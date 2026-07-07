@@ -8,10 +8,18 @@ import webpush from 'web-push';
 import { config } from '../config.js';
 import { prisma } from '../db.js';
 
-const enabled = !!(config.vapid.publicKey && config.vapid.privateKey);
-
-if (enabled) {
-  webpush.setVapidDetails(config.vapid.subject, config.vapid.publicKey, config.vapid.privateKey);
+// A malformed key (bad copy-paste, stray whitespace/quotes) must degrade to
+// "push disabled" — never crash the whole process. web-push's setVapidDetails
+// throws synchronously, and this runs at module-import time, so an unguarded
+// call here would take down the entire API, not just the push feature.
+let enabled = false;
+if (config.vapid.publicKey && config.vapid.privateKey) {
+  try {
+    webpush.setVapidDetails(config.vapid.subject, config.vapid.publicKey, config.vapid.privateKey);
+    enabled = true;
+  } catch (err) {
+    console.error('[fintness-crm] Invalid VAPID keys — Web Push disabled (in-app + socket notifications still work):', err?.message || err);
+  }
 } else {
   console.warn('[fintness-crm] VAPID keys not set — Web Push notifications are disabled (in-app + socket notifications still work).');
 }
