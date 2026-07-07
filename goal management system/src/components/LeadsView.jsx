@@ -577,7 +577,7 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
               <div className="p-3 rounded-xl bg-blue-50/50 dark:bg-blue-950/15 border border-blue-200/60 dark:border-blue-900/40 space-y-2.5">
                 <div className="text-[11px] font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wider">Admin — Assign Lead</div>
                 <div className="flex flex-wrap items-end gap-2">
-                  <div className="w-52"><Field label="Relationship Manager *"><CoolSelect value={assignRm} onChange={(e) => setAssignRm(e.target.value)} className={selectCls + ' text-xs py-1.5'}><option value="">Select RM…</option>{loadTeam().filter(m => Array.isArray(m.roles) && m.roles.includes('RM')).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</CoolSelect></Field></div>
+                  <div className="w-52"><Field label="Relationship Manager *"><CoolSelect value={assignRm} onChange={(e) => setAssignRm(e.target.value)} className={selectCls + ' text-xs py-1.5'}><option value="">Select RM…</option>{loadTeam().map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</CoolSelect></Field></div>
                   <button onClick={doAssign} className={btnPrimary + ' py-2 px-3'}><ArrowRight size={13} /> Assign &amp; Qualify</button>
                 </div>
                 <div>
