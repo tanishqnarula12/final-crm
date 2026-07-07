@@ -1,0 +1,345 @@
+// Team Fintness CRM — database schema.
+//
+// Design notes:
+//  - Provider is plain PostgreSQL. Nothing here is Supabase-specific, so the
+//    same schema runs on a self-hosted Postgres (Mac Mini) unchanged.
+//  - Flexible / nested structures (clientDetails, proposal tables, lead
+//    timelines, etc.) are stored as `Json` (JSONB) so the existing frontend
+//    object shapes carry over verbatim, minimizing migration risk.
+//  - String @id columns preserve the app's existing client-generated ids
+//    (e.g. "c1", uid()) so imported data keeps its references.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  RM
+  PORTFOLIO_MANAGER
+  INSURANCE_MANAGER
+  SERVICE_MANAGER
+  OPERATIONS_MANAGER
+  INTERNAL_MANAGER
+  INTERNAL_USER
+}
+
+enum PermissionScope {
+  NONE
+  ASSIGNED
+  ALL
+}
+
+model User {
+  id           String          @id @default(cuid())
+  email        String          @unique
+  passwordHash String
+  name         String
+  roles        Role[]          @default([INTERNAL_USER]) // a user can hold several permanent roles; RM is contextual (per assigned record), not stored here
+  active       Boolean         @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  profile      AdvisorProfile?
+
+  @@map("users")
+}
+
+// Admin-configurable permission matrix: for every (role, module, action) the
+// admin sets a scope. Effective access = union over a user's roles (+ contextual
+// RM). ADMIN is not stored here — it bypasses all checks.
+model RolePermission {
+  id     String          @id @default(cuid())
+  role   Role
+  module String
+  action String
+  scope  PermissionScope @default(NONE)
+
+  @@unique([role, module, action])
+  @@map("role_permissions")
+}
+
+// Global audit trail — every create/edit/delete/assign/stage-change across the
+// CRM appends one row here. `performedBy` is always a real User.id; the
+// activity-log API joins it to the user's name so the log shows real people.
+model ActivityLog {
+  id          String   @id @default(cuid())
+  moduleName  String
+  recordId    String
+  action      String // CREATE | UPDATE | DELETE | ASSIGN | STAGE_CHANGE
+  oldValue    Json?
+  newValue    Json?
+  performedBy String // User.id
+  timestamp   DateTime @default(now())
+
+  @@index([moduleName, recordId])
+  @@index([performedBy])
+  @@map("activity_logs")
+}
+
+model Client {
+  id              String    @id
+  name            String
+  pan             String
+  age             Int       @default(0)
+  assumptions     String    @default("")
+  assetAllocation Json?
+  clientDetails   Json      @default("{}")
+  createdBy       String? // User.id (immutable) — who created the applicant
+  assignedTo      String? // User.id — the assigned RM
+  departmentOwner String? // owning department/role bucket
+  deletedAt       DateTime? // soft delete
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+
+  goals Goal[]
+  moms  Mom[]
+
+  @@map("clients")
+}
+
+model Goal {
+  id            String   @id
+  clientId      String
+  name          String
+  amount        Float    @default(0)
+  targetMonth   Int      @default(0)
+  targetYear    Int      @default(0)
+  createdMonth  Int      @default(0)
+  createdYear   Int      @default(0)
+  inflation     Float    @default(0)
+  expectedReturn Float   @default(0)
+  sipIncRate    Float    @default(0)
+  currentInv    Float    @default(0)
+  currentSip    Float    @default(0)
+  kidName       String?
+  history       Json     @default("[]")
+  actuals       Json     @default("[]")
+  createdBy       String?
+  assignedTo      String?
+  departmentOwner String?
+  deletedAt       DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@map("goals")
+}
+
+model Mom {
+  id            String   @id
+  clientId      String
+  meetingNumber String   @default("")
+  meetingDate   String   @default("")
+  data          Json     @default("{}")
+  createdBy       String?
+  assignedTo      String?
+  departmentOwner String?
+  deletedAt       DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@map("moms")
+}
+
+// Tasks / Leads / Meetings / Prospects keep their full object in `payload`
+// (JSONB); a few frequently-filtered fields are promoted to real columns for
+// indexing and joins.
+
+model Task {
+  id            String   @id
+  leadId        String?
+  stage         String?
+  groupLeaderId String?
+  assignedTo    String?
+  createdBy       String? // User.id (immutable)
+  departmentOwner String? // = assignedBy (the account that assigned the task)
+  deletedAt       DateTime?
+  payload       Json     @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([leadId])
+  @@index([stage])
+  @@map("tasks")
+}
+
+model Lead {
+  id        String   @id
+  stage     String?
+  status    String?
+  ownerId   String? // legacy display-name owner (kept for back-compat)
+  mobile    String?
+  createdBy       String? // User.id (immutable)
+  assignedTo      String? // User.id — the assigned RM (only Admin can set)
+  departmentOwner String?
+  deletedAt       DateTime?
+  payload   Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([stage])
+  @@index([status])
+  @@index([mobile])
+  @@map("leads")
+}
+
+model Meeting {
+  id            String   @id
+  clientId      String?
+  groupLeaderId String?
+  leadId        String?
+  status        String?
+  createdBy       String? // User.id (immutable) — only creator can edit
+  assignedTo      String? // User.id — meeting host
+  departmentOwner String?
+  deletedAt       DateTime?
+  payload       Json     @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([leadId])
+  @@map("meetings")
+}
+
+model Prospect {
+  id               String   @id
+  groupLeaderId    String?
+  proposalCategory String?
+  stage            String?
+  createdBy       String?
+  assignedTo      String?
+  departmentOwner String?
+  deletedAt       DateTime?
+  payload          Json     @default("{}")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([groupLeaderId])
+  @@index([proposalCategory])
+  @@map("prospects")
+}
+
+model AdvisorProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  data      Json     @default("{}")
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("advisor_profiles")
+}
+
+// ---------------------------------------------------------------------------
+// Internal chat module (DMs + group conversations).
+// Read receipts are WhatsApp-style: each member carries a lastReadAt cursor —
+// a message counts as read by a member when member.lastReadAt >= message
+// .createdAt. Attachments/mentions/linkPreview are JSONB blobs, consistent
+// with how the rest of the app stores flexible structures.
+// ---------------------------------------------------------------------------
+
+model Conversation {
+  id            String    @id @default(cuid())
+  type          String    @default("DM") // "DM" | "GROUP"
+  name          String? // group name (null for DMs — client shows the other member)
+  description   String? // group description
+  photo         String? // group avatar (base64 data URL)
+  createdBy     String?
+  metaUpdatedBy String? // who last edited name/photo/description
+  metaUpdatedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  members  ConversationMember[]
+  messages ChatMessage[]
+
+  @@map("conversations")
+}
+
+model ConversationMember {
+  id             String    @id @default(cuid())
+  conversationId String
+  userId         String
+  lastReadAt     DateTime  @default(now())
+  clearedAt      DateTime? // "Clear chat" — hides messages before this instant, for THIS member only
+  joinedAt       DateTime  @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+  @@map("conversation_members")
+}
+
+model ChatMessage {
+  id             String    @id @default(cuid())
+  conversationId String
+  senderId       String
+  type           String    @default("text") // "text" | "poll"
+  content        String    @default("")
+  replyToId      String?
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  pinned         Boolean   @default(false)
+  attachments    Json      @default("[]") // [{ name, type, size, dataUrl }]
+  mentions       Json      @default("[]") // [{ id, name }]
+  reactions      Json      @default("{}") // { "👍": [userId, ...], ... } — one emoji per user
+  poll           Json? // { question, options:[{id,text}], votes:{optionId:[userId]}, multi }
+  linkPreview    Json? // { url, title, description, image }
+  createdAt      DateTime  @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("chat_messages")
+}
+
+// In-app notifications — the on-screen bell panel. Rows are never shown once
+// read (readAt set); "mark as read" simply hides them. `dedupeKey` makes the
+// scheduler idempotent: (userId, dedupeKey) is unique, so re-running a tick
+// (meeting-soon / task-due slot / birthday-today) never creates a duplicate.
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String // recipient (User.id)
+  type      String // TASK_ASSIGNED | MEETING_SOON | TASK_DUE | PROSPECT_ASSIGNED | LEAD_NEW | BIRTHDAY | LEAD_RM_ASSIGNED
+  title     String
+  body      String    @default("")
+  link      Json? // { view, id } for click-through, optional
+  dedupeKey String? // scheduler idempotency key (see @@unique below)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+// Web Push subscriptions (one per browser/device the user granted notification
+// permission on). `endpoint` is globally unique per browser install, so
+// re-subscribing on the same device/browser (e.g. a different CRM user
+// logging in later on a shared machine) reassigns it via upsert rather than
+// creating a duplicate row that would receive pushes for two people.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}

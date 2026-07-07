@@ -1,0 +1,282 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  --font-heading: 'Outfit', sans-serif;
+  --font-serif: 'Cormorant Garamond', serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+  --font-display: 'Space Grotesk', sans-serif;
+}
+
+:root {
+  --chart-balance: #2563eb;
+  --chart-invested: #94a3b8;
+  --chart-grid: #f1f5f9;
+  --tooltip-bg: rgba(255, 255, 255, 0.95);
+  --tooltip-border: #e2e8f0;
+  --tooltip-color: #0f172a;
+}
+
+.dark {
+  --chart-balance: #818cf8;
+  --chart-invested: #475569;
+  --chart-grid: #1e293b;
+  --tooltip-bg: rgba(15, 23, 42, 0.95);
+  --tooltip-border: #334155;
+  --tooltip-color: #f8fafc;
+}
+
+/* Custom transitions for theme transitions */
+body, .theme-transition {
+  transition-property: background-color, border-color, text-decoration-color, fill, stroke, opacity;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+
+/* Make sure transform and scale transitions don't conflict */
+.no-transition-all * {
+  transition-property: none !important;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleUp {
+  from { transform: scale(0.97); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes bellRing {
+  0% { transform: rotate(0); }
+  15% { transform: rotate(15deg); }
+  30% { transform: rotate(-12deg); }
+  45% { transform: rotate(10deg); }
+  60% { transform: rotate(-8deg); }
+  75% { transform: rotate(4deg); }
+  90% { transform: rotate(-2deg); }
+  100% { transform: rotate(0); }
+}
+
+@keyframes chatBounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  20% { transform: translateY(-8px) scaleY(1.06) scaleX(0.94); }
+  40% { transform: translateY(2px) scaleY(0.96) scaleX(1.03); }
+  60% { transform: translateY(-2px) scale(1.02); }
+  80% { transform: translateY(1px) scale(0.99); }
+}
+
+@keyframes profilePop {
+  0% { transform: scale(1) rotate(0); }
+  30% { transform: scale(1.18) rotate(-15deg); }
+  50% { transform: scale(0.92) rotate(10deg); }
+  70% { transform: scale(1.05) rotate(-5deg); }
+  85% { transform: scale(0.98) rotate(2deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-scale-up {
+  animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Chat message bubble entrance */
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-msg-in {
+  animation: msgIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Chat side drawers (group info panel) */
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.animate-slide-in-right {
+  animation: slideInRight 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Popover entrance (menus, emoji picker, reaction bar) */
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-pop-in {
+  animation: popIn 0.16s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* WhatsApp-style chat wallpaper — subtle finance/wealth doodles, tiled.
+   Two variants so the doodles read correctly in light and dark themes. */
+.chat-doodle-bg {
+  background-color: #f4f5f7;
+  background-image: url('/chatBgLight.svg');
+  background-size: 360px 360px;
+  background-repeat: repeat;
+}
+.dark .chat-doodle-bg {
+  background-color: #0b1120;
+  background-image: url('/chatBgDark.svg');
+}
+
+.animate-bell-ring {
+  animation: bellRing 0.75s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  transform-origin: top center;
+}
+
+.animate-chat-bounce {
+  animation: chatBounce 0.65s cubic-bezier(0.25, 1, 0.5, 1) both;
+}
+
+.animate-profile-pop {
+  animation: profilePop 0.7s cubic-bezier(0.25, 1, 0.5, 1) both;
+}
+
+/* Glassmorphism Classes */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.dark .glass-panel {
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Glow effects */
+.glow-indigo {
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);
+}
+.dark .glow-indigo {
+  box-shadow: 0 0 25px rgba(99, 102, 241, 0.25);
+}
+
+.glow-blue {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
+}
+.dark .glow-blue {
+  box-shadow: 0 0 25px rgba(59, 130, 246, 0.25);
+}
+
+/* Custom Table Overrides */
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* Remove number input spinners */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* macOS Dock Magnification Hover Effect & Tooltips */
+.dock-item-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dock-item {
+  transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1), background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.25s;
+}
+
+.dock-item:hover {
+  transform: scale(1.22);
+}
+
+.dock-item:active {
+  transform: scale(0.95);
+}
+
+.dock-tooltip {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-10px) scale(0.9);
+  transition: opacity 0.18s cubic-bezier(0.25, 1, 0.5, 1), transform 0.18s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.dock-item-container:hover .dock-tooltip {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+}
+
+/* Splash/Loading Screen Animations */
+@keyframes loadingBar {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(0%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-loading-bar {
+  animation: loadingBar 1.5s ease-in-out infinite;
+}
+
+@keyframes bounceSubtle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.animate-bounce-subtle {
+  animation: bounceSubtle 1.8s ease-in-out infinite;
+}
+

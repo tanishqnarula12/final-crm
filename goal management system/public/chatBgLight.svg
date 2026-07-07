@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="360" viewBox="0 0 360 360">
+  <g fill="none" stroke="#0f172a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.05">
+    <text x="46" y="74" font-family="Georgia, 'Times New Roman', serif" font-size="42" fill="#0f172a" stroke="none">₹</text>
+    <text x="256" y="60" font-family="Georgia, serif" font-size="38" fill="#0f172a" stroke="none">$</text>
+    <text x="144" y="316" font-family="Georgia, serif" font-size="38" fill="#0f172a" stroke="none">€</text>
+    <text x="316" y="218" font-family="Georgia, serif" font-size="34" fill="#0f172a" stroke="none">£</text>
+    <text x="90" y="230" font-family="Georgia, serif" font-size="30" fill="#0f172a" stroke="none">%</text>
+    <circle cx="305" cy="112" r="17" />
+    <text x="298" y="120" font-family="Georgia, serif" font-size="18" fill="#0f172a" stroke="none">$</text>
+    <polyline points="36,252 74,214 104,236 150,180" />
+    <polyline points="132,180 150,180 150,198" />
+    <rect x="196" y="290" width="10" height="26" />
+    <rect x="212" y="278" width="10" height="38" />
+    <rect x="228" y="298" width="10" height="18" />
+    <rect x="244" y="268" width="10" height="48" />
+    <circle cx="120" cy="140" r="18" />
+    <line x1="120" y1="140" x2="120" y2="122" />
+    <line x1="120" y1="140" x2="136" y2="148" />
+    <polygon points="205,96 223,114 205,140 187,114" />
+    <rect x="44" y="150" width="44" height="30" rx="4" />
+    <path d="M58 150 v-6 a4 4 0 0 1 4 -4 h8 a4 4 0 0 1 4 4 v6" />
+    <line x1="44" y1="162" x2="88" y2="162" />
+    <path d="M250 250 q14 -22 28 -6 q14 16 30 -10" />
+    <circle cx="330" cy="300" r="16" />
+    <polyline points="323,304 330,294 337,304" />
+  </g>
+</svg>
