@@ -878,14 +878,32 @@ function familyMemberErrors(f) {
   return ff;
 }
 
-// Every reason a parsed row can't be imported as-is. Checked against the same
-// rules the manual Create/Edit Client form enforces (email format, mobile
-// length, 6-digit pincode, plausible DOB), plus duplicate-PAN checks the
-// manual form doesn't need (one row at a time there; a whole sheet here).
-// `fields` flags exactly which columns are wrong, `familyFields[i]` the same
-// for the i-th family member — the preview table highlights and lets you fix
-// both right there instead of re-uploading.
-function rowErrors(r, i, allRows, existingClients) {
+// Resolve a manager reference from the sheet (a team member's id, verbatim,
+// or their name, case-insensitively) to a real active team member id — same
+// matching rule App.jsx's resolveManager() uses at actual import time, so a
+// row that validates here won't silently import with a blank manager there.
+function resolveManagerId(v, team) {
+  if (!v) return '';
+  if (team.some((m) => m.id === v)) return v;
+  const hit = team.find((m) => m.name.trim().toLowerCase() === String(v).trim().toLowerCase());
+  return hit ? hit.id : '';
+}
+
+const MANAGER_LABELS = {
+  relationshipManager: 'Relationship Manager',
+  portfolioManager: 'Portfolio Manager',
+  insuranceManager: 'Insurance Manager',
+  serviceManager: 'Service Manager',
+};
+
+// Every reason a parsed row can't be imported as-is — the full rule set the
+// manual Create/Edit Client form enforces (required fields, email/mobile/
+// pincode/DOB format, a manager name that actually matches someone), plus
+// duplicate-PAN checks the manual form doesn't need (one row at a time
+// there; a whole sheet here). `fields` flags exactly which columns are
+// wrong, `familyFields[i]` the same for the i-th family member — the
+// preview table highlights and lets you fix both right there.
+function rowErrors(r, i, allRows, existingClients, team) {
   const fields = {};
   const msgs = [];
   const flag = (field, msg) => { fields[field] = true; msgs.push(msg); };
@@ -896,16 +914,30 @@ function rowErrors(r, i, allRows, existingClients) {
   else if (allRows.some((other, j) => j !== i && other.pan === r.pan)) flag('pan', 'Duplicate PAN in sheet');
   else if (existingClients.some((c) => (c.pan || '').toUpperCase() === r.pan)) flag('pan', 'PAN already exists');
 
-  if (r.email && !EMAIL_RE.test(r.email)) flag('email', 'Invalid email');
-  if (r.mobile && r.mobile.replace(/[^0-9]/g, '').length < 10) flag('mobile', 'Invalid mobile');
-  if (r.pinCode && !/^\d{6}$/.test(r.pinCode)) flag('pinCode', 'Invalid pincode');
-  if (r.dob && !isValidDob(r.dob)) flag('dob', 'Invalid DOB');
+  if (!r.email) flag('email', 'Missing email');
+  else if (!EMAIL_RE.test(r.email)) flag('email', 'Invalid email');
+  if (!r.mobile) flag('mobile', 'Missing mobile');
+  else if (r.mobile.replace(/[^0-9]/g, '').length < 10) flag('mobile', 'Invalid mobile');
+  if (!r.pinCode) flag('pinCode', 'Missing pincode');
+  else if (!/^\d{6}$/.test(r.pinCode)) flag('pinCode', 'Invalid pincode');
+  if (!r.dob) flag('dob', 'Missing DOB');
+  else if (!isValidDob(r.dob)) flag('dob', 'Invalid DOB');
   // Address is required on the manual Create/Edit Client form — match that
   // here too, since a bulk-imported client shouldn't skip a rule a manually
   // added one can't.
   if (!r.address1) flag('address1', 'Missing address line 1');
   if (!r.address2) flag('address2', 'Missing address line 2');
   if (!r.address3) flag('address3', 'Missing address line 3');
+  if (!r.clientType) flag('clientType', 'Missing client type');
+  if (!r.profession) flag('profession', 'Missing profession');
+  if (!r.state) flag('state', 'Missing state');
+  if (!r.city) flag('city', 'Missing city');
+
+  for (const mf of Object.keys(MANAGER_LABELS)) {
+    const v = r.managers?.[mf];
+    if (!v) flag(mf, `Missing ${MANAGER_LABELS[mf]}`);
+    else if (!resolveManagerId(v, team)) flag(mf, `${MANAGER_LABELS[mf]} "${v}" doesn't match any team member`);
+  }
 
   const familyFields = (r.familyDetails || []).map(familyMemberErrors);
   familyFields.forEach((ff, fi) => {
@@ -1085,9 +1117,10 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
     reader.readAsArrayBuffer(file);
   };
 
+  const team = loadTeam();
   const errorsByRow = useMemo(
-    () => rows ? rows.map((r, i) => rowErrors(r, i, rows, clients)) : [],
-    [rows, clients]
+    () => rows ? rows.map((r, i) => rowErrors(r, i, rows, clients, team)) : [],
+    [rows, clients, team]
   );
   const validRows = rows ? rows.filter((r, i) => errorsByRow[i].msgs.length === 0) : [];
 
@@ -1230,11 +1263,19 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
                     const ok = msgs.length === 0;
                     const hasFamily = (r.familyDetails || []).length > 0;
                     const expanded = expandedRows.has(r.rowNum);
+                    const detailFieldKeys = ['clientType', 'profession', 'state', 'city', 'relationshipManager', 'portfolioManager', 'insuranceManager', 'serviceManager'];
+                    const detailsHaveErrors = detailFieldKeys.some((k) => badFields[k]) || familyFields.some((ff) => Object.keys(ff).length);
                     const cellCls = (field, extra = '') =>
                       `w-full bg-transparent border rounded-md px-1.5 py-1 text-xs focus:outline-none focus:ring-2 ${extra} ${
                         badFields[field]
                           ? 'border-rose-400 text-rose-700 dark:text-rose-400 focus:ring-rose-500/30'
                           : 'border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:ring-blue-500/30 text-slate-800 dark:text-slate-200'
+                      }`;
+                    const detailCellCls = (field, extra = '') =>
+                      `w-full bg-white dark:bg-slate-900 border rounded-md px-1.5 py-1 focus:outline-none focus:ring-2 ${extra} ${
+                        badFields[field]
+                          ? 'border-rose-400 text-rose-700 dark:text-rose-400 focus:ring-rose-500/30'
+                          : 'border-slate-200 dark:border-slate-800 focus:ring-blue-500/30 text-slate-800 dark:text-slate-200'
                       }`;
                     return (
                       <React.Fragment key={r.rowNum}>
@@ -1274,17 +1315,16 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
                             <input type="date" value={r.dob || ''} onChange={(e) => updateRow(r.rowNum, 'dob', e.target.value)} min={DOB_MIN} max={dobMax()} className={cellCls('dob', 'tabular-nums')} />
                           </td>
                           <td className="px-3 py-1.5 text-center">
-                            {hasFamily ? (
-                              <button
-                                type="button"
-                                onClick={() => toggleExpand(r.rowNum)}
-                                className={`inline-flex items-center gap-0.5 tabular-nums font-bold cursor-pointer ${
-                                  familyFields.some((ff) => Object.keys(ff).length) ? 'text-rose-600 dark:text-rose-400' : 'text-slate-600 dark:text-slate-400'
-                                }`}
-                              >
-                                {r.familyDetails.length} {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                              </button>
-                            ) : <span className="opacity-40">0</span>}
+                            <button
+                              type="button"
+                              onClick={() => toggleExpand(r.rowNum)}
+                              title="Client type, profession, location, team assignments & family members"
+                              className={`inline-flex items-center gap-0.5 tabular-nums font-bold cursor-pointer ${
+                                detailsHaveErrors ? 'text-rose-600 dark:text-rose-400' : 'text-slate-600 dark:text-slate-400'
+                              }`}
+                            >
+                              {r.familyDetails?.length || 0} {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                            </button>
                           </td>
                           <td className="px-3 py-1.5 font-bold uppercase tracking-wider text-[10px] max-w-[200px]">
                             {ok
@@ -1298,10 +1338,59 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
                             }
                           </td>
                         </tr>
-                        {expanded && hasFamily && (
+                        {expanded && (
                           <tr className="bg-slate-50/70 dark:bg-slate-950/40">
                             <td />
-                            <td colSpan={11} className="px-3 py-2.5">
+                            <td colSpan={11} className="px-3 py-2.5 space-y-3">
+                              <div>
+                                <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">Client Type / Profession / Location</div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                  <div>
+                                    <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-0.5">Client Type</label>
+                                    <select value={r.clientType} onChange={(e) => updateRow(r.rowNum, 'clientType', e.target.value)} className={detailCellCls('clientType')}>
+                                      <option value="">Select…</option>
+                                      {CLIENT_TYPES.map((ct) => <option key={ct} value={ct}>{ct}</option>)}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-0.5">Profession</label>
+                                    <select value={r.profession} onChange={(e) => updateRow(r.rowNum, 'profession', e.target.value)} className={detailCellCls('profession')}>
+                                      <option value="">Select…</option>
+                                      {PROFESSIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-0.5">State</label>
+                                    <input value={r.state} onChange={(e) => updateRow(r.rowNum, 'state', e.target.value)} className={detailCellCls('state')} placeholder="empty" />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-0.5">City</label>
+                                    <input value={r.city} onChange={(e) => updateRow(r.rowNum, 'city', e.target.value)} className={detailCellCls('city')} placeholder="empty" />
+                                  </div>
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">Team Assignments</div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                  {Object.entries(MANAGER_LABELS).map(([mf, label]) => (
+                                    <div key={mf}>
+                                      <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-0.5">{label}</label>
+                                      <select
+                                        value={resolveManagerId(r.managers?.[mf], team)}
+                                        onChange={(e) => updateRow(r.rowNum, 'managers', { ...r.managers, [mf]: e.target.value })}
+                                        className={detailCellCls(mf)}
+                                      >
+                                        <option value="">Select…</option>
+                                        {team.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                      </select>
+                                      {badFields[mf] && !resolveManagerId(r.managers?.[mf], team) && r.managers?.[mf] && (
+                                        <p className="text-[9px] text-rose-600 dark:text-rose-400 mt-0.5">Sheet had "{r.managers[mf]}" — pick the right person</p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              {hasFamily && (
                               <table className="w-full text-[11px]">
                                 <thead className="text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                                   <tr>
@@ -1356,6 +1445,7 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
                                   })}
                                 </tbody>
                               </table>
+                              )}
                             </td>
                           </tr>
                         )}
