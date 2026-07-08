@@ -191,6 +191,7 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
     
     if (!clientType) errs.clientType = "Required";
     if (!status) errs.status = "Required";
+    if (!maritalStatus) errs.maritalStatus = "Required";
     if (!profession) errs.profession = "Required";
     if (profession === 'Other' && !professionOther.trim()) errs.professionOther = "Required";
     
@@ -231,7 +232,7 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
       alert("Please fix the highlighted errors before saving. Make sure to check all tabs.");
       
       // Auto-switch to the first tab with an error
-      if (['name', 'age', 'dob', 'pan', 'mobile', 'email', 'clientType', 'status', 'profession', 'professionOther', 'address1', 'address2', 'address3', 'country', 'stateName', 'city', 'pinCode'].some(k => errs[k])) {
+      if (['name', 'age', 'dob', 'pan', 'mobile', 'email', 'clientType', 'status', 'maritalStatus', 'profession', 'professionOther', 'address1', 'address2', 'address3', 'country', 'stateName', 'city', 'pinCode'].some(k => errs[k])) {
         setActiveTab('personal');
       } else if (['relationshipManager', 'portfolioManager', 'insuranceManager', 'serviceManager'].some(k => errs[k])) {
         setActiveTab('internal');
@@ -369,7 +370,7 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
                 </CoolSelect>
               </div>
             </Field>
-            <Field label="Marital Status">
+            <Field label="Marital Status *" error={errors.maritalStatus}>
               <div className="relative">
                 <CoolSelect value={maritalStatus} onChange={(e) => setMaritalStatus(e.target.value)} className={selectCls}>
                   <option value="">Select marital status…</option>
@@ -929,6 +930,7 @@ function rowErrors(r, i, allRows, existingClients, team) {
   if (!r.address2) flag('address2', 'Missing address line 2');
   if (!r.address3) flag('address3', 'Missing address line 3');
   if (!r.clientType) flag('clientType', 'Missing client type');
+  if (!r.maritalStatus) flag('maritalStatus', 'Missing marital status');
   if (!r.profession) flag('profession', 'Missing profession');
   if (!r.state) flag('state', 'Missing state');
   if (!r.city) flag('city', 'Missing city');
@@ -960,6 +962,7 @@ const COLS = {
   mobile: ['mobile', 'mobileno', 'mobilenumber', 'phone', 'phoneno', 'contact', 'contactno'],
   email: ['email', 'emailid', 'emailaddress', 'mail'],
   clientType: ['clienttype', 'type', 'category'],
+  maritalStatus: ['maritalstatus', 'marital'],
   profession: ['profession', 'occupation', 'job'],
   address1: ['address1', 'addressline1', 'address', 'addr1'],
   address2: ['address2', 'addressline2', 'addr2'],
@@ -993,7 +996,7 @@ const yesNo = (v) => {
 
 // The full set of columns the sample template ships with (also the export order).
 const TEMPLATE_HEADERS = [
-  'Name', 'PAN', 'Age', 'DOB', 'Mobile', 'Email', 'Client Type', 'Profession',
+  'Name', 'PAN', 'Age', 'DOB', 'Mobile', 'Email', 'Client Type', 'Marital Status', 'Profession',
   'Address 1', 'Address 2', 'Address 3', 'City', 'State', 'Country', 'Pincode', 'Status',
   'Mutual Funds', 'Term Insurance', 'Medical Insurance', 'Accidental Insurance',
   'Relationship Manager', 'Portfolio Manager', 'Insurance Manager', 'Service Manager', 'Owner', 'Operation Manager', 'Internal Manager',
@@ -1018,7 +1021,7 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
   const downloadTemplate = () => {
     const example = {
       Name: 'Aarav Sharma', PAN: 'ABCPS1234A', Age: 33, DOB: '1992-05-15',
-      Mobile: '9876543210', Email: 'aarav@example.com', 'Client Type': 'HNI', Profession: 'Salaried – Private Sector',
+      Mobile: '9876543210', Email: 'aarav@example.com', 'Client Type': 'HNI', 'Marital Status': 'Married', Profession: 'Salaried – Private Sector',
       'Address 1': 'Flat 101, Sunrise Apartments', 'Address 2': 'MG Road', 'Address 3': 'Near City Mall',
       City: 'Jaipur', State: 'Rajasthan', Country: 'India', Pincode: '302004', Status: 'Active',
       'Mutual Funds': 'Yes', 'Term Insurance': 'No', 'Medical Insurance': 'Yes', 'Accidental Insurance': 'No',
@@ -1099,7 +1102,7 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
               pan: val(r, 'pan').toUpperCase(),
               age: keyFor.age ? (Number(r[keyFor.age]) || 0) : 0,
               dob: keyFor.dob ? parseFlexibleDate(r[keyFor.dob]) : '', mobile: val(r, 'mobile'), email: val(r, 'email'),
-              clientType: val(r, 'clientType'), profession: val(r, 'profession'),
+              clientType: val(r, 'clientType'), maritalStatus: val(r, 'maritalStatus'), profession: val(r, 'profession'),
               address1: val(r, 'address1'), address2: val(r, 'address2'), address3: val(r, 'address3'),
               city: val(r, 'city'), state: val(r, 'state'), country: val(r, 'country') || 'India',
               pinCode: val(r, 'pinCode'), status: val(r, 'status') || 'Active',
@@ -1263,7 +1266,7 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
                     const ok = msgs.length === 0;
                     const hasFamily = (r.familyDetails || []).length > 0;
                     const expanded = expandedRows.has(r.rowNum);
-                    const detailFieldKeys = ['clientType', 'profession', 'state', 'city', 'relationshipManager', 'portfolioManager', 'insuranceManager', 'serviceManager'];
+                    const detailFieldKeys = ['clientType', 'maritalStatus', 'profession', 'state', 'city', 'relationshipManager', 'portfolioManager', 'insuranceManager', 'serviceManager'];
                     const detailsHaveErrors = detailFieldKeys.some((k) => badFields[k]) || familyFields.some((ff) => Object.keys(ff).length);
                     const cellCls = (field, extra = '') =>
                       `w-full bg-transparent border rounded-md px-1.5 py-1 text-xs focus:outline-none focus:ring-2 ${extra} ${
@@ -1343,13 +1346,20 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
                             <td />
                             <td colSpan={11} className="px-3 py-2.5 space-y-3">
                               <div>
-                                <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">Client Type / Profession / Location</div>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">Client Type / Marital Status / Profession / Location</div>
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                                   <div>
                                     <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-0.5">Client Type</label>
                                     <select value={r.clientType} onChange={(e) => updateRow(r.rowNum, 'clientType', e.target.value)} className={detailCellCls('clientType')}>
                                       <option value="">Select…</option>
                                       {CLIENT_TYPES.map((ct) => <option key={ct} value={ct}>{ct}</option>)}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-0.5">Marital Status</label>
+                                    <select value={r.maritalStatus} onChange={(e) => updateRow(r.rowNum, 'maritalStatus', e.target.value)} className={detailCellCls('maritalStatus')}>
+                                      <option value="">Select…</option>
+                                      {MARITAL_STATUSES.map((m) => <option key={m} value={m}>{m}</option>)}
                                     </select>
                                   </div>
                                   <div>

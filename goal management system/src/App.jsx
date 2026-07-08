@@ -853,7 +853,7 @@ export default function App() {
     for (const r of rows) {
       const mg = r.managers || {};
       const clientDetails = {
-        mobile: r.mobile || '', email: r.email || '', clientType: r.clientType || '', dob: r.dob || '',
+        mobile: r.mobile || '', email: r.email || '', clientType: r.clientType || '', maritalStatus: r.maritalStatus || '', dob: r.dob || '',
         address1: r.address1 || '', address2: r.address2 || '', address3: r.address3 || '',
         country: r.country || 'India', state: r.state || '', city: r.city || '', pinCode: r.pinCode || '',
         profession: r.profession || '', professionOther: '',
