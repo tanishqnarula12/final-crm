@@ -900,6 +900,12 @@ function rowErrors(r, i, allRows, existingClients) {
   if (r.mobile && r.mobile.replace(/[^0-9]/g, '').length < 10) flag('mobile', 'Invalid mobile');
   if (r.pinCode && !/^\d{6}$/.test(r.pinCode)) flag('pinCode', 'Invalid pincode');
   if (r.dob && !isValidDob(r.dob)) flag('dob', 'Invalid DOB');
+  // Address is required on the manual Create/Edit Client form — match that
+  // here too, since a bulk-imported client shouldn't skip a rule a manually
+  // added one can't.
+  if (!r.address1) flag('address1', 'Missing address line 1');
+  if (!r.address2) flag('address2', 'Missing address line 2');
+  if (!r.address3) flag('address3', 'Missing address line 3');
 
   const familyFields = (r.familyDetails || []).map(familyMemberErrors);
   familyFields.forEach((ff, fi) => {
@@ -1201,7 +1207,7 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
               </p>
             )}
             <div className="overflow-auto max-h-72 rounded-xl border border-slate-200 dark:border-slate-800/80 shadow-md">
-              <table className="w-full text-xs min-w-[820px]">
+              <table className="w-full text-xs min-w-[1160px]">
                 <thead className="bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 sticky top-0">
                   <tr>
                     <th className="px-3 py-3 text-left w-10">#</th>
@@ -1209,6 +1215,9 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
                     <th className="px-3 py-3 text-left">PAN</th>
                     <th className="px-3 py-3 text-left">Mobile</th>
                     <th className="px-3 py-3 text-left">Email</th>
+                    <th className="px-3 py-3 text-left">Address 1</th>
+                    <th className="px-3 py-3 text-left">Address 2</th>
+                    <th className="px-3 py-3 text-left">Address 3</th>
                     <th className="px-3 py-3 text-left">Pincode</th>
                     <th className="px-3 py-3 text-left">DOB</th>
                     <th className="px-3 py-3 text-left">Family</th>
@@ -1250,6 +1259,15 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
                             <input value={r.email} onChange={(e) => updateRow(r.rowNum, 'email', e.target.value)} className={cellCls('email', 'lowercase')} placeholder="—" />
                           </td>
                           <td className="px-1 py-1">
+                            <input value={r.address1} onChange={(e) => updateRow(r.rowNum, 'address1', e.target.value)} className={cellCls('address1')} placeholder="empty" />
+                          </td>
+                          <td className="px-1 py-1">
+                            <input value={r.address2} onChange={(e) => updateRow(r.rowNum, 'address2', e.target.value)} className={cellCls('address2')} placeholder="empty" />
+                          </td>
+                          <td className="px-1 py-1">
+                            <input value={r.address3} onChange={(e) => updateRow(r.rowNum, 'address3', e.target.value)} className={cellCls('address3')} placeholder="empty" />
+                          </td>
+                          <td className="px-1 py-1">
                             <input value={r.pinCode} onChange={(e) => updateRow(r.rowNum, 'pinCode', e.target.value)} className={cellCls('pinCode', 'tabular-nums')} placeholder="—" maxLength={6} />
                           </td>
                           <td className="px-1 py-1">
@@ -1283,7 +1301,7 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
                         {expanded && hasFamily && (
                           <tr className="bg-slate-50/70 dark:bg-slate-950/40">
                             <td />
-                            <td colSpan={8} className="px-3 py-2.5">
+                            <td colSpan={11} className="px-3 py-2.5">
                               <table className="w-full text-[11px]">
                                 <thead className="text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                                   <tr>
