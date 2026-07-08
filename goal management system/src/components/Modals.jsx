@@ -869,23 +869,28 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // rules the manual Create/Edit Client form enforces (email format, mobile
 // length, 6-digit pincode, plausible DOB), plus duplicate-PAN checks the
 // manual form doesn't need (one row at a time there; a whole sheet here).
+// `fields` flags exactly which columns are wrong, so the preview table can
+// highlight and let you fix them right there instead of re-uploading.
 function rowErrors(r, i, allRows, existingClients) {
-  const errs = [];
-  if (!r.name) errs.push('Missing name');
-  if (!r.pan) errs.push('Missing PAN');
-  else if (!PAN_RE.test(r.pan)) errs.push('Invalid PAN format');
-  else if (allRows.some((other, j) => j !== i && other.pan === r.pan)) errs.push('Duplicate PAN in sheet');
-  else if (existingClients.some((c) => (c.pan || '').toUpperCase() === r.pan)) errs.push('PAN already exists');
+  const fields = {};
+  const msgs = [];
+  const flag = (field, msg) => { fields[field] = true; msgs.push(msg); };
 
-  if (r.email && !EMAIL_RE.test(r.email)) errs.push('Invalid email');
-  if (r.mobile && r.mobile.replace(/[^0-9]/g, '').length < 10) errs.push('Invalid mobile');
-  if (r.pinCode && !/^\d{6}$/.test(r.pinCode)) errs.push('Invalid pincode');
-  if (r.dob && !isValidDob(r.dob)) errs.push('Invalid DOB');
+  if (!r.name) flag('name', 'Missing name');
+  if (!r.pan) flag('pan', 'Missing PAN');
+  else if (!PAN_RE.test(r.pan)) flag('pan', 'Invalid PAN format');
+  else if (allRows.some((other, j) => j !== i && other.pan === r.pan)) flag('pan', 'Duplicate PAN in sheet');
+  else if (existingClients.some((c) => (c.pan || '').toUpperCase() === r.pan)) flag('pan', 'PAN already exists');
+
+  if (r.email && !EMAIL_RE.test(r.email)) flag('email', 'Invalid email');
+  if (r.mobile && r.mobile.replace(/[^0-9]/g, '').length < 10) flag('mobile', 'Invalid mobile');
+  if (r.pinCode && !/^\d{6}$/.test(r.pinCode)) flag('pinCode', 'Invalid pincode');
+  if (r.dob && !isValidDob(r.dob)) flag('dob', 'Invalid DOB');
   (r.familyDetails || []).forEach((f, fi) => {
-    if (f.pan && !PAN_RE.test(f.pan)) errs.push(`Family ${fi + 1} PAN invalid`);
-    if (f.dob && !isValidDob(f.dob)) errs.push(`Family ${fi + 1} DOB invalid`);
+    if (f.pan && !PAN_RE.test(f.pan)) msgs.push(`Family ${fi + 1} PAN invalid — fix in the sheet and re-upload`);
+    if (f.dob && !isValidDob(f.dob)) msgs.push(`Family ${fi + 1} DOB invalid — fix in the sheet and re-upload`);
   });
-  return errs;
+  return { fields, msgs };
 }
 
 // Normalize a header for fuzzy matching: lowercase, strip spaces/dots/_/-.
@@ -1053,7 +1058,13 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
     () => rows ? rows.map((r, i) => rowErrors(r, i, rows, clients)) : [],
     [rows, clients]
   );
-  const validRows = rows ? rows.filter((r, i) => errorsByRow[i].length === 0) : [];
+  const validRows = rows ? rows.filter((r, i) => errorsByRow[i].msgs.length === 0) : [];
+
+  // Fix a bad cell right in the preview instead of re-editing the sheet and
+  // re-uploading — re-validates live (errorsByRow is derived from `rows`).
+  const updateRow = (i, field, value) => {
+    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
+  };
 
   const handleImport = async () => {
     setImporting(true);
@@ -1129,58 +1140,85 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
         )}
 
         {rows && (
-          <div className="overflow-auto max-h-64 rounded-xl border border-slate-200 dark:border-slate-800/80 shadow-md">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 sticky top-0">
-                <tr>
-                  <th className="px-3 py-3 text-left w-10">#</th>
-                  <th className="px-3 py-3 text-left">Name</th>
-                  <th className="px-3 py-3 text-left">PAN</th>
-                  <th className="px-3 py-3 text-left">Age</th>
-                  <th className="px-3 py-3 text-left">Mobile</th>
-                  <th className="px-3 py-3 text-left">Email</th>
-                  <th className="px-3 py-3 text-left">Family</th>
-                  <th className="px-3 py-3 text-left">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {rows.map((r, i) => {
-                  const rowErrs = errorsByRow[i];
-                  const nameOk = !!r.name;
-                  const panOk = PAN_RE.test(r.pan);
-                  const ok = rowErrs.length === 0;
-                  return (
-                    <tr key={i} className={`border-t border-slate-100 dark:border-slate-800 ${ok ? 'bg-white dark:bg-slate-900' : 'bg-rose-50/20 dark:bg-rose-950/10'}`}>
-                      <td className="px-3 py-2.5 text-slate-400 dark:text-slate-500">{r.rowNum}</td>
-                      <td className={`px-3 py-2.5 font-bold ${nameOk ? 'text-slate-800 dark:text-slate-200' : 'text-rose-600 dark:text-rose-400'}`}>
-                        {r.name || <em className="font-normal font-sans text-xs opacity-60">empty</em>}
-                      </td>
-                      <td className={`px-3 py-2.5 font-mono tracking-wider text-xs ${panOk ? 'text-slate-800 dark:text-slate-300' : 'text-rose-600 dark:text-rose-400'}`}>
-                        {r.pan || <em className="font-normal font-sans tracking-normal opacity-60">empty</em>}
-                      </td>
-                      <td className="px-3 py-2.5 text-slate-600 dark:text-slate-400 tabular-nums">
-                        {r.age > 0 ? r.age : <em className="font-normal font-sans text-xs opacity-50">—</em>}
-                      </td>
-                      <td className="px-3 py-2.5 text-slate-600 dark:text-slate-400 tabular-nums">{r.mobile || <span className="opacity-40">—</span>}</td>
-                      <td className="px-3 py-2.5 text-slate-600 dark:text-slate-400 lowercase truncate max-w-[140px]">{r.email || <span className="opacity-40">—</span>}</td>
-                      <td className="px-3 py-2.5 text-slate-600 dark:text-slate-400 tabular-nums text-center">{r.familyDetails?.length || <span className="opacity-40">0</span>}</td>
-                      <td className="px-3 py-2.5 font-bold uppercase tracking-wider text-[10px] max-w-[220px]">
-                        {ok
-                          ? <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={12} /> Valid</span>
-                          : (
-                            <span className="inline-flex items-start gap-1 text-rose-600 dark:text-rose-400" title={rowErrs.join('; ')}>
-                              <AlertCircle size={12} className="mt-0.5 shrink-0" />
-                              <span className="normal-case font-semibold leading-snug">{rowErrs.join(', ')}</span>
-                            </span>
-                          )
-                        }
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {rows.length !== validRows.length && (
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                Rows highlighted in red have an error — the exact reason is shown under <strong>Status</strong>.
+                Click into a highlighted field below to fix it directly; the row turns valid as soon as it checks out,
+                no need to re-upload. (Family-member errors still need fixing in the sheet itself.)
+              </p>
+            )}
+            <div className="overflow-auto max-h-72 rounded-xl border border-slate-200 dark:border-slate-800/80 shadow-md">
+              <table className="w-full text-xs min-w-[820px]">
+                <thead className="bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 sticky top-0">
+                  <tr>
+                    <th className="px-3 py-3 text-left w-10">#</th>
+                    <th className="px-3 py-3 text-left">Name</th>
+                    <th className="px-3 py-3 text-left">PAN</th>
+                    <th className="px-3 py-3 text-left">Mobile</th>
+                    <th className="px-3 py-3 text-left">Email</th>
+                    <th className="px-3 py-3 text-left">Pincode</th>
+                    <th className="px-3 py-3 text-left">DOB</th>
+                    <th className="px-3 py-3 text-left">Family</th>
+                    <th className="px-3 py-3 text-left">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {rows.map((r, i) => {
+                    const { fields: badFields, msgs } = errorsByRow[i];
+                    const ok = msgs.length === 0;
+                    const cellCls = (field, extra = '') =>
+                      `w-full bg-transparent border rounded-md px-1.5 py-1 text-xs focus:outline-none focus:ring-2 ${extra} ${
+                        badFields[field]
+                          ? 'border-rose-400 text-rose-700 dark:text-rose-400 focus:ring-rose-500/30'
+                          : 'border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:ring-blue-500/30 text-slate-800 dark:text-slate-200'
+                      }`;
+                    return (
+                      <tr key={i} className={`border-t border-slate-100 dark:border-slate-800 ${ok ? 'bg-white dark:bg-slate-900' : 'bg-rose-50/20 dark:bg-rose-950/10'}`}>
+                        <td className="px-3 py-1.5 text-slate-400 dark:text-slate-500">{r.rowNum}</td>
+                        <td className="px-1 py-1">
+                          <input value={r.name} onChange={(e) => updateRow(i, 'name', e.target.value)} className={cellCls('name', 'font-bold')} placeholder="empty" />
+                        </td>
+                        <td className="px-1 py-1">
+                          <input
+                            value={r.pan}
+                            onChange={(e) => updateRow(i, 'pan', e.target.value.toUpperCase().slice(0, 10))}
+                            className={cellCls('pan', 'font-mono tracking-wider uppercase')}
+                            placeholder="empty"
+                            maxLength={10}
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <input value={r.mobile} onChange={(e) => updateRow(i, 'mobile', e.target.value)} className={cellCls('mobile', 'tabular-nums')} placeholder="—" />
+                        </td>
+                        <td className="px-1 py-1">
+                          <input value={r.email} onChange={(e) => updateRow(i, 'email', e.target.value)} className={cellCls('email', 'lowercase')} placeholder="—" />
+                        </td>
+                        <td className="px-1 py-1">
+                          <input value={r.pinCode} onChange={(e) => updateRow(i, 'pinCode', e.target.value)} className={cellCls('pinCode', 'tabular-nums')} placeholder="—" maxLength={6} />
+                        </td>
+                        <td className="px-1 py-1">
+                          <input type="date" value={r.dob || ''} onChange={(e) => updateRow(i, 'dob', e.target.value)} min={DOB_MIN} max={dobMax()} className={cellCls('dob', 'tabular-nums')} />
+                        </td>
+                        <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400 tabular-nums text-center">{r.familyDetails?.length || <span className="opacity-40">0</span>}</td>
+                        <td className="px-3 py-1.5 font-bold uppercase tracking-wider text-[10px] max-w-[200px]">
+                          {ok
+                            ? <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={12} /> Valid</span>
+                            : (
+                              <span className="inline-flex items-start gap-1 text-rose-600 dark:text-rose-400" title={msgs.join('; ')}>
+                                <AlertCircle size={12} className="mt-0.5 shrink-0" />
+                                <span className="normal-case font-semibold leading-snug">{msgs.join(', ')}</span>
+                              </span>
+                            )
+                          }
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </Modal>
