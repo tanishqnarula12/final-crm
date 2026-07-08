@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X, CheckCircle2, Upload, AlertCircle, FileSpreadsheet, ChevronDown, UserCog, Download } from 'lucide-react';
+import { X, CheckCircle2, Upload, AlertCircle, FileSpreadsheet, ChevronDown, ChevronUp, UserCog, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Field, inputCls, selectCls, btnPrimary, btnSecondary, btnGhost, CoolSelect } from './UI';
 import {
@@ -865,12 +865,26 @@ export function GoalFormModal({ initial, onClose, onSave }) {
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// One family member's field errors — mirrors the manual Create/Edit Client
+// form's rule (a family row that has a name needs a valid PAN and DOB too;
+// mobile/email are optional but checked for format if given).
+function familyMemberErrors(f) {
+  const ff = {};
+  if (!f.pan) ff.pan = 'Missing PAN';
+  else if (!PAN_RE.test(f.pan)) ff.pan = 'Invalid PAN format';
+  if (!f.dob) ff.dob = 'Missing DOB';
+  else if (!isValidDob(f.dob)) ff.dob = 'Invalid DOB';
+  if (f.email && !EMAIL_RE.test(f.email)) ff.email = 'Invalid email';
+  return ff;
+}
+
 // Every reason a parsed row can't be imported as-is. Checked against the same
 // rules the manual Create/Edit Client form enforces (email format, mobile
 // length, 6-digit pincode, plausible DOB), plus duplicate-PAN checks the
 // manual form doesn't need (one row at a time there; a whole sheet here).
-// `fields` flags exactly which columns are wrong, so the preview table can
-// highlight and let you fix them right there instead of re-uploading.
+// `fields` flags exactly which columns are wrong, `familyFields[i]` the same
+// for the i-th family member — the preview table highlights and lets you fix
+// both right there instead of re-uploading.
 function rowErrors(r, i, allRows, existingClients) {
   const fields = {};
   const msgs = [];
@@ -886,11 +900,13 @@ function rowErrors(r, i, allRows, existingClients) {
   if (r.mobile && r.mobile.replace(/[^0-9]/g, '').length < 10) flag('mobile', 'Invalid mobile');
   if (r.pinCode && !/^\d{6}$/.test(r.pinCode)) flag('pinCode', 'Invalid pincode');
   if (r.dob && !isValidDob(r.dob)) flag('dob', 'Invalid DOB');
-  (r.familyDetails || []).forEach((f, fi) => {
-    if (f.pan && !PAN_RE.test(f.pan)) msgs.push(`Family ${fi + 1} PAN invalid — fix in the sheet and re-upload`);
-    if (f.dob && !isValidDob(f.dob)) msgs.push(`Family ${fi + 1} DOB invalid — fix in the sheet and re-upload`);
+
+  const familyFields = (r.familyDetails || []).map(familyMemberErrors);
+  familyFields.forEach((ff, fi) => {
+    if (Object.keys(ff).length) msgs.push(`Family ${fi + 1} (${r.familyDetails[fi].name}): ${Object.values(ff).join(', ')}`);
   });
-  return { fields, msgs };
+
+  return { fields, msgs, familyFields };
 }
 
 // Normalize a header for fuzzy matching: lowercase, strip spaces/dots/_/-.
@@ -956,6 +972,10 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState('');
   const [importing, setImporting] = useState(false);
+  const [importedCount, setImportedCount] = useState(0);
+  // Keyed by the sheet's own row number (stable across partial imports —
+  // array position isn't, once imported rows are removed from `rows`).
+  const [expandedRows, setExpandedRows] = useState(() => new Set());
 
   const downloadTemplate = () => {
     const example = {
@@ -982,6 +1002,8 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
     if (!file) return;
     setError('');
     setRows(null);
+    setImportedCount(0);
+    setExpandedRows(new Set());
 
     const reader = new FileReader();
     reader.onload = (ev) => {
@@ -1062,15 +1084,40 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
 
   // Fix a bad cell right in the preview instead of re-editing the sheet and
   // re-uploading — re-validates live (errorsByRow is derived from `rows`).
-  const updateRow = (i, field, value) => {
-    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
+  // Keyed by rowNum (stable) rather than array position, since a partial
+  // import below removes rows and shifts everyone else's position.
+  const updateRow = (rowNum, field, value) => {
+    setRows((prev) => prev.map((r) => (r.rowNum === rowNum ? { ...r, [field]: value } : r)));
   };
 
+  const updateFamilyField = (rowNum, famIndex, field, value) => {
+    setRows((prev) => prev.map((r) => {
+      if (r.rowNum !== rowNum) return r;
+      return { ...r, familyDetails: r.familyDetails.map((f, fi) => (fi === famIndex ? { ...f, [field]: value } : f)) };
+    }));
+  };
+
+  const toggleExpand = (rowNum) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowNum)) next.delete(rowNum); else next.add(rowNum);
+      return next;
+    });
+  };
+
+  // Import whatever's currently valid, then keep the modal open with just the
+  // still-broken rows — at ~700 entries, forcing every single row to be
+  // perfect before anything can be saved would be a nightmare. Only closes
+  // once nothing is left to fix.
   const handleImport = async () => {
     setImporting(true);
     try {
-      await onImport(validRows);
-      onClose();
+      const toImport = validRows;
+      await onImport(toImport);
+      setImportedCount((c) => c + toImport.length);
+      const remaining = rows.filter((r) => !toImport.includes(r));
+      if (remaining.length) setRows(remaining);
+      else onClose();
     } finally {
       setImporting(false);
     }
@@ -1084,16 +1131,17 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
       footer={
         <div className="flex justify-between items-center gap-2">
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            {rows ? `${validRows.length} of ${rows.length} rows valid` : 'Upload a .xlsx / .xls file'}
+            {importedCount > 0 && <span className="text-emerald-600 dark:text-emerald-400">{importedCount} imported so far — </span>}
+            {rows ? `${validRows.length} of ${rows.length} rows valid` : (importedCount > 0 ? 'All done' : 'Upload a .xlsx / .xls file')}
           </span>
           <div className="flex gap-2">
-            <button onClick={onClose} className={btnGhost}>Cancel</button>
+            <button onClick={onClose} className={btnGhost}>{importedCount > 0 ? 'Close' : 'Cancel'}</button>
             <button
               onClick={handleImport}
               disabled={!validRows.length || importing}
               className={btnPrimary}
             >
-              {importing ? 'Importing…' : `Import ${validRows.length} portfolio${validRows.length !== 1 ? 's' : ''}`}
+              {importing ? 'Importing…' : `Import ${validRows.length} valid row${validRows.length !== 1 ? 's' : ''}`}
             </button>
           </div>
         </div>
@@ -1144,8 +1192,9 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
             {rows.length !== validRows.length && (
               <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
                 Rows highlighted in red have an error — the exact reason is shown under <strong>Status</strong>.
-                Click into a highlighted field below to fix it directly; the row turns valid as soon as it checks out,
-                no need to re-upload. (Family-member errors still need fixing in the sheet itself.)
+                Click into a highlighted field to fix it directly (click the <strong>Family</strong> count to expand
+                and fix family-member fields too) — no need to re-upload. You can <strong>import the valid rows now</strong>
+                {' '}and keep fixing the rest; already-imported rows drop off this list.
               </p>
             )}
             <div className="overflow-auto max-h-72 rounded-xl border border-slate-200 dark:border-slate-800/80 shadow-md">
@@ -1165,8 +1214,10 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {rows.map((r, i) => {
-                    const { fields: badFields, msgs } = errorsByRow[i];
+                    const { fields: badFields, msgs, familyFields } = errorsByRow[i];
                     const ok = msgs.length === 0;
+                    const hasFamily = (r.familyDetails || []).length > 0;
+                    const expanded = expandedRows.has(r.rowNum);
                     const cellCls = (field, extra = '') =>
                       `w-full bg-transparent border rounded-md px-1.5 py-1 text-xs focus:outline-none focus:ring-2 ${extra} ${
                         badFields[field]
@@ -1174,45 +1225,120 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
                           : 'border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:ring-blue-500/30 text-slate-800 dark:text-slate-200'
                       }`;
                     return (
-                      <tr key={i} className={`border-t border-slate-100 dark:border-slate-800 ${ok ? 'bg-white dark:bg-slate-900' : 'bg-rose-50/20 dark:bg-rose-950/10'}`}>
-                        <td className="px-3 py-1.5 text-slate-400 dark:text-slate-500">{r.rowNum}</td>
-                        <td className="px-1 py-1">
-                          <input value={r.name} onChange={(e) => updateRow(i, 'name', e.target.value)} className={cellCls('name', 'font-bold')} placeholder="empty" />
-                        </td>
-                        <td className="px-1 py-1">
-                          <input
-                            value={r.pan}
-                            onChange={(e) => updateRow(i, 'pan', e.target.value.toUpperCase().slice(0, 10))}
-                            className={cellCls('pan', 'font-mono tracking-wider uppercase')}
-                            placeholder="empty"
-                            maxLength={10}
-                          />
-                        </td>
-                        <td className="px-1 py-1">
-                          <input value={r.mobile} onChange={(e) => updateRow(i, 'mobile', e.target.value)} className={cellCls('mobile', 'tabular-nums')} placeholder="—" />
-                        </td>
-                        <td className="px-1 py-1">
-                          <input value={r.email} onChange={(e) => updateRow(i, 'email', e.target.value)} className={cellCls('email', 'lowercase')} placeholder="—" />
-                        </td>
-                        <td className="px-1 py-1">
-                          <input value={r.pinCode} onChange={(e) => updateRow(i, 'pinCode', e.target.value)} className={cellCls('pinCode', 'tabular-nums')} placeholder="—" maxLength={6} />
-                        </td>
-                        <td className="px-1 py-1">
-                          <input type="date" value={r.dob || ''} onChange={(e) => updateRow(i, 'dob', e.target.value)} min={DOB_MIN} max={dobMax()} className={cellCls('dob', 'tabular-nums')} />
-                        </td>
-                        <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400 tabular-nums text-center">{r.familyDetails?.length || <span className="opacity-40">0</span>}</td>
-                        <td className="px-3 py-1.5 font-bold uppercase tracking-wider text-[10px] max-w-[200px]">
-                          {ok
-                            ? <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={12} /> Valid</span>
-                            : (
-                              <span className="inline-flex items-start gap-1 text-rose-600 dark:text-rose-400" title={msgs.join('; ')}>
-                                <AlertCircle size={12} className="mt-0.5 shrink-0" />
-                                <span className="normal-case font-semibold leading-snug">{msgs.join(', ')}</span>
-                              </span>
-                            )
-                          }
-                        </td>
-                      </tr>
+                      <React.Fragment key={r.rowNum}>
+                        <tr className={`border-t border-slate-100 dark:border-slate-800 ${ok ? 'bg-white dark:bg-slate-900' : 'bg-rose-50/20 dark:bg-rose-950/10'}`}>
+                          <td className="px-3 py-1.5 text-slate-400 dark:text-slate-500">{r.rowNum}</td>
+                          <td className="px-1 py-1">
+                            <input value={r.name} onChange={(e) => updateRow(r.rowNum, 'name', e.target.value)} className={cellCls('name', 'font-bold')} placeholder="empty" />
+                          </td>
+                          <td className="px-1 py-1">
+                            <input
+                              value={r.pan}
+                              onChange={(e) => updateRow(r.rowNum, 'pan', e.target.value.toUpperCase().slice(0, 10))}
+                              className={cellCls('pan', 'font-mono tracking-wider uppercase')}
+                              placeholder="empty"
+                              maxLength={10}
+                            />
+                          </td>
+                          <td className="px-1 py-1">
+                            <input value={r.mobile} onChange={(e) => updateRow(r.rowNum, 'mobile', e.target.value)} className={cellCls('mobile', 'tabular-nums')} placeholder="—" />
+                          </td>
+                          <td className="px-1 py-1">
+                            <input value={r.email} onChange={(e) => updateRow(r.rowNum, 'email', e.target.value)} className={cellCls('email', 'lowercase')} placeholder="—" />
+                          </td>
+                          <td className="px-1 py-1">
+                            <input value={r.pinCode} onChange={(e) => updateRow(r.rowNum, 'pinCode', e.target.value)} className={cellCls('pinCode', 'tabular-nums')} placeholder="—" maxLength={6} />
+                          </td>
+                          <td className="px-1 py-1">
+                            <input type="date" value={r.dob || ''} onChange={(e) => updateRow(r.rowNum, 'dob', e.target.value)} min={DOB_MIN} max={dobMax()} className={cellCls('dob', 'tabular-nums')} />
+                          </td>
+                          <td className="px-3 py-1.5 text-center">
+                            {hasFamily ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleExpand(r.rowNum)}
+                                className={`inline-flex items-center gap-0.5 tabular-nums font-bold cursor-pointer ${
+                                  familyFields.some((ff) => Object.keys(ff).length) ? 'text-rose-600 dark:text-rose-400' : 'text-slate-600 dark:text-slate-400'
+                                }`}
+                              >
+                                {r.familyDetails.length} {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                              </button>
+                            ) : <span className="opacity-40">0</span>}
+                          </td>
+                          <td className="px-3 py-1.5 font-bold uppercase tracking-wider text-[10px] max-w-[200px]">
+                            {ok
+                              ? <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={12} /> Valid</span>
+                              : (
+                                <span className="inline-flex items-start gap-1 text-rose-600 dark:text-rose-400" title={msgs.join('; ')}>
+                                  <AlertCircle size={12} className="mt-0.5 shrink-0" />
+                                  <span className="normal-case font-semibold leading-snug">{msgs.join(', ')}</span>
+                                </span>
+                              )
+                            }
+                          </td>
+                        </tr>
+                        {expanded && hasFamily && (
+                          <tr className="bg-slate-50/70 dark:bg-slate-950/40">
+                            <td />
+                            <td colSpan={8} className="px-3 py-2.5">
+                              <table className="w-full text-[11px]">
+                                <thead className="text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                                  <tr>
+                                    <th className="text-left font-bold py-1 px-1">Name</th>
+                                    <th className="text-left font-bold py-1 px-1">Relation</th>
+                                    <th className="text-left font-bold py-1 px-1">PAN</th>
+                                    <th className="text-left font-bold py-1 px-1">DOB</th>
+                                    <th className="text-left font-bold py-1 px-1">Mobile</th>
+                                    <th className="text-left font-bold py-1 px-1">Email</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {r.familyDetails.map((f, fi) => {
+                                    const ff = familyFields[fi] || {};
+                                    const famCellCls = (field, extra = '') =>
+                                      `w-full bg-white dark:bg-slate-900 border rounded-md px-1.5 py-1 focus:outline-none focus:ring-2 ${extra} ${
+                                        ff[field]
+                                          ? 'border-rose-400 text-rose-700 dark:text-rose-400 focus:ring-rose-500/30'
+                                          : 'border-slate-200 dark:border-slate-800 focus:ring-blue-500/30 text-slate-800 dark:text-slate-200'
+                                      }`;
+                                    return (
+                                      <tr key={fi}>
+                                        <td className="px-1 py-1">
+                                          <input value={f.name} onChange={(e) => updateFamilyField(r.rowNum, fi, 'name', e.target.value)} className={famCellCls('name', 'font-bold')} />
+                                        </td>
+                                        <td className="px-1 py-1">
+                                          <select value={f.relation || ''} onChange={(e) => updateFamilyField(r.rowNum, fi, 'relation', e.target.value)} className={famCellCls('relation')}>
+                                            <option value="">Select…</option>
+                                            {RELATIONS.map((rel) => <option key={rel} value={rel}>{rel}</option>)}
+                                          </select>
+                                        </td>
+                                        <td className="px-1 py-1">
+                                          <input
+                                            value={f.pan}
+                                            onChange={(e) => updateFamilyField(r.rowNum, fi, 'pan', e.target.value.toUpperCase().slice(0, 10))}
+                                            className={famCellCls('pan', 'font-mono uppercase')}
+                                            placeholder="empty"
+                                            maxLength={10}
+                                          />
+                                        </td>
+                                        <td className="px-1 py-1">
+                                          <input type="date" value={f.dob || ''} onChange={(e) => updateFamilyField(r.rowNum, fi, 'dob', e.target.value)} min={DOB_MIN} max={dobMax()} className={famCellCls('dob', 'tabular-nums')} />
+                                        </td>
+                                        <td className="px-1 py-1">
+                                          <input value={f.mobile || ''} onChange={(e) => updateFamilyField(r.rowNum, fi, 'mobile', e.target.value)} className={famCellCls('mobile', 'tabular-nums')} placeholder="—" />
+                                        </td>
+                                        <td className="px-1 py-1">
+                                          <input value={f.email || ''} onChange={(e) => updateFamilyField(r.rowNum, fi, 'email', e.target.value)} className={famCellCls('email', 'lowercase')} placeholder="—" />
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
