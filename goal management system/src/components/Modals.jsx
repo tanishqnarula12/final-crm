@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import { Field, inputCls, selectCls, btnPrimary, btnSecondary, btnGhost, CoolSelect } from './UI';
 import {
   calcGoal, monthsBetween, fmtFull, fmtINR, fmtSip, nv, parseNum, GOAL_PRESETS, CURRENT_MONTH, CURRENT_YEAR, MONTH_NAMES, needsKidName,
-  DOB_MIN, dobMax, isValidDob,
+  DOB_MIN, dobMax, isValidDob, parseFlexibleDate,
 } from '../utils/calc';
 import { RELATIONS } from '../utils/team';
 import { loadTeam } from '../services/team';
@@ -1008,7 +1008,7 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
-        const wb = XLSX.read(ev.target.result, { type: 'array' });
+        const wb = XLSX.read(ev.target.result, { type: 'array', cellDates: true });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
 
@@ -1043,7 +1043,10 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
               .map((idx) => {
                 const fk = famKeys[idx];
                 const g = (f) => (fk[f] ? String(r[fk[f]] ?? '').trim() : '');
-                return { name: g('name'), relation: g('relation'), pan: g('pan').toUpperCase(), dob: g('dob'), mobile: g('mobile'), email: g('email') };
+                // DOB needs the raw cell value (number/Date/text) before it's
+                // stringified, so parseFlexibleDate can tell them apart.
+                const dob = fk.dob ? parseFlexibleDate(r[fk.dob]) : '';
+                return { name: g('name'), relation: g('relation'), pan: g('pan').toUpperCase(), dob, mobile: g('mobile'), email: g('email') };
               })
               .filter((f) => f.name);
 
@@ -1057,7 +1060,7 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
               name: val(r, 'name'),
               pan: val(r, 'pan').toUpperCase(),
               age: keyFor.age ? (Number(r[keyFor.age]) || 0) : 0,
-              dob: val(r, 'dob'), mobile: val(r, 'mobile'), email: val(r, 'email'),
+              dob: keyFor.dob ? parseFlexibleDate(r[keyFor.dob]) : '', mobile: val(r, 'mobile'), email: val(r, 'email'),
               clientType: val(r, 'clientType'), profession: val(r, 'profession'),
               address1: val(r, 'address1'), address2: val(r, 'address2'), address3: val(r, 'address3'),
               city: val(r, 'city'), state: val(r, 'state'), country: val(r, 'country') || 'India',

@@ -18,6 +18,42 @@ export const DOB_MIN = '1900-01-01';
 export const dobMax = () => new Date().toISOString().slice(0, 10);
 export const isValidDob = (iso) => !!iso && iso >= DOB_MIN && iso <= dobMax();
 
+// Turn whatever a spreadsheet cell hands back into a real YYYY-MM-DD string
+// (or '' if it can't). Excel date-formatted cells come through as a serial
+// number (days since 1899-12-30) when the workbook isn't read with
+// `cellDates: true`; plain-text cells come through as whatever the person
+// typed — commonly DD-MM-YYYY or DD/MM/YYYY here, not ISO. isValidDob() does
+// a plain string comparison, so anything not already ISO fails it silently —
+// this normalizes first so a genuine date isn't rejected just for being
+// formatted the way most people actually write dates.
+export function parseFlexibleDate(value) {
+  if (value === null || value === undefined || value === '') return '';
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? '' : value.toISOString().slice(0, 10);
+  }
+  if (typeof value === 'number') {
+    // Excel serial date -> JS Date (epoch offset includes the classic 1900 leap-year bug).
+    const d = new Date(Math.round((value - 25569) * 86400 * 1000));
+    return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+  }
+  const s = String(value).trim();
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) {
+    const [y, m, d] = s.split('-');
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  const m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (m) {
+    let [, a, b, year] = m;
+    // Day-first (DD-MM-YYYY / DD/MM/YYYY) is the convention here; if the
+    // first part can't be a month (>12) that also confirms it's the day.
+    let day = a, month = b;
+    if (Number(a) > 12 && Number(b) <= 12) { day = a; month = b; }
+    else if (Number(b) > 12 && Number(a) <= 12) { day = b; month = a; } // was actually MM-DD-YYYY
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+  return '';
+}
+
 export const GOAL_PRESETS = ['Emergency', 'Vacation', 'Dream Car', 'Dream Home', 'Marriage', 'Kids Education', 'Kids Marriage', 'Financial Freedom', 'Wealth Creation', 'Others'];
 
 // Goals that are tied to a specific child and therefore capture the kid's name
