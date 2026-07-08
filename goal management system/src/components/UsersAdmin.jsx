@@ -7,6 +7,7 @@ import { Card, btnPrimary, btnGhost, inputCls, selectCls, Field, CoolSelect } fr
 import { CountrySelect, StateSelect, CitySelect } from './LocationPicker';
 import { RELATIONS } from '../utils/team';
 import { ADVISOR_ROLES, MARITAL_STATUS_OPTIONS } from '../utils/advisorProfile';
+import { DOB_MIN, dobMax } from '../utils/calc';
 import { api } from '../services/api';
 import { getCurrentUser } from '../utils/auth';
 
@@ -408,7 +409,7 @@ function UserFormModal({ initial, isSelf, onClose, onSaved }) {
                     <input type="date" value={teamMemberSince} onChange={(e) => setTeamMemberSince(e.target.value)} className={inputCls} />
                   </Field>
                   <Field label="Date of Birth">
-                    <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className={inputCls} />
+                    <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} min={DOB_MIN} max={dobMax()} className={inputCls} />
                   </Field>
                   <Field label="PAN No." hint={pan && !panValid ? 'Format must be: 5 letters, 4 digits, 1 letter' : null}>
                     <input value={pan} onChange={(e) => setPan(e.target.value.toUpperCase().slice(0, 10))} placeholder="e.g. ABCDE1234F" maxLength={10} className={inputCls + ' font-mono tracking-widest uppercase'} />
@@ -494,7 +495,7 @@ function UserFormModal({ initial, isSelf, onClose, onSaved }) {
                               </CoolSelect>
                             </td>
                             <td className="px-4 py-2">
-                              <input type="date" value={member.dob || ''} onChange={(e) => handleFamilyMemberChange(idx, 'dob', e.target.value)} className={inputCls + ' text-xs py-1.5'} />
+                              <input type="date" value={member.dob || ''} onChange={(e) => handleFamilyMemberChange(idx, 'dob', e.target.value)} min={DOB_MIN} max={dobMax()} className={inputCls + ' text-xs py-1.5'} />
                             </td>
                             <td className="px-4 py-2">
                               <input value={member.mobile || ''} onChange={(e) => handleFamilyMemberChange(idx, 'mobile', e.target.value)} placeholder="Mobile" className={inputCls + ' text-xs py-1.5'} />

@@ -3,7 +3,8 @@ import { X, CheckCircle2, Upload, AlertCircle, FileSpreadsheet, ChevronDown, Use
 import * as XLSX from 'xlsx';
 import { Field, inputCls, selectCls, btnPrimary, btnSecondary, btnGhost, CoolSelect } from './UI';
 import {
-  calcGoal, monthsBetween, fmtFull, fmtINR, fmtSip, nv, parseNum, GOAL_PRESETS, CURRENT_MONTH, CURRENT_YEAR, MONTH_NAMES, needsKidName
+  calcGoal, monthsBetween, fmtFull, fmtINR, fmtSip, nv, parseNum, GOAL_PRESETS, CURRENT_MONTH, CURRENT_YEAR, MONTH_NAMES, needsKidName,
+  DOB_MIN, dobMax, isValidDob,
 } from '../utils/calc';
 import { RELATIONS } from '../utils/team';
 import { loadTeam } from '../services/team';
@@ -174,6 +175,7 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
     if (!name.trim()) errs.name = "Required";
     if (!age || isNaN(age) || age <= 0) errs.age = "Required";
     if (!dob) errs.dob = "Required";
+    else if (!isValidDob(dob)) errs.dob = dob > dobMax() ? "Cannot be in the future" : "Enter a valid date of birth";
     
     if (!pan.trim()) errs.pan = "Required";
     else if (pan.length !== 10 || !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(pan)) errs.pan = "Invalid format";
@@ -218,6 +220,7 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
       if (!f.pan?.trim()) { fE.pan = "Required"; hasFamErrs = true; }
       else if (f.pan.length !== 10 || !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(f.pan)) { fE.pan = "Invalid format"; hasFamErrs = true; }
       if (!f.dob) { fE.dob = "Required"; hasFamErrs = true; }
+      else if (!isValidDob(f.dob)) { fE.dob = f.dob > dobMax() ? "Cannot be in the future" : "Enter a valid date of birth"; hasFamErrs = true; }
       if (Object.keys(fE).length > 0) famErrs[idx] = fE;
     });
 
@@ -332,7 +335,7 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
               <input type="number" value={age} readOnly className={`${inputCls} bg-slate-50 dark:bg-slate-900/50 cursor-not-allowed`} placeholder="Select Date of Birth first" />
             </Field>
             <Field label="Date of Birth *" error={errors.dob}>
-              <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className={inputCls} />
+              <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} min={DOB_MIN} max={dobMax()} className={inputCls} />
             </Field>
             <Field label="PAN Card Number *" error={errors.pan} hint={pan && !panValid ? 'Format usually: 5 letters, 4 digits, 1 letter' : null}>
               <input
@@ -526,6 +529,7 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
                               type="date"
                               value={member.dob || ''}
                               onChange={(e) => handleFamilyMemberChange(idx, 'dob', e.target.value)}
+                              min={DOB_MIN} max={dobMax()}
                               className={`${inputCls} text-xs py-1.5 ${errors.familyDetails?.[idx]?.dob ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/20' : ''}`}
                             />
                             {errors.familyDetails?.[idx]?.dob && <p className="text-[10px] text-rose-600 font-bold mt-1">{errors.familyDetails[idx].dob}</p>}
@@ -859,6 +863,30 @@ export function GoalFormModal({ initial, onClose, onSave }) {
 }
 
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Every reason a parsed row can't be imported as-is. Checked against the same
+// rules the manual Create/Edit Client form enforces (email format, mobile
+// length, 6-digit pincode, plausible DOB), plus duplicate-PAN checks the
+// manual form doesn't need (one row at a time there; a whole sheet here).
+function rowErrors(r, i, allRows, existingClients) {
+  const errs = [];
+  if (!r.name) errs.push('Missing name');
+  if (!r.pan) errs.push('Missing PAN');
+  else if (!PAN_RE.test(r.pan)) errs.push('Invalid PAN format');
+  else if (allRows.some((other, j) => j !== i && other.pan === r.pan)) errs.push('Duplicate PAN in sheet');
+  else if (existingClients.some((c) => (c.pan || '').toUpperCase() === r.pan)) errs.push('PAN already exists');
+
+  if (r.email && !EMAIL_RE.test(r.email)) errs.push('Invalid email');
+  if (r.mobile && r.mobile.replace(/[^0-9]/g, '').length < 10) errs.push('Invalid mobile');
+  if (r.pinCode && !/^\d{6}$/.test(r.pinCode)) errs.push('Invalid pincode');
+  if (r.dob && !isValidDob(r.dob)) errs.push('Invalid DOB');
+  (r.familyDetails || []).forEach((f, fi) => {
+    if (f.pan && !PAN_RE.test(f.pan)) errs.push(`Family ${fi + 1} PAN invalid`);
+    if (f.dob && !isValidDob(f.dob)) errs.push(`Family ${fi + 1} DOB invalid`);
+  });
+  return errs;
+}
 
 // Normalize a header for fuzzy matching: lowercase, strip spaces/dots/_/-.
 const normHeader = (h) => String(h).toLowerCase().replace(/[\s._-]/g, '');
@@ -912,9 +940,13 @@ const TEMPLATE_HEADERS = [
   'Relationship Manager', 'Portfolio Manager', 'Insurance Manager', 'Service Manager', 'Owner', 'Operation Manager', 'Internal Manager',
   'Family 1 Name', 'Family 1 Relation', 'Family 1 PAN', 'Family 1 DOB', 'Family 1 Mobile', 'Family 1 Email',
   'Family 2 Name', 'Family 2 Relation', 'Family 2 PAN', 'Family 2 DOB', 'Family 2 Mobile', 'Family 2 Email',
+  // A 3rd example makes the "just keep numbering" pattern obvious — the import
+  // parser (see famKeys below) already reads "Family <n> ..." for any n, so
+  // there's no real cap; Family 4, 5, etc. work exactly the same way.
+  'Family 3 Name', 'Family 3 Relation', 'Family 3 PAN', 'Family 3 DOB', 'Family 3 Mobile', 'Family 3 Email',
 ];
 
-export function ExcelImportModal({ onClose, onImport }) {
+export function ExcelImportModal({ onClose, onImport, clients = [] }) {
   const fileRef = useRef();
   const [rows, setRows] = useState(null);
   const [error, setError] = useState('');
@@ -931,6 +963,7 @@ export function ExcelImportModal({ onClose, onImport }) {
       'Service Manager': 'Mehul Khandelwal', Owner: 'Nitesh Luthra', 'Operation Manager': 'Mehul Khandelwal', 'Internal Manager': 'Mehul Khandelwal',
       'Family 1 Name': 'Nisha Sharma', 'Family 1 Relation': 'Spouse', 'Family 1 PAN': 'XYZPN5678B', 'Family 1 DOB': '1994-08-22', 'Family 1 Mobile': '9876500000', 'Family 1 Email': 'nisha@example.com',
       'Family 2 Name': 'Aryan Sharma', 'Family 2 Relation': 'Son', 'Family 2 PAN': '', 'Family 2 DOB': '2016-03-10', 'Family 2 Mobile': '', 'Family 2 Email': '',
+      'Family 3 Name': 'Kavita Sharma', 'Family 3 Relation': 'Mother', 'Family 3 PAN': '', 'Family 3 DOB': '1965-11-02', 'Family 3 Mobile': '', 'Family 3 Email': '',
     };
     const ws = XLSX.utils.json_to_sheet([example], { header: TEMPLATE_HEADERS });
     ws['!cols'] = TEMPLATE_HEADERS.map((h) => ({ wch: Math.max(12, h.length + 2) }));
@@ -1016,7 +1049,11 @@ export function ExcelImportModal({ onClose, onImport }) {
     reader.readAsArrayBuffer(file);
   };
 
-  const validRows = rows ? rows.filter(r => r.name && PAN_RE.test(r.pan)) : [];
+  const errorsByRow = useMemo(
+    () => rows ? rows.map((r, i) => rowErrors(r, i, rows, clients)) : [],
+    [rows, clients]
+  );
+  const validRows = rows ? rows.filter((r, i) => errorsByRow[i].length === 0) : [];
 
   const handleImport = async () => {
     setImporting(true);
@@ -1059,7 +1096,7 @@ export function ExcelImportModal({ onClose, onImport }) {
             <div>
               <p className="text-xs font-bold text-slate-700 dark:text-slate-200">First time? Download the sample template</p>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                Fill your client data in this exact format (personal, address, holdings, team assignments &amp; up to 2 family members per client), then upload it back.
+                Fill your client data in this exact format (personal, address, holdings, team assignments &amp; family members), then upload it back. The template shows 2 example family members, but you can add more — just copy the "Family 2 …" columns again as "Family 3 …", "Family 4 …" and so on; there's no limit.
               </p>
             </div>
           </div>
@@ -1108,9 +1145,10 @@ export function ExcelImportModal({ onClose, onImport }) {
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {rows.map((r, i) => {
+                  const rowErrs = errorsByRow[i];
                   const nameOk = !!r.name;
                   const panOk = PAN_RE.test(r.pan);
-                  const ok = nameOk && panOk;
+                  const ok = rowErrs.length === 0;
                   return (
                     <tr key={i} className={`border-t border-slate-100 dark:border-slate-800 ${ok ? 'bg-white dark:bg-slate-900' : 'bg-rose-50/20 dark:bg-rose-950/10'}`}>
                       <td className="px-3 py-2.5 text-slate-400 dark:text-slate-500">{r.rowNum}</td>
@@ -1126,10 +1164,15 @@ export function ExcelImportModal({ onClose, onImport }) {
                       <td className="px-3 py-2.5 text-slate-600 dark:text-slate-400 tabular-nums">{r.mobile || <span className="opacity-40">—</span>}</td>
                       <td className="px-3 py-2.5 text-slate-600 dark:text-slate-400 lowercase truncate max-w-[140px]">{r.email || <span className="opacity-40">—</span>}</td>
                       <td className="px-3 py-2.5 text-slate-600 dark:text-slate-400 tabular-nums text-center">{r.familyDetails?.length || <span className="opacity-40">0</span>}</td>
-                      <td className="px-3 py-2.5 font-bold uppercase tracking-wider text-[10px]">
+                      <td className="px-3 py-2.5 font-bold uppercase tracking-wider text-[10px] max-w-[220px]">
                         {ok
                           ? <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={12} /> Valid</span>
-                          : <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400"><AlertCircle size={12} /> {!nameOk ? 'Missing name' : 'Invalid PAN'}</span>
+                          : (
+                            <span className="inline-flex items-start gap-1 text-rose-600 dark:text-rose-400" title={rowErrs.join('; ')}>
+                              <AlertCircle size={12} className="mt-0.5 shrink-0" />
+                              <span className="normal-case font-semibold leading-snug">{rowErrs.join(', ')}</span>
+                            </span>
+                          )
                         }
                       </td>
                     </tr>

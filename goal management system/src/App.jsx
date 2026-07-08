@@ -1661,6 +1661,7 @@ export default function App() {
         <ExcelImportModal
           onClose={() => setShowImportExcel(false)}
           onImport={handleImportClients}
+          clients={clients}
         />
       )}
 

@@ -7,7 +7,7 @@ import {
 import { Card, Field, inputCls, selectCls, btnPrimary, btnGhost, CoolSelect } from './UI';
 import { CountrySelect, StateSelect, CitySelect } from './LocationPicker';
 import { RELATIONS } from '../utils/team';
-import { avatarColor, initials, fmtDate } from '../utils/calc';
+import { avatarColor, initials, fmtDate, DOB_MIN, dobMax } from '../utils/calc';
 import {
   loadAdvisorProfile, saveAdvisorProfile, ADVISOR_ROLES, MARITAL_STATUS_OPTIONS
 } from '../utils/advisorProfile';
@@ -449,7 +449,7 @@ function ProfileEditModal({ profile, onClose, onSave }) {
               </CoolSelect>
             </Field>
             <Field label="Date of Birth">
-              <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className={inputCls} />
+              <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} min={DOB_MIN} max={dobMax()} className={inputCls} />
             </Field>
             <Field label="Team Member Since">
               <input type="date" value={teamMemberSince} onChange={(e) => setTeamMemberSince(e.target.value)} className={inputCls} />
@@ -563,6 +563,7 @@ function ProfileEditModal({ profile, onClose, onSave }) {
                           type="date"
                           value={member.dob || ''}
                           onChange={(e) => handleFamilyMemberChange(idx, 'dob', e.target.value)}
+                          min={DOB_MIN} max={dobMax()}
                           className={inputCls + ' text-xs py-1.5'}
                         />
                       </td>

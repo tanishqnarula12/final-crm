@@ -10,6 +10,14 @@ export const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Au
 export const monthLabel = (m, y) => `${MONTH_NAMES[(m - 1 + 12) % 12]} ${y}`;
 export const monthsBetween = (fromM, fromY, toM, toY) => (toY - fromY) * 12 + (toM - fromM);
 
+// DOB bounds — a real person's date of birth can't be in the future, and
+// realistically isn't before 1900. Used as both the <input type="date">
+// min/max (blocks the date picker/spinner) and to re-validate on save (catches
+// a value typed or pasted in directly, which the HTML attributes alone won't).
+export const DOB_MIN = '1900-01-01';
+export const dobMax = () => new Date().toISOString().slice(0, 10);
+export const isValidDob = (iso) => !!iso && iso >= DOB_MIN && iso <= dobMax();
+
 export const GOAL_PRESETS = ['Emergency', 'Vacation', 'Dream Car', 'Dream Home', 'Marriage', 'Kids Education', 'Kids Marriage', 'Financial Freedom', 'Wealth Creation', 'Others'];
 
 // Goals that are tied to a specific child and therefore capture the kid's name

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   Search, X, Pin, Pencil, Trash2, Copy, CornerUpLeft, Download, ChevronUp,
   CheckCheck, Check, Users as UsersIcon, MessageSquare, ExternalLink, ArrowLeft,
-  ChevronDown, Smile, Plus, BarChart3, MoreVertical, Info, Eraser,
+  ChevronDown, Smile, Plus, BarChart3, MoreVertical, Info, Eraser, Clock, RotateCw,
 } from 'lucide-react';
 import {
   fetchMessages, sendMessage, editMessage, deleteMessage, pinMessage,
@@ -179,11 +179,62 @@ export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAct
   useEffect(() => { loadOlderRef.current = loadOlder; }, [loadOlder]);
 
   // ---- Actions ------------------------------------------------------------------
+  // Optimistic send: the bubble appears and the composer clears instantly (the
+  // network round-trip no longer blocks either), matching the "meta line" tick
+  // treatment below (clock while pending, retry on failure). The REST response
+  // and the live socket broadcast can arrive in either order — the state
+  // updates below reconcile with the temp id either way, without duplicating.
   const handleSend = async ({ content, attachments, mentions, replyToId, poll }) => {
-    const { message } = await sendMessage(convId, { content, attachments, mentions, replyToId, poll });
-    setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
+    const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const optimistic = {
+      id: tempId,
+      conversationId: convId,
+      senderId: me.id,
+      type: poll ? 'poll' : 'text',
+      content,
+      replyToId: replyToId || null,
+      replyTo: replyTo ? {
+        id: replyTo.id,
+        senderId: replyTo.senderId,
+        content: replyTo.deleted ? '' : (replyTo.content || '').slice(0, 200),
+        deleted: !!replyTo.deleted,
+        hasAttachments: Array.isArray(replyTo.attachments) && replyTo.attachments.length > 0,
+      } : null,
+      editedAt: null,
+      deleted: false,
+      pinned: false,
+      attachments: attachments || [],
+      mentions: mentions || [],
+      reactions: {},
+      poll: poll || null,
+      linkPreview: null,
+      createdAt: new Date().toISOString(),
+      pending: true,
+    };
+    setMessages((prev) => [...prev, optimistic]);
     setReplyTo(null);
     requestAnimationFrame(() => scrollToBottom(true));
+
+    // Deliberately not awaited: the composer (which awaits this function) should
+    // clear immediately, not block on the network round-trip. Success/failure
+    // reconciles the temp bubble in place, asynchronously.
+    sendMessage(convId, { content, attachments, mentions, replyToId, poll })
+      .then(({ message }) => {
+        setMessages((prev) => {
+          const withoutTemp = prev.filter((m) => m.id !== tempId);
+          // The socket's `message:new` may have already delivered this one.
+          return withoutTemp.some((m) => m.id === message.id) ? withoutTemp : [...withoutTemp, message];
+        });
+      })
+      .catch(() => {
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, pending: false, failed: true } : m)));
+      });
+  };
+
+  // Re-send a message that failed — removes the failed bubble and retries as new.
+  const handleRetry = (m) => {
+    setMessages((prev) => prev.filter((x) => x.id !== m.id));
+    handleSend({ content: m.content, attachments: m.attachments, mentions: m.mentions, replyToId: m.replyToId, poll: m.poll });
   };
 
   const handleSaveEdit = async (content) => {
@@ -432,6 +483,7 @@ export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAct
                     onReply={() => { setEditing(null); setReplyTo(m); }}
                     onEdit={() => { setReplyTo(null); setEditing(m); }}
                     onDelete={() => handleDelete(m)}
+                    onRetry={() => handleRetry(m)}
                     onPin={() => handlePin(m)}
                     onReact={(emoji) => handleReact(m, emoji)}
                     onVote={(optionId) => handleVote(m, optionId)}
@@ -577,7 +629,7 @@ function AnchoredPopover({ anchorRef, onClose, placement = 'bottom', children })
 
 function MessageBubble({
   m, mine, meId, sender, grouped, isGroup, isAdmin, highlighted, read,
-  onReply, onEdit, onDelete, onPin, onReact, onVote, onJumpToReply, onOpenImage, onOpenProfile, usersById,
+  onReply, onEdit, onDelete, onRetry, onPin, onReact, onVote, onJumpToReply, onOpenImage, onOpenProfile, usersById,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reactOpen, setReactOpen] = useState(false);
@@ -601,7 +653,7 @@ function MessageBubble({
   const doReact = (emoji) => { onReact(emoji); setReactOpen(false); setReactFull(false); };
 
   return (
-    <div id={`msg-${m.id}`} className={`group flex gap-2 animate-msg-in ${mine ? 'justify-end' : 'justify-start'} ${grouped ? 'mt-0.5' : 'mt-2.5'} ${highlighted ? 'animate-pulse' : ''}`}>
+    <div id={`msg-${m.id}`} className={`group flex gap-2 animate-msg-in ${mine ? 'justify-end' : 'justify-start'} ${grouped ? 'mt-0.5' : 'mt-2.5'} ${highlighted ? 'animate-pulse' : ''} ${m.pending ? 'opacity-60' : ''}`}>
       {!mine && (
         <div className="w-8 shrink-0 self-end">
           {!grouped && (
@@ -777,11 +829,20 @@ function MessageBubble({
           {/* Meta line */}
           <div className={`flex items-center gap-1 justify-end mt-0.5 ${mine ? 'text-white/70' : 'text-slate-400'}`}>
             {m.editedAt && !m.deleted && <span className="text-[8.5px] italic mr-0.5">edited</span>}
-            <span className="text-[9px] font-semibold tabular-nums">{fmtTime(m.createdAt)}</span>
-            {mine && !m.deleted && (
-              read
-                ? <CheckCheck size={12} className="text-sky-300" />
-                : <Check size={12} />
+            {m.failed ? (
+              <button onClick={onRetry} title="Failed to send — tap to retry" className="flex items-center gap-1 text-rose-300 hover:text-rose-200 cursor-pointer">
+                <span className="text-[9px] font-bold">Failed — retry</span>
+                <RotateCw size={11} />
+              </button>
+            ) : (
+              <>
+                <span className="text-[9px] font-semibold tabular-nums">{fmtTime(m.createdAt)}</span>
+                {mine && !m.deleted && (
+                  m.pending
+                    ? <Clock size={11} />
+                    : read ? <CheckCheck size={12} className="text-sky-300" /> : <Check size={12} />
+                )}
+              </>
             )}
           </div>
         </div>

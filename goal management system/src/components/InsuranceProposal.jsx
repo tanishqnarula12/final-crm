@@ -3,7 +3,7 @@ import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, CoolSele
 import { Plus, Trash2, Shield, Heart, Briefcase, FileText, Printer, ArrowLeft, CheckCircle2, AlertCircle, Save } from 'lucide-react';
 import { LOGO_DATA_URI } from '../assets/logoBase64';
 import { RELATIONS } from '../utils/team';
-import { uid } from '../utils/calc';
+import { uid, DOB_MIN, dobMax } from '../utils/calc';
 import { addProspects } from '../utils/prospects';
 import { saveGeneratedDocument, wrapStandaloneHtml } from '../utils/documents';
 import { ProspectModal } from './BusinessProspects';
@@ -867,6 +867,7 @@ export default function InsuranceProposal({ client, isViewer }) {
                           type="date"
                           value={member.dob}
                           onChange={(e) => updateApplicant(index, 'dob', e.target.value)}
+                          min={DOB_MIN} max={dobMax()}
                           className={inputCls + ' text-xs py-2 px-3'}
                         />
                       </div>
