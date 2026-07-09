@@ -44,5 +44,12 @@ export const canChangeQueryStage = (_me, query, fromStage, toStage) =>
   can('queries', 'changeStage', query, { fromStage, toStage });
 export const canLogQuery = (_me, query) => can('queries', 'editLog', query);
 
+// ---- Leave -----------------------------------------------------------------
+export const canCreateLeave = () => can('leave', 'create');
+export const canEditLeave = (_me, leaveRequest) => can('leave', 'editDetails', leaveRequest);
+// respond's scope is only ever NONE or ALL (never ASSIGNED — see permissionCatalog.js),
+// so no record/ownership check is needed here.
+export const canRespondToLeave = () => can('leave', 'respond');
+
 // Generic fallback for any module/action.
 export const canDo = (module, action, record) => can(module, action, record);

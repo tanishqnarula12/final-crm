@@ -250,6 +250,36 @@ model Query {
   @@map("queries")
 }
 
+// Leave requests — a plain typed table (not the Task-style JSONB payload
+// pattern) since its shape is small and fixed, unlike Tasks/Leads. Deliberately
+// NOT routed through syncBulk(): approve/reject is a one-directional action by
+// a DIFFERENT party than the requester (not a symmetric "two people share a
+// record" shape like Tasks/Queries), so it's served by dedicated REST actions
+// (apply, edit/re-apply, respond) in routes/leave.js instead — cleaner and
+// safer than bending the generic bulk-array-diff engine to fit an asymmetric
+// approval workflow.
+model Leave {
+  id              String    @id @default(cuid())
+  createdBy       String // User.id — the requester (immutable)
+  fromDate        String // YYYY-MM-DD
+  toDate          String // YYYY-MM-DD
+  reason          String
+  status          String    @default("Pending") // Pending | Approved | Rejected
+  responseMessage String? // optional note from the approver (accept or reject)
+  respondedBy     String? // User.id — the admin/internal manager who decided
+  respondedAt     DateTime?
+  // Past decisions, appended each time a rejected request is edited and
+  // re-applied — so re-applying doesn't erase the history of prior rounds.
+  history         Json      @default("[]")
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([createdBy])
+  @@index([status])
+  @@map("leaves")
+}
+
 model AdvisorProfile {
   id        String   @id @default(cuid())
   userId    String   @unique
@@ -332,7 +362,7 @@ model ChatMessage {
 model Notification {
   id        String    @id @default(cuid())
   userId    String // recipient (User.id)
-  type      String // TASK_ASSIGNED | MEETING_SOON | TASK_DUE | PROSPECT_ASSIGNED | LEAD_NEW | BIRTHDAY | LEAD_RM_ASSIGNED | QUERY_RAISED
+  type      String // TASK_ASSIGNED | MEETING_SOON | TASK_DUE | PROSPECT_ASSIGNED | LEAD_NEW | BIRTHDAY | LEAD_RM_ASSIGNED | QUERY_RAISED | LEAVE_APPLIED | LEAVE_RESPONDED
   title     String
   body      String    @default("")
   link      Json? // { view, id } for click-through, optional

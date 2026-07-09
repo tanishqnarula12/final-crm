@@ -5,7 +5,7 @@
 import React from 'react';
 import {
   Bell, CheckCheck, Check, ClipboardList, AlarmClock, Video,
-  Briefcase, UserPlus, Cake, HelpCircle,
+  Briefcase, UserPlus, Cake, HelpCircle, CalendarClock, CalendarCheck2,
 } from 'lucide-react';
 
 // Per-type icon + accent colour.
@@ -18,6 +18,8 @@ const TYPE_META = {
   LEAD_RM_ASSIGNED: { icon: UserPlus,      cls: 'bg-teal-50 text-teal-600 dark:bg-teal-950/40 dark:text-teal-400' },
   BIRTHDAY:         { icon: Cake,          cls: 'bg-pink-50 text-pink-600 dark:bg-pink-950/40 dark:text-pink-400' },
   QUERY_RAISED:     { icon: HelpCircle,    cls: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400' },
+  LEAVE_APPLIED:    { icon: CalendarClock, cls: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400' },
+  LEAVE_RESPONDED:  { icon: CalendarCheck2, cls: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400' },
 };
 const fallbackMeta = { icon: Bell, cls: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' };
 

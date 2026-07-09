@@ -44,6 +44,7 @@ import ProposalWorkspace from './components/ProposalWorkspace';
 import Sidebar from './components/Sidebar';
 import TasksView, { TaskFormModal } from './components/TasksView';
 import QueriesView, { QueryFormModal } from './components/QueriesView';
+import LeaveView from './components/LeaveView';
 import CobrView from './components/CobrView';
 import CobrFormModal from './components/CobrFormModal';
 import CobrTaskModal from './components/CobrTaskModal';
@@ -57,6 +58,8 @@ import OthersView from './components/OthersView';
 import { loadLeads, hydrateLeads, updateLead, clientPayloadFromLead, markConnectedFromTask, syncMeetingToLead, leadName as leadNameOf } from './services/leads';
 import { loadTasks, saveTasks, hydrateTasks } from './utils/tasks';
 import { loadQueries, saveQueries, hydrateQueries, QUERY_STAGES } from './utils/queries';
+import { loadLeave, hydrateLeave } from './utils/leave';
+import { canRespondToLeave } from './utils/permissions';
 import { loadProspects, saveProspects, hydrateProspects } from './utils/prospects';
 import { loadMeetings, saveMeetings, hydrateMeetings } from './utils/meetings';
 import { hydrateTeam, loadTeam, teamName } from './services/team';
@@ -167,6 +170,10 @@ export default function App() {
   const [leadsBadge, setLeadsBadge] = useState(0);
   // Sidebar "pending" count badges per module (tasks/cobr/meetings/prospects/queries).
   const [moduleBadges, setModuleBadges] = useState({ tasks: 0, cobr: 0, meetings: 0, prospects: 0, queries: 0 });
+  // Pending-leave-requests-awaiting-my-decision count (Admin / Internal Manager
+  // only) — shown next to the "Leave" item in the Account Settings dropdown,
+  // since Leave has no sidebar nav icon to badge instead.
+  const [pendingLeaveCount, setPendingLeaveCount] = useState(0);
   const [convertingLead, setConvertingLead] = useState(null);
 
   // Asset allocation tab states
@@ -211,6 +218,7 @@ export default function App() {
         hydrateLeads().catch((err) => console.error('Failed to load leads:', err)),
         hydrateTasks().catch((err) => console.error('Failed to load tasks:', err)),
         hydrateQueries().catch((err) => console.error('Failed to load queries:', err)),
+        hydrateLeave().catch((err) => console.error('Failed to load leave requests:', err)),
         hydrateMeetings().catch((err) => console.error('Failed to load meetings:', err)),
         hydrateProspects().catch((err) => console.error('Failed to load prospects:', err)),
         hydrateAdvisorProfile().catch((err) => console.error('Failed to load advisor profile:', err)),
@@ -640,6 +648,23 @@ export default function App() {
       window.removeEventListener('crm:queries-updated', recompute);
     };
   }, [tasksChangeCounter, meetingsChangeCounter, prospectsChangeCounter, queriesChangeCounter]);
+
+  // Leave has no sidebar icon, so its "needs my attention" count is tracked
+  // separately and surfaced in the Account Settings dropdown instead.
+  useEffect(() => {
+    const recompute = () => {
+      if (!canRespondToLeave()) { setPendingLeaveCount(0); return; }
+      const me = getCurrentUser();
+      setPendingLeaveCount(loadLeave().filter((l) => l.status === 'Pending' && l.createdBy !== me?.id).length);
+    };
+    recompute();
+    window.addEventListener('crm:leave-updated', recompute);
+    window.addEventListener('crm:permissions-updated', recompute);
+    return () => {
+      window.removeEventListener('crm:leave-updated', recompute);
+      window.removeEventListener('crm:permissions-updated', recompute);
+    };
+  }, []);
 
   const goToMomMapping = (clientId) => {
     setSelectedClientId(null);
@@ -1081,13 +1106,24 @@ export default function App() {
                 </div>
                 <div className="space-y-1">
                   <div className="px-3 py-2 text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest">
-                    Account Settings
+                    Account and General Settings
                   </div>
                   <button
                     onClick={() => { setActiveDropdown(null); setView('myprofile'); }}
                     className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-650 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer transition-all"
                   >
                     Profile Settings
+                  </button>
+                  <button
+                    onClick={() => { setActiveDropdown(null); setView('leave'); }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-650 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer transition-all"
+                  >
+                    <span>Leave</span>
+                    {pendingLeaveCount > 0 && (
+                      <span className="text-[9px] font-black text-white bg-amber-500 rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                        {pendingLeaveCount > 99 ? '99+' : pendingLeaveCount}
+                      </span>
+                    )}
                   </button>
                   {isAdmin && (
                     <button
@@ -1179,6 +1215,12 @@ export default function App() {
           </main>
         )}
 
+        {view === 'leave' && (
+          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+            <LeaveView />
+          </main>
+        )}
+
         {view === 'users' && isAdmin && (
           <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
             <UsersAdmin />
@@ -1236,6 +1278,7 @@ export default function App() {
                   activeDropdown={activeDropdown}
                   setActiveDropdown={setActiveDropdown}
                   setView={setView}
+                  pendingLeaveCount={pendingLeaveCount}
                   notifications={notifications}
                   onMarkRead={markNotificationRead}
                   onMarkAllRead={markAllNotificationsRead}
@@ -1817,7 +1860,7 @@ export default function App() {
 function ChatSidebar({
   advisorProfile, isAdmin, theme, setTheme, onLogout,
   setShowChangePassword, activeDropdown, setActiveDropdown, setView,
-  notifications = [], onMarkRead, onMarkAllRead, onOpenNotification
+  notifications = [], onMarkRead, onMarkAllRead, onOpenNotification, pendingLeaveCount = 0
 }) {
   return (
     <aside
@@ -1928,13 +1971,24 @@ function ChatSidebar({
           </div>
           <div className="space-y-1">
             <div className="px-3 py-2 text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest">
-              Account Settings
+              Account and General Settings
             </div>
             <button
               onClick={() => { setActiveDropdown(null); setView('myprofile'); }}
               className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-650 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer transition-all"
             >
               Profile Settings
+            </button>
+            <button
+              onClick={() => { setActiveDropdown(null); setView('leave'); }}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-650 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer transition-all"
+            >
+              <span>Leave</span>
+              {pendingLeaveCount > 0 && (
+                <span className="text-[9px] font-black text-white bg-amber-500 rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                  {pendingLeaveCount > 99 ? '99+' : pendingLeaveCount}
+                </span>
+              )}
             </button>
             {isAdmin && (
               <button

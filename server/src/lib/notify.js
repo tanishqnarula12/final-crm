@@ -21,6 +21,8 @@ export const NOTIF = {
   LEAD_RM_ASSIGNED: 'LEAD_RM_ASSIGNED',
   BIRTHDAY: 'BIRTHDAY',
   QUERY_RAISED: 'QUERY_RAISED',
+  LEAVE_APPLIED: 'LEAVE_APPLIED',
+  LEAVE_RESPONDED: 'LEAVE_RESPONDED',
 };
 
 export const serializeNotification = (n) => ({
@@ -56,6 +58,7 @@ const prospectLabel = (rec) => {
 const queryLabel = (rec) => pick(rec, ['category']) && pick(rec, ['query'])
   ? `${pick(rec, ['category'])} — ${pick(rec, ['query']).slice(0, 80)}`
   : pick(rec, ['category', 'query']) || 'New query';
+const leaveLabel = (rec) => `${rec.fromDate}${rec.toDate && rec.toDate !== rec.fromDate ? ` – ${rec.toDate}` : ''}`;
 
 // Resolve a recipient reference to a REAL active user id. Most records store
 // the user id directly, but some legacy rows store the display name instead
@@ -202,4 +205,33 @@ export async function notifyFromEvents(prisma, events) {
   }
 
   await pushNotifications(prisma, items);
+}
+
+// Leave isn't routed through syncBulk (see routes/leave.js for why), so it
+// doesn't produce domain events for notifyFromEvents above — these two are
+// called directly from the route handlers instead.
+
+// A new leave request → every Admin + Internal Manager (same audience as a
+// new lead), so whoever's on approval duty sees it regardless of who applied.
+export async function notifyLeaveApplied(prisma, leaveRow) {
+  const managers = await pipelineManagerIds(prisma);
+  const items = managers
+    .filter((uid) => uid !== leaveRow.createdBy)
+    .map((uid) => ({
+      userId: uid, type: NOTIF.LEAVE_APPLIED,
+      title: 'New leave request', body: leaveLabel(leaveRow),
+      link: { view: 'leave', id: leaveRow.id },
+    }));
+  await pushNotifications(prisma, items);
+}
+
+// A decision on a leave request → the requester, regardless of who decided.
+export async function notifyLeaveResponded(prisma, leaveRow) {
+  if (!leaveRow.createdBy || leaveRow.createdBy === leaveRow.respondedBy) return;
+  await pushNotifications(prisma, [{
+    userId: leaveRow.createdBy, type: NOTIF.LEAVE_RESPONDED,
+    title: leaveRow.status === 'Approved' ? 'Your leave request was approved' : 'Your leave request was rejected',
+    body: leaveRow.responseMessage || leaveLabel(leaveRow),
+    link: { view: 'leave', id: leaveRow.id },
+  }]);
 }

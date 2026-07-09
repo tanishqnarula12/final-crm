@@ -46,12 +46,14 @@ export const MODULES = [
   { key: 'documents', label: 'Documents', actions: ['upload', 'view', 'delete'] },
   { key: 'meetings', label: 'Meetings', actions: ['create', 'view', 'edit', 'delete'] },
   { key: 'queries', label: 'Queries', actions: ['create', 'view', 'editDetails', 'changeStage', 'editLog', 'delete'] },
+  { key: 'leave', label: 'Leave', actions: ['create', 'view', 'editDetails', 'respond'] },
 ];
 
 export const ACTION_LABELS = {
   create: 'Create', view: 'View', edit: 'Edit', editPersonal: 'Edit Personal Details',
   editDetails: 'Edit Details', changeStage: 'Change Stage', editLog: 'Edit / Add Log',
   assignRm: 'Assign RM', convert: 'Convert', delete: 'Delete', upload: 'Upload',
+  respond: 'Approve / Reject',
 };
 
 // How "owned / assigned" and "is RM of this record" are computed per module.
@@ -63,7 +65,7 @@ export const OWNERSHIP = {
   leads: 'self', clients: 'self', tasks: 'task', cobr: 'task', queries: 'task', mom: 'creator', meetings: 'creator',
   goals: 'client', assetAllocation: 'client', investmentProposal: 'client', insuranceProposal: 'client',
   portfolioReview: 'client', policyReview: 'client', investmentProspects: 'client', insuranceProspects: 'client',
-  documents: 'client',
+  documents: 'client', leave: 'creator',
 };
 
 // Compact default scopes. `_` is the fallback for any role not listed.
@@ -119,6 +121,13 @@ const DEF = {
   // (departmentOwner) and whoever it's raised to (assignedTo) — same overlay
   // as Tasks (see permissions.js), same defaults.
   queries: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, changeStage: { _: S, INTERNAL_MANAGER: A }, editLog: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
+  // Leave: everyone may request their own (create) and sees/edits only their
+  // own request (view/editDetails are ASSIGNED for every role — ownership via
+  // `creator` resolves that to "only mine", no role gets someone else's by
+  // default). `respond` (approve/reject) is the privileged action — NONE for
+  // every ordinary role; only Internal Manager (+ Admin, which bypasses the
+  // matrix entirely) may decide on ANY user's request, not just their own.
+  leave: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S }, respond: { _: N, INTERNAL_MANAGER: A } },
 };
 
 export function defaultScope(role, module, action) {
