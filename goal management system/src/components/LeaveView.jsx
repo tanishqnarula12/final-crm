@@ -53,35 +53,39 @@ export default function LeaveView() {
           </div>
           <div>
             <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Leave</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 font-medium">Apply for leave and track its approval</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+              {mayRespond ? "Review and decide on your team's leave requests" : 'Apply for leave and track its approval'}
+            </p>
           </div>
         </div>
-        {mayCreate && (
+        {mayCreate && !mayRespond && (
           <button onClick={openApply} className={btnPrimary + ' shrink-0'}>
             <Plus size={14} /> Apply for Leave
           </button>
         )}
       </div>
 
-      {/* My Requests */}
-      <div className="space-y-3">
-        <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">My Requests</h3>
-        {mine.length === 0 ? (
-          <Card className="p-10 text-center border-dashed border-2 border-slate-200 dark:border-slate-800">
-            <CalendarDays className="mx-auto text-slate-400 dark:text-slate-600 mb-3" size={32} />
-            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-4">No leave requests yet</p>
-            {mayCreate && (
-              <button onClick={openApply} className={btnSecondary}><Plus size={14} /> Apply for leave</button>
-            )}
-          </Card>
-        ) : (
-          <div className="space-y-2.5">
-            {mine.map((l) => (
-              <LeaveRow key={l.id} leave={l} showRequester={false} onEdit={canEditLeave(me, l) && l.status !== 'Approved' ? () => openEdit(l) : null} />
-            ))}
-          </div>
-        )}
-      </div>
+      {/* My Requests — hidden for Admin / Internal Manager, who only need Approvals here */}
+      {!mayRespond && (
+        <div className="space-y-3">
+          <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">My Requests</h3>
+          {mine.length === 0 ? (
+            <Card className="p-10 text-center border-dashed border-2 border-slate-200 dark:border-slate-800">
+              <CalendarDays className="mx-auto text-slate-400 dark:text-slate-600 mb-3" size={32} />
+              <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-4">No leave requests yet</p>
+              {mayCreate && (
+                <button onClick={openApply} className={btnSecondary}><Plus size={14} /> Apply for leave</button>
+              )}
+            </Card>
+          ) : (
+            <div className="space-y-2.5">
+              {mine.map((l) => (
+                <LeaveRow key={l.id} leave={l} showRequester={false} onEdit={canEditLeave(me, l) && l.status !== 'Approved' ? () => openEdit(l) : null} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Team Approvals — Admin / Internal Manager only */}
       {mayRespond && (
