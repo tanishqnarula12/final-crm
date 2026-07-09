@@ -231,6 +231,25 @@ model Prospect {
   @@map("prospects")
 }
 
+// Internal staff queries — same shape/ownership as Task (raisedBy =
+// departmentOwner, raisedTo = assignedTo), enforced through the same
+// syncBulk() engine as Tasks/Leads/Prospects.
+model Query {
+  id              String    @id
+  stage           String?
+  category        String?
+  assignedTo      String? // User.id — who the query is raised to
+  createdBy       String? // User.id (immutable) — who raised it
+  departmentOwner String? // = raisedBy (same account as createdBy)
+  deletedAt       DateTime?
+  payload         Json      @default("{}")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([stage])
+  @@map("queries")
+}
+
 model AdvisorProfile {
   id        String   @id @default(cuid())
   userId    String   @unique
@@ -313,7 +332,7 @@ model ChatMessage {
 model Notification {
   id        String    @id @default(cuid())
   userId    String // recipient (User.id)
-  type      String // TASK_ASSIGNED | MEETING_SOON | TASK_DUE | PROSPECT_ASSIGNED | LEAD_NEW | BIRTHDAY | LEAD_RM_ASSIGNED
+  type      String // TASK_ASSIGNED | MEETING_SOON | TASK_DUE | PROSPECT_ASSIGNED | LEAD_NEW | BIRTHDAY | LEAD_RM_ASSIGNED | QUERY_RAISED
   title     String
   body      String    @default("")
   link      Json? // { view, id } for click-through, optional

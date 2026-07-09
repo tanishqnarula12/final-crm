@@ -81,12 +81,25 @@ function maxScope(roles, module, action) {
   return best;
 }
 
-const TASK_STAGES = ['Open', 'Waiting For Client', 'In Process', 'Completed', 'Lost'];
-const TASK_TERMINAL = new Set(['Completed', 'Lost']);
-function isBackwardStage(from, to) {
+// Per-module stage vocabularies (each task-shaped module has its own —
+// "backward" can't be a single hardcoded list). Mirrors the server's
+// server/src/lib/permissions.js STAGE_ORDER/TERMINAL_STAGES exactly.
+const STAGE_ORDER = {
+  tasks: ['Open', 'Waiting For Client', 'In Process', 'Completed', 'Lost'],
+  cobr: ['Open', 'Waiting For Client', 'In Process', 'Completed', 'Lost'],
+  queries: ['Open', 'In Progress', 'Resolved', 'Closed'],
+};
+const TERMINAL_STAGES = {
+  tasks: new Set(['Completed', 'Lost']),
+  cobr: new Set(['Completed', 'Lost']),
+  queries: new Set(['Resolved', 'Closed']),
+};
+function isBackwardStage(module, from, to) {
   if (!from || !to || from === to) return false;
-  if (TASK_TERMINAL.has(from) && !TASK_TERMINAL.has(to)) return true;
-  const fi = TASK_STAGES.indexOf(from), ti = TASK_STAGES.indexOf(to);
+  const stages = STAGE_ORDER[module] || [];
+  const terminal = TERMINAL_STAGES[module] || new Set();
+  if (terminal.has(from) && !terminal.has(to)) return true;
+  const fi = stages.indexOf(from), ti = stages.indexOf(to);
   return fi >= 0 && ti >= 0 && ti < fi;
 }
 
@@ -99,7 +112,7 @@ export function can(module, action, record = null, ctx = {}) {
   const scope = maxScope(roles, module, action);
   if (scope === 'NONE') return false;
 
-  if ((module === 'tasks' || module === 'cobr') && ['editDetails', 'changeStage', 'editLog'].includes(action) && record) {
+  if (['tasks', 'cobr', 'queries'].includes(module) && ['editDetails', 'changeStage', 'editLog'].includes(action) && record) {
     if (scope === 'ALL') return true;
     const isAssigner = record.departmentOwner === user.id;
     const isAssignee = record.assignedTo === user.id;
@@ -107,7 +120,7 @@ export function can(module, action, record = null, ctx = {}) {
     if (isAssigner) return true;
     if (!isAssignee) return false;
     if (action === 'editLog') return true;
-    return !isBackwardStage(ctx.fromStage, ctx.toStage);
+    return !isBackwardStage(module, ctx.fromStage, ctx.toStage);
   }
 
   if (scope === 'ALL') return true;

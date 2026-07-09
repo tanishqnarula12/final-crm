@@ -105,11 +105,13 @@ export function can(user, module, action, record = null, ctx = {}) {
   const scope = maxScope(roles, module, action);
   if (scope === 'NONE') return false;
 
-  // Task overlay (fixed business rule): only the assigner edits details; the
-  // assignee may change stage / add log, but not move a task backward. COBR
-  // records ARE Task rows (relatedTo: 'COBR') under their own matrix column,
-  // so the same assigner/assignee mechanics apply to them too.
-  if ((module === 'tasks' || module === 'cobr') && ['editDetails', 'changeStage', 'editLog'].includes(action) && record) {
+  // Task-shaped overlay (fixed business rule): only the assigner edits
+  // details; the assignee may change stage / add log, but not move it
+  // backward. COBR records ARE Task rows (relatedTo: 'COBR') under their own
+  // matrix column, so the same mechanics apply; Queries have the identical
+  // two-party shape (raisedBy = departmentOwner, raisedTo = assignedTo), just
+  // its own stage vocabulary (see STAGE_ORDER below).
+  if (['tasks', 'cobr', 'queries'].includes(module) && ['editDetails', 'changeStage', 'editLog'].includes(action) && record) {
     if (scope === 'ALL') return true;
     const isAssigner = record.departmentOwner === user.id;
     const isAssignee = record.assignedTo === user.id;
@@ -119,7 +121,7 @@ export function can(user, module, action, record = null, ctx = {}) {
     if (!isAssignee) return false;
     if (action === 'editLog') return true;
     // assignee changing stage: forward only (no reopen / backward)
-    return !isBackwardTaskStage(ctx.fromStage, ctx.toStage);
+    return !isBackwardStage(module, ctx.fromStage, ctx.toStage);
   }
 
   if (scope === 'ALL') return true;
@@ -133,13 +135,24 @@ export function can(user, module, action, record = null, ctx = {}) {
   return ownsRecord(module, record, user.id);
 }
 
-// ---- task stage direction --------------------------------------------------
-const TASK_STAGES = ['Open', 'Waiting For Client', 'In Process', 'Completed', 'Lost'];
-const TASK_TERMINAL = new Set(['Completed', 'Lost']);
-function isBackwardTaskStage(from, to) {
+// ---- stage direction (per module — each task-shaped module has its own
+// vocabulary, so "backward" can't be a single hardcoded list) --------------
+const STAGE_ORDER = {
+  tasks: ['Open', 'Waiting For Client', 'In Process', 'Completed', 'Lost'],
+  cobr: ['Open', 'Waiting For Client', 'In Process', 'Completed', 'Lost'],
+  queries: ['Open', 'In Progress', 'Resolved', 'Closed'],
+};
+const TERMINAL_STAGES = {
+  tasks: new Set(['Completed', 'Lost']),
+  cobr: new Set(['Completed', 'Lost']),
+  queries: new Set(['Resolved', 'Closed']),
+};
+function isBackwardStage(module, from, to) {
   if (!from || !to || from === to) return false;
-  if (TASK_TERMINAL.has(from) && !TASK_TERMINAL.has(to)) return true; // reopen
-  const fi = TASK_STAGES.indexOf(from), ti = TASK_STAGES.indexOf(to);
+  const stages = STAGE_ORDER[module] || [];
+  const terminal = TERMINAL_STAGES[module] || new Set();
+  if (terminal.has(from) && !terminal.has(to)) return true; // reopen
+  const fi = stages.indexOf(from), ti = stages.indexOf(to);
   return fi >= 0 && ti >= 0 && ti < fi;
 }
 

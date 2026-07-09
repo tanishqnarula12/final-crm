@@ -37,5 +37,12 @@ export const canEditTask = (_me, task) => can('tasks', 'editDetails', task);
 export const canChangeTaskStage = (_me, task, fromStage, toStage) =>
   can('tasks', 'changeStage', task, { fromStage, toStage });
 
+// ---- Queries -----------------------------------------------------------------
+export const canCreateQuery = () => can('queries', 'create');
+export const canEditQuery = (_me, query) => can('queries', 'editDetails', query);
+export const canChangeQueryStage = (_me, query, fromStage, toStage) =>
+  can('queries', 'changeStage', query, { fromStage, toStage });
+export const canLogQuery = (_me, query) => can('queries', 'editLog', query);
+
 // Generic fallback for any module/action.
 export const canDo = (module, action, record) => can(module, action, record);

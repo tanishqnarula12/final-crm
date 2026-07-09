@@ -43,6 +43,7 @@ import MomWorkspace from './components/MomWorkspace';
 import ProposalWorkspace from './components/ProposalWorkspace';
 import Sidebar from './components/Sidebar';
 import TasksView, { TaskFormModal } from './components/TasksView';
+import QueriesView, { QueryFormModal } from './components/QueriesView';
 import CobrView from './components/CobrView';
 import CobrFormModal from './components/CobrFormModal';
 import CobrTaskModal from './components/CobrTaskModal';
@@ -55,6 +56,7 @@ import LeadsView from './components/LeadsView';
 import OthersView from './components/OthersView';
 import { loadLeads, hydrateLeads, updateLead, clientPayloadFromLead, markConnectedFromTask, syncMeetingToLead, leadName as leadNameOf } from './services/leads';
 import { loadTasks, saveTasks, hydrateTasks } from './utils/tasks';
+import { loadQueries, saveQueries, hydrateQueries, QUERY_STAGES } from './utils/queries';
 import { loadProspects, saveProspects, hydrateProspects } from './utils/prospects';
 import { loadMeetings, saveMeetings, hydrateMeetings } from './utils/meetings';
 import { hydrateTeam, loadTeam, teamName } from './services/team';
@@ -133,7 +135,8 @@ export default function App() {
   const [selectedGoalId, setSelectedGoalId] = useState(null);
   const [selectedGoalName, setSelectedGoalName] = useState(null);
   const [activeTaskId, setActiveTaskId] = useState(null);
-  
+  const [activeQueryId, setActiveQueryId] = useState(null);
+
   // Modal states
   const [showAddClient, setShowAddClient] = useState(false);
   const [showGoalForm, setShowGoalForm] = useState(false);
@@ -143,6 +146,9 @@ export default function App() {
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [tasksChangeCounter, setTasksChangeCounter] = useState(0);
+  const [showQueryForm, setShowQueryForm] = useState(false);
+  const [editingQuery, setEditingQuery] = useState(null);
+  const [queriesChangeCounter, setQueriesChangeCounter] = useState(0);
   const [showCobrForm, setShowCobrForm] = useState(false);
   const [editingCobr, setEditingCobr] = useState(null);
   const [cobrAllowReopen, setCobrAllowReopen] = useState(false);
@@ -159,8 +165,8 @@ export default function App() {
   const [activeMeetingId, setActiveMeetingId] = useState(null);
   const [leadsChangeCounter, setLeadsChangeCounter] = useState(0);
   const [leadsBadge, setLeadsBadge] = useState(0);
-  // Sidebar "pending" count badges per module (tasks/cobr/meetings/prospects).
-  const [moduleBadges, setModuleBadges] = useState({ tasks: 0, cobr: 0, meetings: 0, prospects: 0 });
+  // Sidebar "pending" count badges per module (tasks/cobr/meetings/prospects/queries).
+  const [moduleBadges, setModuleBadges] = useState({ tasks: 0, cobr: 0, meetings: 0, prospects: 0, queries: 0 });
   const [convertingLead, setConvertingLead] = useState(null);
 
   // Asset allocation tab states
@@ -204,6 +210,7 @@ export default function App() {
         getClients(),
         hydrateLeads().catch((err) => console.error('Failed to load leads:', err)),
         hydrateTasks().catch((err) => console.error('Failed to load tasks:', err)),
+        hydrateQueries().catch((err) => console.error('Failed to load queries:', err)),
         hydrateMeetings().catch((err) => console.error('Failed to load meetings:', err)),
         hydrateProspects().catch((err) => console.error('Failed to load prospects:', err)),
         hydrateAdvisorProfile().catch((err) => console.error('Failed to load advisor profile:', err)),
@@ -241,6 +248,13 @@ export default function App() {
     const bump = () => setTasksChangeCounter(prev => prev + 1);
     window.addEventListener('crm:tasks-updated', bump);
     return () => window.removeEventListener('crm:tasks-updated', bump);
+  }, []);
+
+  // Same for queries.
+  useEffect(() => {
+    const bump = () => setQueriesChangeCounter(prev => prev + 1);
+    window.addEventListener('crm:queries-updated', bump);
+    return () => window.removeEventListener('crm:queries-updated', bump);
   }, []);
 
   // Same for meetings — MeetingsView/DashboardView already self-listen to
@@ -417,6 +431,23 @@ export default function App() {
     }
   };
 
+  const handleOpenQuery = (q) => {
+    setEditingQuery(q);
+    setShowQueryForm(true);
+  };
+
+  const handleSaveQueryGlobal = (q) => {
+    const allQueries = loadQueries();
+    const exists = allQueries.some(x => x.id === q.id);
+    const updatedQueries = exists
+      ? allQueries.map(x => x.id === q.id ? q : x)
+      : [q, ...allQueries];
+    saveQueries(updatedQueries);
+    setShowQueryForm(false);
+    setEditingQuery(null);
+    setQueriesChangeCounter(prev => prev + 1);
+  };
+
   // COBR (Change of Broker) records are Task rows — same save pipeline as
   // handleSaveTaskGlobal above, just closing the COBR-specific modal state.
   // The COBR module opens a READ-ONLY summary (interactive=false) whose only
@@ -585,6 +616,7 @@ export default function App() {
   useEffect(() => {
     const TASK_DONE = new Set(['Completed', 'Lost']);
     const PROSPECT_DONE = new Set(['Close Won', 'Close Lost', 'Policy Issued', 'Policy Rejected']);
+    const QUERY_DONE = new Set(['Resolved', 'Closed']);
     const recompute = () => {
       const tasks = loadTasks();
       setModuleBadges({
@@ -593,18 +625,21 @@ export default function App() {
         cobr: tasks.filter(t => t.relatedTo === 'COBR' && (t.stage || 'Open') !== 'Completed').length,
         meetings: loadMeetings().filter(m => (m.status || 'Scheduled') === 'Scheduled').length,
         prospects: loadProspects().filter(p => !PROSPECT_DONE.has(p.stage)).length,
+        queries: loadQueries().filter(q => !QUERY_DONE.has(q.stage || 'Open')).length,
       });
     };
     recompute();
     window.addEventListener('crm:tasks-updated', recompute);
     window.addEventListener('crm:meetings-updated', recompute);
     window.addEventListener('crm:prospects-updated', recompute);
+    window.addEventListener('crm:queries-updated', recompute);
     return () => {
       window.removeEventListener('crm:tasks-updated', recompute);
       window.removeEventListener('crm:meetings-updated', recompute);
       window.removeEventListener('crm:prospects-updated', recompute);
+      window.removeEventListener('crm:queries-updated', recompute);
     };
-  }, [tasksChangeCounter, meetingsChangeCounter, prospectsChangeCounter]);
+  }, [tasksChangeCounter, meetingsChangeCounter, prospectsChangeCounter, queriesChangeCounter]);
 
   const goToMomMapping = (clientId) => {
     setSelectedClientId(null);
@@ -942,7 +977,7 @@ export default function App() {
           view={view}
           setView={handleSetView}
           onNavDoubleClick={handleNavDoubleClick}
-          badges={{ leads: leadsBadge, chat: chatUnread, tasks: moduleBadges.tasks, cobr: moduleBadges.cobr, meetings: moduleBadges.meetings, prospects: moduleBadges.prospects }}
+          badges={{ leads: leadsBadge, chat: chatUnread, tasks: moduleBadges.tasks, cobr: moduleBadges.cobr, meetings: moduleBadges.meetings, prospects: moduleBadges.prospects, queries: moduleBadges.queries }}
           othersSubTab={othersSubTab}
           onSelectOthersTab={setOthersSubTab}
         />
@@ -1279,6 +1314,18 @@ export default function App() {
         {view === 'documents' && (
           <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
             <DocumentsView clients={clients} />
+          </main>
+        )}
+
+        {view === 'queries' && (
+          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+            <QueriesView
+              isViewer={isViewer}
+              activeQueryId={activeQueryId}
+              setActiveQueryId={setActiveQueryId}
+              onOpenQuery={handleOpenQuery}
+              queriesChangeCounter={queriesChangeCounter}
+            />
           </main>
         )}
 
@@ -1706,6 +1753,15 @@ export default function App() {
           isViewer={isViewer}
           onClose={() => { setShowTaskForm(false); setEditingTask(null); }}
           onSave={handleSaveTaskGlobal}
+        />
+      )}
+
+      {showQueryForm && (
+        <QueryFormModal
+          initial={editingQuery}
+          isViewer={isViewer}
+          onClose={() => { setShowQueryForm(false); setEditingQuery(null); }}
+          onSave={handleSaveQueryGlobal}
         />
       )}
 

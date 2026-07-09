@@ -9,7 +9,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Bell, X, ClipboardList, AlarmClock, Video, Briefcase, UserPlus, Cake, MessageSquare,
+  Bell, X, ClipboardList, AlarmClock, Video, Briefcase, UserPlus, Cake, MessageSquare, HelpCircle,
 } from 'lucide-react';
 import { onNotificationArrival, playNotificationJingle } from '../services/notifications';
 import { onChatEvent } from '../services/chat';
@@ -24,6 +24,7 @@ const TYPE_META = {
   LEAD_NEW:         { icon: UserPlus,      ring: 'ring-emerald-500/30',dot: 'bg-emerald-500' },
   LEAD_RM_ASSIGNED: { icon: UserPlus,      ring: 'ring-teal-500/30',   dot: 'bg-teal-500' },
   BIRTHDAY:         { icon: Cake,          ring: 'ring-pink-500/30',   dot: 'bg-pink-500' },
+  QUERY_RAISED:     { icon: HelpCircle,    ring: 'ring-indigo-500/30', dot: 'bg-indigo-500' },
 };
 const fallback = { icon: Bell, ring: 'ring-slate-400/30', dot: 'bg-slate-400' };
 const AUTO_DISMISS_MS = 6000;

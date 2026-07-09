@@ -20,6 +20,7 @@ export const NOTIF = {
   LEAD_NEW: 'LEAD_NEW',
   LEAD_RM_ASSIGNED: 'LEAD_RM_ASSIGNED',
   BIRTHDAY: 'BIRTHDAY',
+  QUERY_RAISED: 'QUERY_RAISED',
 };
 
 export const serializeNotification = (n) => ({
@@ -52,6 +53,9 @@ const prospectLabel = (rec) => {
   const type = pick(rec, ['proposalType', 'proposalCategory']);
   return [who, type].filter(Boolean).join(' — ') || 'Business prospect';
 };
+const queryLabel = (rec) => pick(rec, ['category']) && pick(rec, ['query'])
+  ? `${pick(rec, ['category'])} — ${pick(rec, ['query']).slice(0, 80)}`
+  : pick(rec, ['category', 'query']) || 'New query';
 
 // Resolve a recipient reference to a REAL active user id. Most records store
 // the user id directly, but some legacy rows store the display name instead
@@ -132,6 +136,7 @@ async function pipelineManagerIds(prisma) {
  *   • leads CREATE            → Admins + Internal Managers: "New lead added"
  *   • prospects CREATE        → RM/assignee: "Business prospect assigned"
  *   • leads ASSIGN (RM set)   → new RM: "You are now the RM for a lead"
+ *   • queries CREATE/ASSIGN   → recipient: "A query has been raised to you"
  * Never notifies the actor about their own action.
  */
 export async function notifyFromEvents(prisma, events) {
@@ -175,6 +180,22 @@ export async function notifyFromEvents(prisma, events) {
           userId: ev.to, type: NOTIF.LEAD_RM_ASSIGNED,
           title: 'You are now the RM for a lead', body: leadLabel(rec),
           link: { view: 'leads', id: rec.id },
+        });
+      }
+    } else if (ev.type === 'CREATE' && ev.module === 'queries') {
+      if (rec.assignedTo && rec.assignedTo !== ev.actorId) {
+        items.push({
+          userId: rec.assignedTo, type: NOTIF.QUERY_RAISED,
+          title: 'A query has been raised to you', body: queryLabel(rec),
+          link: { view: 'queries', id: rec.id },
+        });
+      }
+    } else if (ev.type === 'ASSIGN' && ev.module === 'queries') {
+      if (ev.to && ev.to !== ev.actorId) {
+        items.push({
+          userId: ev.to, type: NOTIF.QUERY_RAISED,
+          title: 'A query has been raised to you', body: queryLabel(rec),
+          link: { view: 'queries', id: rec.id },
         });
       }
     }

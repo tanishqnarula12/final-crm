@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Users, UserPlus, ListChecks, FolderOpen, UserCheck, LayoutDashboard, Video, TrendingUp, MoreHorizontal, Calculator, FileSpreadsheet } from 'lucide-react';
+import { Users, UserPlus, ListChecks, FolderOpen, UserCheck, LayoutDashboard, Video, TrendingUp, MoreHorizontal, Calculator, FileSpreadsheet, HelpCircle } from 'lucide-react';
 import logoImg from '../assets/logo.png';
 
 const NAV = [
@@ -12,6 +12,7 @@ const NAV = [
   { id: 'meetings', label: 'Meetings', icon: Video },
   { id: 'documents', label: 'Docs', icon: FolderOpen },
   { id: 'prospects', label: 'Prospect', icon: UserCheck },
+  { id: 'queries', label: 'Queries', icon: HelpCircle },
   { id: 'reports', label: 'Reports', icon: TrendingUp },
   { id: 'others', label: 'Others', icon: MoreHorizontal },
 ];

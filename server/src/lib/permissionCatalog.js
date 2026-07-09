@@ -45,6 +45,7 @@ export const MODULES = [
   { key: 'insuranceProspects', label: 'Insurance Prospects', actions: ['create', 'view', 'editDetails', 'changeStage'] },
   { key: 'documents', label: 'Documents', actions: ['upload', 'view', 'delete'] },
   { key: 'meetings', label: 'Meetings', actions: ['create', 'view', 'edit', 'delete'] },
+  { key: 'queries', label: 'Queries', actions: ['create', 'view', 'editDetails', 'changeStage', 'editLog', 'delete'] },
 ];
 
 export const ACTION_LABELS = {
@@ -59,7 +60,7 @@ export const ACTION_LABELS = {
 //   task    — assigner = departmentOwner, assignee = assignedTo (handled by overlay)
 //   client  — ownership flows from the parent client's RM / createdBy
 export const OWNERSHIP = {
-  leads: 'self', clients: 'self', tasks: 'task', cobr: 'task', mom: 'creator', meetings: 'creator',
+  leads: 'self', clients: 'self', tasks: 'task', cobr: 'task', queries: 'task', mom: 'creator', meetings: 'creator',
   goals: 'client', assetAllocation: 'client', investmentProposal: 'client', insuranceProposal: 'client',
   portfolioReview: 'client', policyReview: 'client', investmentProspects: 'client', insuranceProspects: 'client',
   documents: 'client',
@@ -114,6 +115,10 @@ const DEF = {
   insuranceProspects: { create: { _: N, INSURANCE_MANAGER: A, INTERNAL_MANAGER: A }, view: { _: A }, editDetails: { _: N, INSURANCE_MANAGER: A, INTERNAL_MANAGER: A }, changeStage: { _: N, INSURANCE_MANAGER: A, INTERNAL_MANAGER: A } },
   documents: { upload: { _: A }, view: { _: A }, delete: { _: N } },
   meetings: { create: { _: A }, view: { _: A }, edit: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
+  // Queries are private to the two people on them: whoever raised it
+  // (departmentOwner) and whoever it's raised to (assignedTo) — same overlay
+  // as Tasks (see permissions.js), same defaults.
+  queries: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, changeStage: { _: S, INTERNAL_MANAGER: A }, editLog: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
 };
 
 export function defaultScope(role, module, action) {
