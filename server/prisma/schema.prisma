@@ -14,8 +14,17 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // DATABASE_URL: the pooled connection (Supabase's Transaction-mode pooler,
+  // port 6543, ?pgbouncer=true) — used by the running app for everyday
+  // queries, where many short-lived connections are normal.
+  url       = env("DATABASE_URL")
+  // DIRECT_URL: an unpooled, direct connection (port 5432, no pooler) used
+  // ONLY for `prisma migrate deploy`/`generate` at build time. Migrations
+  // need a real, persistent connection — running them through the same
+  // pooled session-mode endpoint the app uses is what exhausted Supabase's
+  // pooler connection cap (session mode: max 15 clients) and broke deploys.
+  directUrl = env("DIRECT_URL")
 }
 
 enum Role {
