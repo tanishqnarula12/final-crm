@@ -40,4 +40,6 @@ export const config = {
     email: process.env.SEED_ADMIN_EMAIL || 'mail@fintness.in',
     password: process.env.SEED_ADMIN_PASSWORD || 'ChangeMe#2026',
   },
+  // Portfolio Review (AI PDF analysis) — server-side only, never sent to the browser.
+  geminiApiKey: process.env.GEMINI_API_KEY || '',
 };

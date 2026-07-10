@@ -17,6 +17,7 @@ import leadRoutes from './routes/leads.js';
 import taskRoutes from './routes/tasks.js';
 import queryRoutes from './routes/queries.js';
 import leaveRoutes from './routes/leave.js';
+import portfolioReviewRoutes from './routes/portfolioReview.js';
 import meetingRoutes from './routes/meetings.js';
 import prospectRoutes from './routes/prospects.js';
 import profileRoutes from './routes/profile.js';
@@ -35,7 +36,7 @@ export function createApp() {
 
   app.use(helmet());
   app.use(cors({ origin: config.clientOrigin, credentials: true }));
-  app.use(express.json({ limit: '15mb' })); // large limit: proposals/docs carry base64 blobs
+  app.use(express.json({ limit: '25mb' })); // large limit: proposals/docs and portfolio-review PDFs carry base64 blobs
   app.use(cookieParser());
 
   // Health check (no auth) — used by uptime checks and the verification steps.
@@ -59,6 +60,7 @@ export function createApp() {
   app.use('/api/tasks', taskRoutes);
   app.use('/api/queries', queryRoutes);
   app.use('/api/leave', leaveRoutes);
+  app.use('/api/portfolio-review', portfolioReviewRoutes);
   app.use('/api/meetings', meetingRoutes);
   app.use('/api/prospects', prospectRoutes);
   app.use('/api/profile', profileRoutes);

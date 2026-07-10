@@ -50,7 +50,7 @@ import CobrFormModal from './components/CobrFormModal';
 import CobrTaskModal from './components/CobrTaskModal';
 import DocumentsView from './components/DocumentsView';
 import ProspectsView, { ProspectModal } from './components/BusinessProspects';
-import PolicyReview from './components/PolicyReview';
+import ReviewWorkspace from './components/ReviewWorkspace';
 import MeetingsView, { MeetingFormModal } from './components/MeetingsView';
 import DashboardView from './components/DashboardView';
 import LeadsView from './components/LeadsView';
@@ -183,6 +183,7 @@ export default function App() {
   const [proposalClientId, setProposalClientId] = useState(null);
   const [reviewClientId, setReviewClientId] = useState(null);
   const [proposalSubTab, setProposalSubTab] = useState('insurance');
+  const [reviewSubTab, setReviewSubTab] = useState('policy');
   const [othersSubTab, setOthersSubTab] = useState('other_tools');
   const [showAllocModal, setShowAllocModal] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -1670,9 +1671,10 @@ export default function App() {
 
         {tab === 'review' && reviewClientId && reviewClient && (
           <div className="animate-scale-up">
-            <PolicyReview
+            <ReviewWorkspace
               client={reviewClient}
-              onBack={backToClients}
+              subTab={reviewSubTab}
+              setSubTab={setReviewSubTab}
             />
           </div>
         )}
