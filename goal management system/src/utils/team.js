@@ -21,5 +21,5 @@ export const RELATIONS = [
   'Father-in-law', 'Mother-in-law', 'Son-in-law', 'Daughter-in-law',
   'Nephew', 'Niece', 'Uncle', 'Aunt', 'Cousin',
   'Legal Guardian', 'Relative', 'Friend', 'Business Partner',
-  'Employee', 'Employer', 'Trustee',
+  'Employee', 'Employer', 'Trustee', 'Others',
 ];

@@ -876,6 +876,15 @@ function familyMemberErrors(f) {
   if (!f.dob) ff.dob = 'Missing DOB';
   else if (!isValidDob(f.dob)) ff.dob = 'Invalid DOB';
   if (f.email && !EMAIL_RE.test(f.email)) ff.email = 'Invalid email';
+  // Relation is free text in the sheet but must match one of the same
+  // options the manual form's dropdown offers (case-insensitive, so
+  // "others"/"OTHERS" etc. from the sheet still count as the "Others"
+  // option) — anything else gets flagged for the user to pick from the
+  // dropdown in the preview table below instead of silently importing an
+  // arbitrary string.
+  if (f.relation && !RELATIONS.some((r) => r.toLowerCase() === f.relation.toLowerCase())) {
+    ff.relation = `"${f.relation}" doesn't match any relation option`;
+  }
   return ff;
 }
 
