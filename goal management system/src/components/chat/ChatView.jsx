@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   MessageSquare, Search, Plus, X, Users as UsersIcon, Check, Sparkles
 } from 'lucide-react';
@@ -20,6 +20,12 @@ export default function ChatView({ onQuickAction, initialConversationId, initial
   const [activeId, setActiveId] = useState(null);
   const [query, setQuery] = useState('');
   const [showNew, setShowNew] = useState(false);
+  const [startingChat, setStartingChat] = useState(false); // in-flight guard — a fast double-click on the same (or another) person before the first request lands would otherwise race the server's dedupe check and create two DM conversations
+  // React state updates are async/batched, so two clicks landing in the same
+  // tick would both still see `startingChat === false` from the stale
+  // closure. A ref is checked/set synchronously, so the second click is
+  // reliably rejected even before the first re-render happens.
+  const startingChatRef = useRef(false);
 
   const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
   const active = conversations.find((c) => c.id === activeId) || null;
@@ -134,6 +140,9 @@ export default function ChatView({ onQuickAction, initialConversationId, initial
   }, [initialConversationId]);
 
   const startDM = async (userId) => {
+    if (startingChatRef.current) return; // already creating one — ignore a fast repeat click
+    startingChatRef.current = true;
+    setStartingChat(true);
     try {
       const { conversation } = await createConversation({ type: 'DM', memberIds: [userId] });
       setConversations((prev) => (prev.some((c) => c.id === conversation.id) ? prev : [conversation, ...prev]));
@@ -141,14 +150,25 @@ export default function ChatView({ onQuickAction, initialConversationId, initial
       openConversation(conversation.id);
     } catch (err) {
       alert(err?.message || 'Failed to start chat.');
+    } finally {
+      startingChatRef.current = false;
+      setStartingChat(false);
     }
   };
 
   const createGroup = async (name, memberIds) => {
-    const { conversation } = await createConversation({ type: 'GROUP', memberIds, name });
-    setConversations((prev) => [conversation, ...prev]);
-    setShowNew(false);
-    openConversation(conversation.id);
+    if (startingChatRef.current) return;
+    startingChatRef.current = true;
+    setStartingChat(true);
+    try {
+      const { conversation } = await createConversation({ type: 'GROUP', memberIds, name });
+      setConversations((prev) => [conversation, ...prev]);
+      setShowNew(false);
+      openConversation(conversation.id);
+    } finally {
+      startingChatRef.current = false;
+      setStartingChat(false);
+    }
   };
 
   const filtered = conversations.filter((c) => {
@@ -272,6 +292,7 @@ export default function ChatView({ onQuickAction, initialConversationId, initial
       {showNew && (
         <NewChatModal
           me={me} users={users} online={online}
+          starting={startingChat}
           onClose={() => setShowNew(false)}
           onStartDM={startDM}
           onCreateGroup={createGroup}
@@ -285,7 +306,7 @@ export default function ChatView({ onQuickAction, initialConversationId, initial
 // New chat / group modal
 // ---------------------------------------------------------------------------
 
-function NewChatModal({ me, users, online, onClose, onStartDM, onCreateGroup }) {
+function NewChatModal({ me, users, online, starting, onClose, onStartDM, onCreateGroup }) {
   const [tab, setTab] = useState('dm'); // 'dm' | 'group'
   const [q, setQ] = useState('');
   const [groupName, setGroupName] = useState('');
@@ -361,8 +382,9 @@ function NewChatModal({ me, users, online, onClose, onStartDM, onCreateGroup }) 
             ) : teammates.map((u) => (
               <button
                 key={u.id}
+                disabled={tab === 'dm' && starting}
                 onClick={() => (tab === 'dm' ? onStartDM(u.id) : toggle(u.id))}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors cursor-pointer text-left"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors cursor-pointer text-left disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
               >
                 <ChatAvatar user={u} size={36} online={online.has(u.id)} />
                 <div className="min-w-0 flex-1">
@@ -386,7 +408,7 @@ function NewChatModal({ me, users, online, onClose, onStartDM, onCreateGroup }) 
         {tab === 'group' && (
           <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 rounded-b-2xl flex justify-between items-center gap-2">
             <span className="text-[10px] font-bold text-slate-450 dark:text-slate-500">{selected.size} member{selected.size === 1 ? '' : 's'} selected</span>
-            <button onClick={submitGroup} disabled={saving} className={btnPrimary}>
+            <button onClick={submitGroup} disabled={saving || starting} className={btnPrimary}>
               {saving ? 'Creating…' : (<><UsersIcon size={13} /> Create Group</>)}
             </button>
           </div>

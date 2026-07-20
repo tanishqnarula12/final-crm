@@ -69,9 +69,21 @@ let cache = defaultProfile();
 
 export const loadAdvisorProfile = () => cache;
 
+// Every save chains onto this so a hydrate that happens to run concurrently
+// (e.g. an unrelated `window.refreshAppData()` elsewhere in the app, which
+// re-hydrates this cache alongside everything else) always waits for any
+// in-flight write to land first — otherwise the hydrate's GET can win the
+// race against the save's PUT and overwrite the cache (photo, etc.) with the
+// pre-save server state, making a just-saved change look like it "didn't
+// save" or got silently cleared.
+let saveChain = Promise.resolve();
+
 // Fetches the logged-in user's profile from the server and populates the
-// cache. Call once on login/app-load (App.jsx `loadData`).
+// cache. Call once on login/app-load (App.jsx `loadData`) — also safe to
+// call again later (e.g. a global refresh) since it always waits for any
+// pending save first.
 export async function hydrateAdvisorProfile() {
+  await saveChain;
   const { profile } = await api.get('/profile');
   cache = mergeWithDefaults(profile);
   window.dispatchEvent(new Event('crm:advisor-profile-updated'));
@@ -81,5 +93,11 @@ export async function hydrateAdvisorProfile() {
 export const saveAdvisorProfile = (profile) => {
   cache = profile;
   window.dispatchEvent(new Event('crm:advisor-profile-updated'));
-  api.put('/profile', { data: profile }).catch((err) => console.error('Failed to persist advisor profile:', err));
+  // Swallow the error *inside* the chain (not via a separate .catch() off to
+  // the side) so a failed PUT can't leave `saveChain` permanently rejected —
+  // that would make every future `await saveChain` in hydrateAdvisorProfile
+  // throw, breaking hydration app-wide until a page reload.
+  saveChain = saveChain.then(() =>
+    api.put('/profile', { data: profile }).catch((err) => console.error('Failed to persist advisor profile:', err))
+  );
 };

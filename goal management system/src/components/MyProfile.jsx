@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Camera, Pencil, Save, X, IdCard, Fingerprint, Calendar, CalendarClock,
   Phone, Mail, MapPin, Users, Landmark, Banknote, Building2, KeyRound,
@@ -143,6 +143,19 @@ export default function MyProfileView() {
   const [showAadhar, setShowAadhar] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const fileInputRef = useRef(null);
+
+  // The `useState(() => loadAdvisorProfile())` above only reads the cache at
+  // mount time. If this view happens to mount before the app-load hydrate
+  // resolves (or the cache is refreshed later from elsewhere, e.g. another
+  // module's `window.refreshAppData()`), local state would otherwise go
+  // stale and a subsequent save here would overwrite the server copy with
+  // whatever we saw at mount — silently reverting fields (most visibly the
+  // photo). Stay in sync with the shared cache instead.
+  useEffect(() => {
+    const onUpdate = () => setProfile(loadAdvisorProfile());
+    window.addEventListener('crm:advisor-profile-updated', onUpdate);
+    return () => window.removeEventListener('crm:advisor-profile-updated', onUpdate);
+  }, []);
 
   const handlePhotoSelect = (e) => {
     const file = e.target.files[0];

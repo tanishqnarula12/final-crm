@@ -66,7 +66,7 @@ import { loadMeetings, saveMeetings, hydrateMeetings } from './utils/meetings';
 import { hydrateTeam, loadTeam, teamName } from './services/team';
 import { hydratePermissions } from './services/permissions';
 import {
-  hydrateNotifications, startNotificationStream, loadNotifications,
+  hydrateNotifications, startNotificationStream, stopNotificationStream, loadNotifications,
   onNotificationsUpdated, markNotificationRead, markAllNotificationsRead, clearNotifications,
 } from './services/notifications';
 import NotificationPanel from './components/NotificationPanel';
@@ -347,7 +347,10 @@ export default function App() {
     subscribeToPush(); // OS-level push, alongside the socket stream above — no-op if unsupported/declined
     const off = onNotificationsUpdated(() => setNotifications(loadNotifications()));
     setNotifications(loadNotifications());
-    return () => off();
+    // Detach the socket listener when this session ends (authed -> false on
+    // logout) so a later re-login in the same tab — a fresh socket instance
+    // — reattaches instead of silently staying subscribed to nothing.
+    return () => { off(); stopNotificationStream(); };
   }, [authed]);
 
   // Clicking an OS push notification posts a message from the service worker

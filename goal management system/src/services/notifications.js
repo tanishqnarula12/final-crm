@@ -10,7 +10,7 @@ import { onChatEvent } from './chat';
 let cache = []; // unread notifications, newest-first
 const EVT = 'crm:notifications-updated';
 const arrivalHandlers = new Set();
-let streamStarted = false;
+let unsubStream = null; // detach fn for the currently-attached socket listener, if any
 
 export const loadNotifications = () => cache;
 export const unreadCount = () => cache.length;
@@ -52,17 +52,24 @@ export async function hydrateNotifications() {
   return cache;
 }
 
-// Attach the live stream once (App calls this after connectChat()).
+// Attach the live stream to the current socket (App calls this after
+// connectChat(), once per login). Idempotent *for the currently-connected
+// socket* — but unlike a one-time-ever flag, `stopNotificationStream()` lets
+// a logout/login cycle in the same tab (new socket instance) reattach a
+// fresh listener instead of silently staying deaf forever.
 export function startNotificationStream() {
-  if (streamStarted) return;
-  streamStarted = true;
-  onChatEvent('notification:new', ({ notification }) => {
+  if (unsubStream) return;
+  unsubStream = onChatEvent('notification:new', ({ notification }) => {
     if (!notification) return;
     if (cache.some((n) => n.id === notification.id)) return; // de-dupe
     cache = [notification, ...cache];
     emit();
     arrivalHandlers.forEach((h) => { try { h(notification); } catch { /* isolate */ } });
   });
+}
+
+export function stopNotificationStream() {
+  if (unsubStream) { unsubStream(); unsubStream = null; }
 }
 
 export function clearNotifications() {
