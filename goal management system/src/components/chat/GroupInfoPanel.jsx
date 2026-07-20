@@ -4,6 +4,7 @@ import { X, Camera, Pencil, Check, Users as UsersIcon, Crown, ShieldCheck, Trash
 import { ChatAvatar, GroupAvatar } from './Avatars';
 import { updateConversation, deleteConversation } from '../../services/chat';
 import { fmtTime, dayLabel } from './chatFormat';
+import AvatarCropperModal from '../AvatarCropperModal';
 
 const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
 
@@ -16,6 +17,7 @@ export default function GroupInfoPanel({ conv, me, usersById, onlineSet, onClose
   const [description, setDescription] = useState(conv.description || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [cropSrc, setCropSrc] = useState(null); // raw, uncropped selection — staged for AvatarCropperModal
   const fileRef = useRef(null);
 
   const editor = conv.metaUpdatedBy ? usersById.get(conv.metaUpdatedBy) : null;
@@ -63,8 +65,13 @@ export default function GroupInfoPanel({ conv, me, usersById, onlineSet, onClose
     if (!file) return;
     if (file.size > MAX_PHOTO_BYTES) { setError('Image must be under 3MB.'); return; }
     const reader = new FileReader();
-    reader.onload = (ev) => persist({ photo: ev.target.result });
+    reader.onload = (ev) => setCropSrc(ev.target.result);
     reader.readAsDataURL(file);
+  };
+
+  const onCropConfirm = (croppedDataUrl) => {
+    setCropSrc(null);
+    persist({ photo: croppedDataUrl });
   };
 
   const roleTint = {
@@ -105,6 +112,9 @@ export default function GroupInfoPanel({ conv, me, usersById, onlineSet, onClose
                 <Camera size={14} />
               </button>
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPhoto} />
+              {cropSrc && (
+                <AvatarCropperModal src={cropSrc} onCancel={() => setCropSrc(null)} onConfirm={onCropConfirm} />
+              )}
             </div>
 
             {editing ? (

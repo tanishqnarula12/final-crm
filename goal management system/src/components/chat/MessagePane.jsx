@@ -21,7 +21,7 @@ import { QUICK_REACTIONS } from './emojiData';
 import ProfileCard from './ProfileCard';
 import GroupInfoPanel from './GroupInfoPanel';
 
-export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAction, onBackToList, onConversationUpdate, onConversationRemoved }) {
+export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAction, onBackToList, onConversationUpdate, onConversationRemoved, initialMessageId }) {
   const [messages, setMessages] = useState([]); // ascending by createdAt
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -101,7 +101,13 @@ export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAct
   }, [pinnedList.length]);
 
   useEffect(() => {
-    if (!loading) scrollToBottom();
+    if (loading) return;
+    // Jumping in from the chat-icon hover preview lands on that exact
+    // message (reuses the same jumpTo used for reply-quote/search-result
+    // clicks) instead of the usual scroll-to-bottom.
+    if (initialMessageId) jumpTo(initialMessageId);
+    else scrollToBottom();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
   // ---- Socket subscriptions -------------------------------------------------

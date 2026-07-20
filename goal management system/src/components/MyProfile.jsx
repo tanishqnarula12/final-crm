@@ -5,6 +5,7 @@ import {
   Eye, EyeOff, Heart, Stethoscope, Briefcase, User
 } from 'lucide-react';
 import { Card, Field, inputCls, selectCls, btnPrimary, btnGhost, CoolSelect } from './UI';
+import AvatarCropperModal from './AvatarCropperModal';
 import { CountrySelect, StateSelect, CitySelect } from './LocationPicker';
 import { RELATIONS } from '../utils/team';
 import { avatarColor, initials, fmtDate, DOB_MIN, dobMax } from '../utils/calc';
@@ -138,6 +139,7 @@ export default function MyProfileView() {
   const [profile, setProfile] = useState(() => loadAdvisorProfile());
   const [showEdit, setShowEdit] = useState(false);
   const [pendingPhoto, setPendingPhoto] = useState(null);
+  const [cropSrc, setCropSrc] = useState(null); // raw, uncropped selection — staged for AvatarCropperModal
   const [showAadhar, setShowAadhar] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const fileInputRef = useRef(null);
@@ -150,8 +152,18 @@ export default function MyProfileView() {
       return;
     }
     const reader = new FileReader();
-    reader.onload = (ev) => setPendingPhoto(ev.target.result);
+    reader.onload = (ev) => setCropSrc(ev.target.result);
     reader.readAsDataURL(file);
+  };
+
+  const handleCropConfirm = (croppedDataUrl) => {
+    setCropSrc(null);
+    setPendingPhoto(croppedDataUrl);
+  };
+
+  const handleCropCancel = () => {
+    setCropSrc(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSavePhoto = () => {
@@ -206,6 +218,9 @@ export default function MyProfileView() {
                 <Camera size={13} />
               </button>
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
+              {cropSrc && (
+                <AvatarCropperModal src={cropSrc} onCancel={handleCropCancel} onConfirm={handleCropConfirm} />
+              )}
             </div>
             <div className="flex flex-col gap-1.5">
               <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{profile.name || 'Your Name'}</h2>

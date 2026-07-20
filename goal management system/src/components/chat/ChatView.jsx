@@ -11,7 +11,7 @@ import { ChatAvatar, GroupAvatar } from './Avatars';
 import { fmtListStamp, conversationName, conversationOtherUser } from './chatFormat';
 import MessagePane from './MessagePane';
 
-export default function ChatView({ onQuickAction }) {
+export default function ChatView({ onQuickAction, initialConversationId, initialMessageId }) {
   const me = getCurrentUser();
   const [users, setUsers] = useState([]);
   const [online, setOnline] = useState(new Set());
@@ -123,6 +123,15 @@ export default function ChatView({ onQuickAction }) {
     setActiveId(id);
     setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, unread: 0 } : c)));
   };
+
+  // Jumping in from the chat-icon hover preview (App.jsx) — select the
+  // target conversation as soon as we know about it. `conversations` may
+  // still be loading at this point; once it arrives, `active` below simply
+  // resolves on its own since `activeId` is already set.
+  useEffect(() => {
+    if (initialConversationId) openConversation(initialConversationId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialConversationId]);
 
   const startDM = async (userId) => {
     try {
@@ -243,6 +252,7 @@ export default function ChatView({ onQuickAction }) {
           onBackToList={() => setActiveId(null)}
           onConversationUpdate={handleConversationUpdate}
           onConversationRemoved={handleConversationRemoved}
+          initialMessageId={active.id === initialConversationId ? initialMessageId : undefined}
         />
       ) : (
         <div className="flex-1 hidden md:flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-slate-50/80 to-blue-50/30 dark:from-slate-950/60 dark:to-slate-950/20 text-center px-8">

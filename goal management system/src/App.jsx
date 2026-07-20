@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Users, Target, FileBarChart, Plus, ChevronLeft, ChevronRight, Trash2, X,
@@ -34,7 +34,8 @@ import ActivityLogView from './components/ActivityLogView';
 import PermissionsMatrix from './components/PermissionsMatrix';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import ChatView from './components/chat/ChatView';
-import { connectChat, disconnectChat, onChatEvent, fetchConversations as fetchChatConversations } from './services/chat';
+import { connectChat, disconnectChat, onChatEvent, fetchConversations as fetchChatConversations, fetchChatUsers } from './services/chat';
+import ChatHoverPreview from './components/ChatHoverPreview';
 import { normalizeAllocation, buildAllocationEdits, hasAllocation } from './utils/assets';
 import { StatTile } from './components/UI';
 import Login from './components/Login';
@@ -188,6 +189,16 @@ export default function App() {
   const [showAllocModal, setShowAllocModal] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [chatUnread, setChatUnread] = useState(0);
+  // Hover-preview data for the chat dock icon — a lightweight mirror of what
+  // ChatView itself fetches, kept here so the preview works without having
+  // to mount the whole Chat module first.
+  const [chatConversationsPreview, setChatConversationsPreview] = useState([]);
+  const [chatUsersById, setChatUsersById] = useState(new Map());
+  const [chatPreviewOpen, setChatPreviewOpen] = useState(false);
+  const chatPreviewCloseTimer = useRef(null);
+  // Set by clicking a chat hover-preview item — tells ChatView which
+  // conversation (and MessagePane which message) to jump straight into.
+  const [pendingChatOpen, setPendingChatOpen] = useState(null); // { conversationId, messageId } | null
   const [notifications, setNotifications] = useState([]);
   const [showChatSplash, setShowChatSplash] = useState(false);
   
@@ -282,23 +293,38 @@ export default function App() {
     if (!authed) return;
     connectChat();
     let cancelled = false;
-    const refreshUnread = async () => {
+    const refreshChatPreview = async () => {
       try {
         const { conversations } = await fetchChatConversations();
-        if (!cancelled) setChatUnread(conversations.reduce((sum, c) => sum + (c.unread || 0), 0));
+        if (cancelled) return;
+        setChatUnread(conversations.reduce((sum, c) => sum + (c.unread || 0), 0));
+        setChatConversationsPreview(conversations);
       } catch { /* server unreachable — keep last value */ }
     };
-    refreshUnread();
+    refreshChatPreview();
+    // Directory for the hover preview (names/photos) — fetched once per
+    // session, same source ChatView itself uses.
+    fetchChatUsers().then(({ users }) => {
+      if (!cancelled) setChatUsersById(new Map(users.map((u) => [u.id, u])));
+    }).catch(() => {});
     const meId = getCurrentUser()?.id;
     const offNew = onChatEvent('message:new', ({ message }) => {
-      if (message.senderId !== meId) refreshUnread();
+      if (message.senderId !== meId) refreshChatPreview();
     });
     const offRead = onChatEvent('read', ({ userId }) => {
-      if (userId === meId) refreshUnread();
+      if (userId === meId) refreshChatPreview();
     });
-    const offConv = onChatEvent('conversation:new', refreshUnread);
+    const offConv = onChatEvent('conversation:new', refreshChatPreview);
     return () => { cancelled = true; offNew(); offRead(); offConv(); };
   }, [authed]);
+
+  // A pending chat-preview jump only makes sense while we're about to enter
+  // (or are in) Chat — drop it once the user navigates elsewhere, so
+  // reopening the same conversation later via the sidebar list doesn't
+  // unexpectedly re-jump/highlight an old message.
+  useEffect(() => {
+    if (view !== 'chat') setPendingChatOpen(null);
+  }, [view]);
 
   // Notifications: hydrate the unread list, attach the live stream (the shared
   // chat socket also carries `notification:new`), and mirror the store's cache
@@ -1019,16 +1045,25 @@ export default function App() {
               }}
               className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-x border-slate-200/20 dark:border-slate-800/40 pl-9 pr-9 py-2.5 flex items-center gap-5.5"
             >
-              {/* Chat Icon Button */}
+              {/* Chat Icon Button — hover for an unread-messages preview,
+                  click to open the full Chat module as before. */}
               <button
                 onClick={() => {
                   triggerAnim('chat');
                   setActiveDropdown(null);
+                  setChatPreviewOpen(false);
                   setView('chat');
                   setShowChatSplash(true);
                   setTimeout(() => {
                     setShowChatSplash(false);
                   }, 1800);
+                }}
+                onMouseEnter={() => {
+                  clearTimeout(chatPreviewCloseTimer.current);
+                  setChatPreviewOpen(true);
+                }}
+                onMouseLeave={() => {
+                  chatPreviewCloseTimer.current = setTimeout(() => setChatPreviewOpen(false), 250);
                 }}
                 className={`p-1.5 transition-all duration-300 relative cursor-pointer text-slate-500 dark:text-slate-400
                   hover:scale-125 hover:text-blue-600 dark:hover:text-blue-400 hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]
@@ -1076,6 +1111,31 @@ export default function App() {
                 )}
               </button>
             </div>
+
+            {/* Chat unread-messages hover preview */}
+            {chatPreviewOpen && (
+              <div
+                className="absolute top-11 right-24 w-80 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/80 shadow-2xl z-45 animate-scale-up p-4 mt-2 text-left"
+                onMouseEnter={() => clearTimeout(chatPreviewCloseTimer.current)}
+                onMouseLeave={() => {
+                  chatPreviewCloseTimer.current = setTimeout(() => setChatPreviewOpen(false), 250);
+                }}
+              >
+                <ChatHoverPreview
+                  conversations={chatConversationsPreview}
+                  usersById={chatUsersById}
+                  me={getCurrentUser()}
+                  online={new Set()}
+                  onOpen={(conversationId, messageId) => {
+                    setChatPreviewOpen(false);
+                    setPendingChatOpen({ conversationId, messageId });
+                    triggerAnim('chat');
+                    setActiveDropdown(null);
+                    setView('chat');
+                  }}
+                />
+              </div>
+            )}
 
             {/* Dropdown Popovers - Outside the clipped dock */}
             {activeDropdown === 'bell' && (
@@ -1294,6 +1354,8 @@ export default function App() {
                       else if (action === 'client') setView('clients');
                       else if (action === 'dash') setView('dashboard');
                     }}
+                    initialConversationId={pendingChatOpen?.conversationId}
+                    initialMessageId={pendingChatOpen?.messageId}
                   />
                 </div>
               </>
