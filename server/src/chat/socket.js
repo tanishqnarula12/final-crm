@@ -85,13 +85,29 @@ export function initChat(httpServer) {
     if (!onlineSockets.has(user.id)) onlineSockets.set(user.id, new Set());
     onlineSockets.get(user.id).add(socket.id);
 
-    // Join the personal room + every conversation this user belongs to.
+    // Join the personal room unconditionally (cheap, synchronous — presence
+    // and direct notifications must never depend on the DB call below).
     socket.join(`user:${user.id}`);
-    const memberships = await prisma.conversationMember.findMany({
-      where: { userId: user.id },
-      select: { conversationId: true },
-    });
-    for (const m of memberships) socket.join(`conv:${m.conversationId}`);
+
+    // Join every conversation this user belongs to. This DB call runs on
+    // EVERY connect/reconnect (network blips, tab sleep/wake, etc. all
+    // trigger socket.io reconnects), and `io.on('connection', async ...)`
+    // is NOT awaited by Socket.IO — an uncaught rejection here becomes an
+    // unhandled promise rejection, which crashes the whole Node process by
+    // default (Node >= 15). A single transient DB hiccup on one user's
+    // reconnect must never take the entire server down for everyone, so
+    // this is deliberately isolated: on failure, this socket just doesn't
+    // get its conversation rooms yet (falls back to a REST refetch/refresh
+    // on the client) rather than killing every other connection too.
+    try {
+      const memberships = await prisma.conversationMember.findMany({
+        where: { userId: user.id },
+        select: { conversationId: true },
+      });
+      for (const m of memberships) socket.join(`conv:${m.conversationId}`);
+    } catch (err) {
+      console.error(`[chat-socket] failed to join conversation rooms for user:${user.id}:`, err);
+    }
 
     broadcastPresence();
 
