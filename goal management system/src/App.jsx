@@ -136,6 +136,9 @@ export default function App() {
   
   // Selection States
   const [selectedClientId, setSelectedClientId] = useState(null);
+  // Set by the client search dropdown's "Applicants" results — tells
+  // ClientProfile which family member to scroll to/highlight once open.
+  const [highlightApplicant, setHighlightApplicant] = useState(null); // { clientId, pan, name } | null
   const [selectedGoalId, setSelectedGoalId] = useState(null);
   const [selectedGoalName, setSelectedGoalName] = useState(null);
   const [activeTaskId, setActiveTaskId] = useState(null);
@@ -326,6 +329,13 @@ export default function App() {
     if (view !== 'chat') setPendingChatOpen(null);
   }, [view]);
 
+  // Same idea for a pending client-search "jump to this applicant" —
+  // once we've left the Client Profile tab, drop it so returning to a
+  // profile later (via the normal client list) doesn't re-highlight.
+  useEffect(() => {
+    if (tab !== 'profile') setHighlightApplicant(null);
+  }, [tab]);
+
   // Notifications: hydrate the unread list, attach the live stream (the shared
   // chat socket also carries `notification:new`), and mirror the store's cache
   // into React state so the bell badge + panel re-render on every change.
@@ -429,6 +439,14 @@ export default function App() {
 
   const goToClientProfileFreshly = async (clientId) => {
     await loadData();
+    goToClientProfile(clientId);
+  };
+
+  // From the client search dropdown's "Applicants" results — open the
+  // owning Group Leader's profile and scroll/highlight that specific
+  // family member in the Family & Applicants Details table.
+  const goToApplicant = (clientId, applicant) => {
+    setHighlightApplicant({ clientId, pan: applicant?.pan || '', name: applicant?.name || '' });
     goToClientProfile(clientId);
   };
 
@@ -1613,6 +1631,7 @@ export default function App() {
               clients={clients}
               onSelect={goToClientProfile}
               onSelectFreshly={goToClientProfileFreshly}
+              onSelectApplicant={goToApplicant}
               onAdd={() => setShowAddClient(true)}
               onDelete={handleDeleteClient}
               onImport={() => setShowImportExcel(true)}
@@ -1697,6 +1716,7 @@ export default function App() {
               onEditClient={() => { setEditingClientId(clientProfileId); setShowAddClient(true); }}
               onDeleteClient={() => handleDeleteClient(clientProfileId)}
               isViewer={isViewer}
+              highlightApplicant={highlightApplicant?.clientId === clientProfileId ? highlightApplicant : null}
               onNavigateToTasks={(taskId) => {
                 setView('tasks');
                 setActiveTaskId(taskId);

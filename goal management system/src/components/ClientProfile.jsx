@@ -26,6 +26,7 @@ export default function ClientProfileView({
   onNavigateToTasks, onOpenTask, tasksChangeCounter, onOpenCobr,
   onNavigateToProspects, onOpenProspect, prospectsChangeCounter,
   onScheduleMeeting, onOpenMeeting, meetingsChangeCounter, onNavigateToMeetings,
+  highlightApplicant,
 }) {
   // RBAC: personal-details edit is Operations-Manager/Admin only; delete is
   // Admin only (soft). Server enforces the same rules.
@@ -73,6 +74,32 @@ export default function ClientProfileView({
 
   // Filter State
   const [attachmentFilter, setAttachmentFilter] = React.useState('custom');
+
+  // Deep-link from the client search dropdown's "Applicants" results — scroll
+  // to and briefly flash the matching row in the Family & Applicants Details
+  // table below (mirrors the chat message jump-to-and-flash behavior).
+  const [flashApplicant, setFlashApplicant] = React.useState(null);
+  React.useEffect(() => {
+    if (!highlightApplicant) return;
+    const key = highlightApplicant.pan || highlightApplicant.name;
+    if (!key) return;
+    const id = `applicant-row-${key}`;
+    let cancelled = false;
+    let attempts = 0;
+    const tryScroll = () => {
+      if (cancelled) return;
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setFlashApplicant(key);
+        setTimeout(() => setFlashApplicant(null), 1800);
+      } else if (attempts++ < 10) {
+        setTimeout(tryScroll, 100);
+      }
+    };
+    tryScroll();
+    return () => { cancelled = true; };
+  }, [highlightApplicant]);
 
   // Sync tasks when client or counter changes
   React.useEffect(() => {
@@ -486,8 +513,15 @@ export default function ClientProfileView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {applicantRows.map((f, i) => (
-                    <tr key={i} className="hover:bg-blue-50/40 dark:hover:bg-slate-900/20 transition-colors">
+                  {applicantRows.map((f, i) => {
+                    const rowKey = f.pan || f.name;
+                    const isFlashed = rowKey && flashApplicant === rowKey;
+                    return (
+                    <tr
+                      key={i}
+                      id={rowKey ? `applicant-row-${rowKey}` : undefined}
+                      className={`hover:bg-blue-50/40 dark:hover:bg-slate-900/20 transition-colors ${isFlashed ? 'ring-2 ring-inset ring-amber-400 bg-amber-50/60 dark:bg-amber-950/20 animate-pulse' : ''}`}
+                    >
                       <td className="px-4 py-2.5">
                         <span className="inline-flex items-center gap-2.5">
                           <Avatar name={f.name} size="sm" />
@@ -508,7 +542,8 @@ export default function ClientProfileView({
                       <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300 tabular-nums">{f.mobile || '—'}</td>
                       <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300 lowercase">{f.email || '—'}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

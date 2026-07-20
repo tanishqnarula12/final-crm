@@ -10,6 +10,7 @@ import {
 import { getCurrentUser } from '../utils/auth';
 import { canCreateClient, canDeleteClient } from '../utils/permissions';
 import { hasAllocation } from '../utils/assets';
+import ClientSearchDropdown from './ClientSearchDropdown';
 
 // Manage Columns — the optional columns an advisor can pin onto the Client
 // Directory table, on top of the always-on Name / PAN / Age columns.
@@ -60,7 +61,7 @@ function StatusPill({ ok, yesIcon: YesIcon = CheckCircle2, noIcon: NoIcon = Aler
   );
 }
 
-export default function ClientList({ clients, onSelect, onSelectFreshly, onAdd, onImport, onDelete, isViewer }) {
+export default function ClientList({ clients, onSelect, onSelectFreshly, onSelectApplicant, onAdd, onImport, onDelete, isViewer }) {
   // RBAC: only the Operations Manager (or Admin) may create applicants; only
   // Admin may delete (soft). The server enforces this too.
   const me = getCurrentUser();
@@ -71,6 +72,8 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onAdd, 
   const [pickerRect, setPickerRect] = useState(null);
   const columnTriggerRef = useRef(null);
   const [query, setQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchBlurTimer = useRef(null);
   const [ageMin, setAgeMin] = useState('');
   const [ageMax, setAgeMax] = useState('');
   const [goalsMin, setGoalsMin] = useState('');
@@ -187,15 +190,36 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onAdd, 
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* Search bar — always visible */}
+          {/* Search bar — always visible. Filters the table below by name/PAN
+              (unchanged), AND — while focused with a query typed — shows a
+              richer live dropdown that also reaches into family members
+              (Applicants) and matches on mobile/email/PAN too. */}
           <div className="relative">
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search name or PAN…"
-              className={inputCls + ' pl-9 w-56'}
+              onFocus={() => { clearTimeout(searchBlurTimer.current); setSearchFocused(true); }}
+              onBlur={() => { searchBlurTimer.current = setTimeout(() => setSearchFocused(false), 150); }}
+              placeholder="Search name, mobile, email or PAN…"
+              className={inputCls + ' pl-9 w-56 md:w-72'}
             />
+            {searchFocused && query.trim() && (
+              <ClientSearchDropdown
+                query={query}
+                clients={clients}
+                onSelectApplicant={(clientId, applicant) => {
+                  setSearchFocused(false);
+                  setQuery('');
+                  onSelectApplicant?.(clientId, applicant);
+                }}
+                onSelectGroupLeader={(clientId) => {
+                  setSearchFocused(false);
+                  setQuery('');
+                  onSelect(clientId);
+                }}
+              />
+            )}
           </div>
           <button
             onClick={() => setShowFilters(s => !s)}
