@@ -67,7 +67,7 @@ import { hydrateTeam, loadTeam, teamName } from './services/team';
 import { hydratePermissions } from './services/permissions';
 import {
   hydrateNotifications, startNotificationStream, stopNotificationStream, loadNotifications,
-  onNotificationsUpdated, markNotificationRead, markAllNotificationsRead, clearNotifications,
+  onNotificationsUpdated, onNotificationArrival, markNotificationRead, markAllNotificationsRead, clearNotifications,
 } from './services/notifications';
 import NotificationPanel from './components/NotificationPanel';
 import NotificationToaster from './components/NotificationToaster';
@@ -351,6 +351,33 @@ export default function App() {
     // logout) so a later re-login in the same tab — a fresh socket instance
     // — reattaches instead of silently staying subscribed to nothing.
     return () => { off(); stopNotificationStream(); };
+  }, [authed]);
+
+  // When a notification ARRIVES live (e.g. someone assigns you a task, raises a
+  // query, or schedules a meeting), the bell/toast updated — but the actual
+  // module data (your task list, prospects, etc.) was NOT re-fetched, so the
+  // new item only showed up after a manual page refresh. Re-hydrate the
+  // relevant module on arrival so the item appears in real time. Each
+  // hydrate() dispatches its own `crm:*-updated` event, which bumps the change
+  // counters the views already listen on, so TasksView / DashboardView /
+  // ClientProfile / etc. re-render with the fresh data automatically.
+  useEffect(() => {
+    if (!authed) return;
+    return onNotificationArrival((n) => {
+      const refreshers = {
+        TASK_ASSIGNED: hydrateTasks,
+        TASK_DUE: hydrateTasks,
+        PROSPECT_ASSIGNED: hydrateProspects,
+        MEETING_SOON: hydrateMeetings,
+        LEAD_NEW: hydrateLeads,
+        LEAD_RM_ASSIGNED: hydrateLeads,
+        QUERY_RAISED: hydrateQueries,
+        LEAVE_APPLIED: hydrateLeave,
+        LEAVE_RESPONDED: hydrateLeave,
+      };
+      const refresh = refreshers[n?.type];
+      if (refresh) refresh().catch(() => { /* transient — the next arrival or a manual refresh recovers */ });
+    });
   }, [authed]);
 
   // Clicking an OS push notification posts a message from the service worker

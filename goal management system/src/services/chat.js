@@ -17,7 +17,21 @@ let socket = null;
 
 export function connectChat() {
   if (socket) return socket;
-  socket = io(SOCKET_URL, { withCredentials: true });
+  socket = io(SOCKET_URL, {
+    withCredentials: true,
+    // Connect over WebSocket FIRST, not the Engine.IO default of "start on
+    // HTTP long-polling, then upgrade to WebSocket". In production (custom
+    // domain in front of Render) that polling->websocket UPGRADE fails every
+    // time ("WebSocket is closed before the connection is established"), so
+    // the socket was silently stuck on slow, flaky long-polling — which is
+    // what made chat/presence/notifications lag by seconds and need a manual
+    // refresh. A DIRECT websocket connection works and authenticates fine
+    // (verified against production); it's only the upgrade step that breaks.
+    // `tryAllTransports` keeps long-polling as a real fallback for any client
+    // whose network blocks WebSockets entirely, so nobody is left worse off.
+    transports: ['websocket', 'polling'],
+    tryAllTransports: true,
+  });
   return socket;
 }
 
