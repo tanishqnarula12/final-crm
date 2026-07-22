@@ -32,3 +32,24 @@ export function teamName(idOrName) {
 }
 
 export const teamMember = (id) => cache.find((m) => m.id === id) || null;
+
+// Resolve a manager reference from an imported sheet — a team member's id
+// verbatim, or their display name (case-insensitively) — to a UNIQUE active
+// team-member id. Returns { id, status } with status:
+//   'ok'        exactly one match (id set)
+//   'empty'     no value provided
+//   'nomatch'   a value was given but no team member has that id/name
+//   'ambiguous' the name matches MORE THAN ONE account
+// Ambiguity is a real hazard here: if two accounts share a display name (e.g.
+// an Admin AND an RM both named "Nitesh Luthra"), a name alone cannot safely
+// pick one — and owner/RM drives RBAC plus every task/prospect that hangs off
+// the client. So the caller must surface an error instead of silently guessing.
+export function resolveTeamMemberId(value, team = cache) {
+  const v = String(value ?? '').trim();
+  if (!v) return { id: '', status: 'empty' };
+  if (team.some((m) => m.id === v)) return { id: v, status: 'ok' };
+  const matches = team.filter((m) => (m.name || '').trim().toLowerCase() === v.toLowerCase());
+  if (matches.length === 1) return { id: matches[0].id, status: 'ok' };
+  if (matches.length === 0) return { id: '', status: 'nomatch' };
+  return { id: '', status: 'ambiguous' };
+}

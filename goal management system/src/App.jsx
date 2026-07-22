@@ -1017,6 +1017,24 @@ export default function App() {
     if (fail > 0) alert(`Imported ${ok} client(s). ${fail} row(s) failed — see console for details.`);
   };
 
+  // TEMPORARY admin cleanup — soft-delete every client (batched so a large
+  // directory doesn't fire hundreds of requests at once). Used once to wipe
+  // the wrongly-owner-mapped import before re-importing with correct
+  // owner/RM names. Soft delete leaves the rows with deletedAt set; the PAN
+  // uniqueness check ignores deleted rows, so re-importing the same PANs works.
+  // Returns { done, failed }.
+  const handleDeleteAllClients = async () => {
+    const all = clients.slice();
+    let done = 0, failed = 0;
+    const BATCH = 8;
+    for (let i = 0; i < all.length; i += BATCH) {
+      const results = await Promise.allSettled(all.slice(i, i + BATCH).map((c) => deleteClient(c.id)));
+      for (const r of results) (r.status === 'fulfilled' ? done++ : failed++);
+    }
+    await loadData();
+    return { done, failed };
+  };
+
   // Re-fetch just the current client directory (used by several module views).
   const refreshClients = async () => {
     const data = await getClients();
@@ -1745,6 +1763,7 @@ export default function App() {
               onSelectApplicant={goToApplicant}
               onAdd={() => setShowAddClient(true)}
               onDelete={handleDeleteClient}
+              onDeleteAll={handleDeleteAllClients}
               onImport={() => setShowImportExcel(true)}
               isViewer={isViewer}
             />

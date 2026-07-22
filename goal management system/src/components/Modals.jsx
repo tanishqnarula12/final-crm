@@ -7,7 +7,7 @@ import {
   DOB_MIN, dobMax, isValidDob, parseFlexibleDate,
 } from '../utils/calc';
 import { RELATIONS } from '../utils/team';
-import { loadTeam } from '../services/team';
+import { loadTeam, resolveTeamMemberId } from '../services/team';
 import { CountrySelect, StateSelect, CitySelect } from './LocationPicker';
 import { isAdminRole } from '../utils/auth';
 
@@ -893,10 +893,9 @@ function familyMemberErrors(f) {
 // matching rule App.jsx's resolveManager() uses at actual import time, so a
 // row that validates here won't silently import with a blank manager there.
 function resolveManagerId(v, team) {
-  if (!v) return '';
-  if (team.some((m) => m.id === v)) return v;
-  const hit = team.find((m) => m.name.trim().toLowerCase() === String(v).trim().toLowerCase());
-  return hit ? hit.id : '';
+  // Ambiguity-safe: a name that matches two accounts resolves to '' (flagged
+  // as unmatched below) rather than silently picking one.
+  return resolveTeamMemberId(v, team).id;
 }
 
 const MANAGER_LABELS = {
@@ -944,11 +943,23 @@ function rowErrors(r, i, allRows, existingClients, team) {
   if (!r.state) flag('state', 'Missing state');
   if (!r.city) flag('city', 'Missing city');
 
-  for (const mf of Object.keys(MANAGER_LABELS)) {
+  // Manager columns must map to a real, UNIQUE team member. A name that
+  // matches nobody, or matches two accounts (the ambiguity that mis-linked
+  // owner/RM before), is flagged rather than silently mapped/blanked — the
+  // whole point, since owner/RM drives RBAC + every task/prospect on the
+  // client. The 4 core managers are required; owner/operation/internal are
+  // only checked when a value is present.
+  const checkManager = (mf, label, required) => {
     const v = r.managers?.[mf];
-    if (!v) flag(mf, `Missing ${MANAGER_LABELS[mf]}`);
-    else if (!resolveManagerId(v, team)) flag(mf, `${MANAGER_LABELS[mf]} "${v}" doesn't match any team member`);
-  }
+    if (!v) { if (required) flag(mf, `Missing ${label}`); return; }
+    const { status } = resolveTeamMemberId(v, team);
+    if (status === 'nomatch') flag(mf, `${label} "${v}" — no such user exists`);
+    else if (status === 'ambiguous') flag(mf, `${label} "${v}" matches more than one account — make the name unique`);
+  };
+  for (const mf of Object.keys(MANAGER_LABELS)) checkManager(mf, MANAGER_LABELS[mf], true);
+  checkManager('owner', 'Owner', false);
+  checkManager('operationManager', 'Operation Manager', false);
+  checkManager('internalManager', 'Internal Manager', false);
 
   const familyFields = (r.familyDetails || []).map(familyMemberErrors);
   familyFields.forEach((ff, fi) => {

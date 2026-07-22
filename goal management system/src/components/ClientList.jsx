@@ -61,12 +61,13 @@ function StatusPill({ ok, yesIcon: YesIcon = CheckCircle2, noIcon: NoIcon = Aler
   );
 }
 
-export default function ClientList({ clients, onSelect, onSelectFreshly, onSelectApplicant, onAdd, onImport, onDelete, isViewer }) {
+export default function ClientList({ clients, onSelect, onSelectFreshly, onSelectApplicant, onAdd, onImport, onDelete, onDeleteAll, isViewer }) {
   // RBAC: only the Operations Manager (or Admin) may create applicants; only
   // Admin may delete (soft). The server enforces this too.
   const me = getCurrentUser();
   const mayCreateClient = !isViewer && canCreateClient(me);
   const mayDeleteClient = canDeleteClient(me);
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
   const [pickerRect, setPickerRect] = useState(null);
@@ -242,8 +243,28 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
               <Plus size={14} /> Add client
             </button>
           )}
+          {/* TEMPORARY admin cleanup button — password-gated wipe of all
+              clients, used once to clear the wrongly-mapped import before
+              re-importing with correct owner/RM names. */}
+          {mayDeleteClient && onDeleteAll && clients.length > 0 && (
+            <button
+              onClick={() => setShowDeleteAll(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-all cursor-pointer"
+              title="Delete every client (admin cleanup)"
+            >
+              <Trash2 size={14} /> Delete all clients
+            </button>
+          )}
         </div>
       </div>
+
+      {showDeleteAll && (
+        <DeleteAllClientsModal
+          count={clients.length}
+          onClose={() => setShowDeleteAll(false)}
+          onConfirm={onDeleteAll}
+        />
+      )}
 
       {showFilters && (
         <Card className="p-6 border border-blue-100 dark:border-blue-900/40 bg-blue-50/10 dark:bg-blue-950/5 shadow-md animate-scale-up">
@@ -444,5 +465,104 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
         document.body
       )}
     </div>
+  );
+}
+
+// TEMPORARY admin cleanup modal: password gate -> explicit "are you sure"
+// confirmation -> soft-deletes every client. Two deliberate barriers because
+// this wipes the whole directory.
+const DELETE_ALL_PASSWORD = '1-2KA4,4-2KA1';
+
+function DeleteAllClientsModal({ count, onClose, onConfirm }) {
+  const [password, setPassword] = useState('');
+  const [stage, setStage] = useState('password'); // 'password' | 'confirm' | 'working' | 'done'
+  const [error, setError] = useState('');
+  const [result, setResult] = useState(null);
+
+  const submitPassword = () => {
+    if (password === DELETE_ALL_PASSWORD) { setError(''); setStage('confirm'); }
+    else setError('Incorrect password.');
+  };
+
+  const runDelete = async () => {
+    setStage('working');
+    try {
+      const res = await onConfirm();
+      setResult(res || {});
+      setStage('done');
+    } catch (e) {
+      setError(e?.message || 'Deletion failed.');
+      setStage('confirm');
+    }
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-fade-in" onClick={stage === 'working' ? undefined : onClose}>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+            <Trash2 size={18} />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">Delete all clients</h3>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">{count} client{count === 1 ? '' : 's'} in the directory</p>
+          </div>
+        </div>
+
+        {stage === 'password' && (
+          <>
+            <p className="text-xs text-slate-600 dark:text-slate-300 mb-3">Enter the admin cleanup password to continue.</p>
+            <input
+              type="password" value={password} autoFocus
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submitPassword()}
+              placeholder="Password" className={inputCls}
+            />
+            {error && <p className="text-xs font-bold text-rose-600 dark:text-rose-400 mt-2">{error}</p>}
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={onClose} className={btnGhost}>Cancel</button>
+              <button onClick={submitPassword} disabled={!password} className={btnPrimary + ' disabled:opacity-50'}>Continue</button>
+            </div>
+          </>
+        )}
+
+        {stage === 'confirm' && (
+          <>
+            <div className="rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-200/60 dark:border-rose-900/40 p-4 mb-4">
+              <p className="text-sm font-bold text-rose-700 dark:text-rose-400">Are you sure you want to delete ALL {count} clients?</p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1.5">This removes every client from the directory. Re-importing the same PANs afterwards is allowed. This cannot be undone from here.</p>
+            </div>
+            {error && <p className="text-xs font-bold text-rose-600 dark:text-rose-400 mb-2">{error}</p>}
+            <div className="flex justify-end gap-2">
+              <button onClick={onClose} className={btnGhost}>Cancel</button>
+              <button onClick={runDelete} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl bg-rose-600 hover:bg-rose-700 text-white transition-all cursor-pointer">
+                <Trash2 size={14} /> Yes, delete all
+              </button>
+            </div>
+          </>
+        )}
+
+        {stage === 'working' && (
+          <div className="flex flex-col items-center justify-center py-6 gap-3">
+            <div className="w-9 h-9 rounded-full border-4 border-rose-500 border-t-transparent animate-spin" />
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">Deleting {count} clients…</p>
+          </div>
+        )}
+
+        {stage === 'done' && (
+          <div className="py-2">
+            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/40 p-4 mb-4">
+              <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">Deleted {result?.done ?? 0} client{(result?.done ?? 0) === 1 ? '' : 's'}.</p>
+              {result?.failed > 0 && <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">{result.failed} could not be deleted — try again.</p>}
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1.5">You can now re-import your Excel with the corrected owner/RM names.</p>
+            </div>
+            <div className="flex justify-end">
+              <button onClick={onClose} className={btnPrimary}>Done</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
   );
 }
