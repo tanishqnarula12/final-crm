@@ -905,15 +905,35 @@ export function TaskFormModal({ initial, clients, isViewer, onClose, onSave }) {
   const hasStageChanged = isEdit && stage !== (initial?.stage || 'Open');
   const logEntryCompulsory = hasStageChanged && !stageRemark.trim();
 
-  // RBAC gating (mirrors the server): only the assigner (assignedBy) or Admin
-  // may edit/reopen; the assignee cannot move a task to a previous stage.
-  // Legacy tasks with no departmentOwner fall back to editable.
+  // RBAC gating (mirrors the server overlay). Roles on an existing task:
+  //   • assigner (departmentOwner) or Admin — edit everything, incl. reopen
+  //   • assignee (assignedTo) — change the stage forward + add a log entry
+  //   • sub-person (subPerson) — add a comment/log only (no stage change)
+  // Legacy tasks with no departmentOwner fall back to fully editable.
   const me = getCurrentUser();
-  const canEditThis = !isEdit || isAdmin(me) || !initial?.departmentOwner || canEditTask(me, initial);
+  const meId = me?.id;
+  const legacyOrNew = !isEdit || !initial?.departmentOwner;
+  const canEditThis = legacyOrNew || isAdmin(me) || canEditTask(me, initial); // edit DETAILS
+  // The assignee (and assigner/Admin) may move the stage; the sub-person may not.
+  const mayChangeStage = legacyOrNew || isAdmin(me)
+    || initial?.departmentOwner === meId
+    || initial?.assignedTo === meId;
   const stageOk = !hasStageChanged || canChangeTaskStage(me, initial, initial?.stage || 'Open', stage);
-  const permissionBlocked = isEdit && (!canEditThis || !stageOk);
 
-  const canSave = !isViewer && canEditThis && stageOk && groupLeader && applicant && relatedTo && relatedLabel && (!hasStageChanged || stageRemark.trim());
+  // Only truly "blocked" when a stage move they attempted isn't allowed (e.g.
+  // the assignee trying to reopen). Editing details without rights can't happen
+  // — non-editors never get into edit mode (no "Edit Task" button for them).
+  const permissionBlocked = isEdit && hasStageChanged && !stageOk;
+
+  // A full details edit needs edit rights; but a stage-only change or a plain
+  // comment (both done WITHOUT entering edit mode) only needs stage/log rights,
+  // which the server enforces. So don't require canEditThis unless we're in
+  // full edit mode — that's what previously blocked the assignee from saving.
+  const canSave = !isViewer
+    && (isEditingMode ? canEditThis : true)
+    && stageOk
+    && groupLeader && applicant && relatedTo && relatedLabel
+    && (!hasStageChanged || stageRemark.trim());
 
   const handleSubmit = () => {
     if (logEntryCompulsory) {
@@ -1574,13 +1594,14 @@ export function TaskFormModal({ initial, clients, isViewer, onClose, onSave }) {
               <Field label="Stage">
                 <CoolSelect
                   value={stage}
+                  disabled={!mayChangeStage}
                   onChange={(e) => {
                     setStage(e.target.value);
                     if (e.target.value === (initial?.stage || 'Open')) {
                       setStageRemark('');
                     }
                   }}
-                  className={selectCls}
+                  className={selectCls + (!mayChangeStage ? ' opacity-60 cursor-not-allowed bg-slate-50 dark:bg-slate-950/20' : '')}
                 >
                   {TASK_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
                 </CoolSelect>

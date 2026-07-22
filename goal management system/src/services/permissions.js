@@ -128,12 +128,13 @@ export function can(module, action, record = null, ctx = {}) {
   if (['tasks', 'cobr', 'queries'].includes(module) && ['editDetails', 'changeStage', 'editLog'].includes(action) && record) {
     if (scope === 'ALL') return true;
     const isAssigner = record.departmentOwner === user.id;
-    // Assignee + sub-person both may change stage / add log; only assigner edits details.
-    const isAssignee = record.assignedTo === user.id || taskSubPerson(record) === user.id;
+    const isAssignee = record.assignedTo === user.id;
+    const isSubPerson = taskSubPerson(record) === user.id;
     if (action === 'editDetails') return isAssigner;
     if (isAssigner) return true;
+    // Comment: assignee + sub-person. Change stage: assignee only (not sub-person).
+    if (action === 'editLog') return isAssignee || isSubPerson;
     if (!isAssignee) return false;
-    if (action === 'editLog') return true;
     return !isBackwardStage(module, ctx.fromStage, ctx.toStage);
   }
 
