@@ -1041,14 +1041,19 @@ export default function App() {
     myprofile: hydrateAdvisorProfile,
   };
 
+  // Run a module's refreshers and return the promise (no spinner). Shared by
+  // the on-click refresh and the silent background auto-refresh below.
+  const runModuleRefreshers = (targetView) => {
+    const job = MODULE_REFRESHERS[targetView];
+    return job ? Promise.resolve().then(job) : Promise.resolve();
+  };
+
   // Fire-and-forget a targeted refresh for a module, toggling the small dock
   // spinner. Failures keep the last-known data (never blanks the screen).
   const refreshModuleData = (targetView) => {
-    const job = MODULE_REFRESHERS[targetView];
-    if (!job) return;
+    if (!MODULE_REFRESHERS[targetView]) return;
     setRefreshingModule(true);
-    Promise.resolve()
-      .then(job)
+    runModuleRefreshers(targetView)
       .catch((err) => console.error(`Failed to refresh ${targetView}:`, err))
       .finally(() => setRefreshingModule(false));
   };
@@ -1062,6 +1067,32 @@ export default function App() {
     // notification clicks, which route through here).
     refreshModuleData(newView);
   };
+
+  // Auto-refresh the module you're CURRENTLY sitting on, so data created by
+  // other users (a task/query/prospect assigned to you, etc.) shows up on its
+  // own — no click away-and-back needed. Silent (no spinner) so it's
+  // unobtrusive; paused while the tab is backgrounded (and fires immediately
+  // when you switch back to the tab) to avoid needless polling. This is the
+  // reliable, socket-independent path — it works even when the live socket
+  // doesn't.
+  useEffect(() => {
+    if (!authed) return undefined;
+    if (!MODULE_REFRESHERS[view]) return undefined;
+    let cancelled = false;
+    const tick = () => {
+      if (cancelled || document.visibilityState === 'hidden') return;
+      runModuleRefreshers(view).catch(() => { /* keep last data */ });
+    };
+    const id = setInterval(tick, 12000);
+    const onVisible = () => { if (document.visibilityState === 'visible') tick(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, view]);
 
   // Clicking a notification (in the panel or a toast) marks it read and jumps to
   // the relevant module. The record-level id is carried on the link for future
