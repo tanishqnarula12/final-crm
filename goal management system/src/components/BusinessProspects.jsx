@@ -765,6 +765,18 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
     };
     const historyAuthor = getCurrentUser()?.name || 'System';
     let stageHistory = [...(initial?.stageHistory || [])];
+    // First log entry, once, when the prospect is created: "Prospect created by
+    // <user>" so the timeline always opens with who created it and when.
+    if (!isEdit) {
+      stageHistory.push({
+        at: new Date().toISOString(),
+        by: historyAuthor,
+        from: '',
+        to: '',
+        remark: 'Prospect created',
+        created: true,
+      });
+    }
     if (stageChanged) {
       stageHistory.push({
         at: new Date().toISOString(),
@@ -1095,7 +1107,9 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">{fmtProspectStamp(h.at)}</span>
                           {h.by && <span className="text-[10px] font-bold text-blue-500 dark:text-blue-400">• {h.by}</span>}
-                          {isStageChange ? (
+                          {h.created ? (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/60 dark:bg-emerald-950/30 dark:text-emerald-400 dark:ring-emerald-900/40">Created</span>
+                          ) : isStageChange ? (
                             <>
                               <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ring-1 ${ALL_STAGE_THEME[fromStage] || 'bg-slate-50 text-slate-700'}`}>{fromStage}</span>
                               <ArrowRight size={11} className="text-slate-450" />

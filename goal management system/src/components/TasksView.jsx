@@ -8,7 +8,7 @@ import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, Field, C
 import { RELATIONS } from '../utils/team';
 import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
-import { canCreateTask, canEditTask, canChangeTaskStage, isAdmin } from '../utils/permissions';
+import { canCreateTask, canEditTask, canDeleteTask, canChangeTaskStage, isAdmin } from '../utils/permissions';
 import {
   loadTasks, saveTasks, TASK_STAGES, STAGE_THEME, RELATED_OPTIONS, NFT_TYPES, AMC_LIST, fmtTaskStamp
 } from '../utils/tasks';
@@ -16,7 +16,8 @@ import { uid } from '../utils/calc';
 import { updateClient } from '../services/db';
 
 export default function TasksView({ clients = [], isViewer, activeTaskId, setActiveTaskId, onOpenTask, tasksChangeCounter }) {
-  const mayCreateTask = !isViewer && canCreateTask(getCurrentUser());
+  const me = getCurrentUser();
+  const mayCreateTask = !isViewer && canCreateTask(me);
   const [tasks, setTasks] = useState(() => loadTasks());
   const [query, setQuery] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
@@ -170,7 +171,9 @@ export default function TasksView({ clients = [], isViewer, activeTaskId, setAct
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      {!isViewer && (
+                      {/* Delete only shows for someone the permission matrix
+                          actually grants task-delete to (Admin by default). */}
+                      {!isViewer && canDeleteTask(me, t) && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}
                           className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100"
@@ -1785,7 +1788,11 @@ export function TaskFormModal({ initial, clients, isViewer, onClose, onSave }) {
           ) : (
             <>
               <button onClick={onClose} className={btnGhost}>Close</button>
-              {!isViewer && (
+              {/* "Edit Task" (full details edit) only for the assigner or Admin.
+                  The assignee + sub-person don't see it — but the Stage
+                  dropdown above stays enabled for them, so they can still move
+                  the stage forward (which is all they're allowed to do). */}
+              {!isViewer && canEditThis && (
                 <button onClick={() => setIsEditingMode(true)} className={btnPrimary}>
                   Edit Task
                 </button>

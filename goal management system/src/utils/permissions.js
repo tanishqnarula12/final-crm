@@ -34,6 +34,7 @@ export const canDeleteClient = () => can('clients', 'delete');
 // ---- Tasks -----------------------------------------------------------------
 export const canCreateTask = () => can('tasks', 'create');
 export const canEditTask = (_me, task) => can('tasks', 'editDetails', task);
+export const canDeleteTask = (_me, task) => can('tasks', 'delete', task);
 export const canChangeTaskStage = (_me, task, fromStage, toStage) =>
   can('tasks', 'changeStage', task, { fromStage, toStage });
 

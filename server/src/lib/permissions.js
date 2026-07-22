@@ -61,11 +61,19 @@ function isClientRm(record, uid) {
 }
 
 // ---- ownership resolvers ---------------------------------------------------
+// A task's "sub person" is a third participant (e.g. an RM assigns a task to
+// an ops person AND tags a sub-person who also works it). Stored in the task
+// payload (not a promoted column), so it's read from either shape can() gets:
+// the raw payload directly, or a stored Prisma row's `.payload`.
+const taskSubPerson = (record) => record?.subPerson ?? record?.payload?.subPerson ?? null;
+
 function ownsRecord(module, record, uid) {
   if (!record) return false;
   const kind = OWNERSHIP[module] || 'self';
   if (kind === 'creator') return record.createdBy === uid;
-  if (kind === 'task') return record.departmentOwner === uid || record.assignedTo === uid;
+  // task = the three people on it: assigner (departmentOwner), assignee
+  // (assignedTo) and the sub-person. Nobody else "owns" (sees) it.
+  if (kind === 'task') return record.departmentOwner === uid || record.assignedTo === uid || taskSubPerson(record) === uid;
   if (kind === 'client') return isClientRm(record, uid) || record.createdBy === uid;
   return record.assignedTo === uid || record.createdBy === uid; // self
 }
@@ -101,6 +109,16 @@ export function can(user, module, action, record = null, ctx = {}) {
   if (!user) return false;
   if (isAdmin(user)) return true;
 
+  // A prospect's creator may always edit its details — their own record — even
+  // if their role's matrix scope wouldn't otherwise grant it (mirrors the task
+  // assigner's edit right). Never restricts anyone; purely an additive grant to
+  // whoever created the prospect. Stage moves stay matrix-governed.
+  if (record && record.createdBy === user.id
+      && ['investmentProspects', 'insuranceProspects'].includes(module)
+      && action === 'editDetails') {
+    return true;
+  }
+
   const roles = rolesFor(user, module, record);
   const scope = maxScope(roles, module, action);
   if (scope === 'NONE') return false;
@@ -114,7 +132,9 @@ export function can(user, module, action, record = null, ctx = {}) {
   if (['tasks', 'cobr', 'queries'].includes(module) && ['editDetails', 'changeStage', 'editLog'].includes(action) && record) {
     if (scope === 'ALL') return true;
     const isAssigner = record.departmentOwner === user.id;
-    const isAssignee = record.assignedTo === user.id;
+    // The assignee AND the sub-person are the "workers" on the task: both may
+    // change the stage / add a log, but only the assigner may edit details.
+    const isAssignee = record.assignedTo === user.id || taskSubPerson(record) === user.id;
     if (action === 'editDetails') return isAssigner;
     // changeStage / editLog:
     if (isAssigner) return true;

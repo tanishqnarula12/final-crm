@@ -49,11 +49,16 @@ function isClientRm(record, uid) {
     || record?.client?.clientDetails?.relationshipManager === uid;
 }
 
+// A task's third participant (sub-person). Client records ARE the payload, so
+// it's read directly; `.payload` fallback keeps it safe either way.
+const taskSubPerson = (record) => record?.subPerson ?? record?.payload?.subPerson ?? null;
+
 function ownsRecord(module, record, uid) {
   if (!record) return false;
   const kind = ownershipKind(module);
   if (kind === 'creator') return record.createdBy === uid;
-  if (kind === 'task') return record.departmentOwner === uid || record.assignedTo === uid;
+  // The three people on a task: assigner, assignee and sub-person.
+  if (kind === 'task') return record.departmentOwner === uid || record.assignedTo === uid || taskSubPerson(record) === uid;
   if (kind === 'client') return isClientRm(record, uid) || record.createdBy === uid;
   return record.assignedTo === uid || record.createdBy === uid;
 }
@@ -108,6 +113,14 @@ export function can(module, action, record = null, ctx = {}) {
   if (!user) return false;
   if ((user.roles || []).includes('ADMIN')) return true;
 
+  // A prospect's creator may always edit its details (their own record),
+  // mirroring the server engine. Additive grant only; stage stays matrix-governed.
+  if (record && record.createdBy === user.id
+      && ['investmentProspects', 'insuranceProspects'].includes(module)
+      && action === 'editDetails') {
+    return true;
+  }
+
   const roles = rolesFor(user, module, record);
   const scope = maxScope(roles, module, action);
   if (scope === 'NONE') return false;
@@ -115,7 +128,8 @@ export function can(module, action, record = null, ctx = {}) {
   if (['tasks', 'cobr', 'queries'].includes(module) && ['editDetails', 'changeStage', 'editLog'].includes(action) && record) {
     if (scope === 'ALL') return true;
     const isAssigner = record.departmentOwner === user.id;
-    const isAssignee = record.assignedTo === user.id;
+    // Assignee + sub-person both may change stage / add log; only assigner edits details.
+    const isAssignee = record.assignedTo === user.id || taskSubPerson(record) === user.id;
     if (action === 'editDetails') return isAssigner;
     if (isAssigner) return true;
     if (!isAssignee) return false;
