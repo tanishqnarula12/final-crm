@@ -81,6 +81,10 @@ export default function App() {
   const [clients, setClients] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [view, setView] = useState('dashboard'); // top-level: 'dashboard' | 'leads' | 'clients' | 'tasks' | 'meetings' | 'documents' | 'prospects' | 'reports' | 'myprofile'
+  // True while a module's data is being re-fetched on navigation (small spinner
+  // in the top dock). Every sidebar/notification click re-pulls just that
+  // module's data so newly-arrived items appear without a full app reload.
+  const [refreshingModule, setRefreshingModule] = useState(false);
   const [tab, setTab] = useState('clients');
   const [activeDropdown, setActiveDropdown] = useState(null); // 'chat' | 'bell' | 'profile' | null
   const [activeAnim, setActiveAnim] = useState({ chat: false, bell: false, profile: false });
@@ -1013,11 +1017,50 @@ export default function App() {
     if (fail > 0) alert(`Imported ${ok} client(s). ${fail} row(s) failed — see console for details.`);
   };
 
+  // Re-fetch just the current client directory (used by several module views).
+  const refreshClients = async () => {
+    const data = await getClients();
+    setClients(data);
+  };
+
+  // Which data each module view depends on. Clicking into a module re-pulls
+  // exactly that data — a quick, targeted refresh (not a full app reload) — so
+  // items created by other users since login show up without a manual refresh.
+  const MODULE_REFRESHERS = {
+    dashboard: () => Promise.all([hydrateTasks(), hydrateProspects(), hydrateMeetings(), hydrateLeads(), refreshClients()]),
+    leads: hydrateLeads,
+    clients: refreshClients,
+    documents: refreshClients,
+    tasks: hydrateTasks,
+    cobr: hydrateTasks,
+    queries: hydrateQueries,
+    leave: hydrateLeave,
+    meetings: hydrateMeetings,
+    prospects: hydrateProspects,
+    profile: () => Promise.all([refreshClients(), hydrateTasks(), hydrateProspects(), hydrateMeetings()]),
+    myprofile: hydrateAdvisorProfile,
+  };
+
+  // Fire-and-forget a targeted refresh for a module, toggling the small dock
+  // spinner. Failures keep the last-known data (never blanks the screen).
+  const refreshModuleData = (targetView) => {
+    const job = MODULE_REFRESHERS[targetView];
+    if (!job) return;
+    setRefreshingModule(true);
+    Promise.resolve()
+      .then(job)
+      .catch((err) => console.error(`Failed to refresh ${targetView}:`, err))
+      .finally(() => setRefreshingModule(false));
+  };
+
   const handleSetView = (newView) => {
     setView(newView);
     if (newView === 'prospects') {
       setProspectQuery('');
     }
+    // Pull fresh data for the module we're navigating into (also covers
+    // notification clicks, which route through here).
+    refreshModuleData(newView);
   };
 
   // Clicking a notification (in the panel or a toast) marks it read and jumps to
@@ -1093,6 +1136,13 @@ export default function App() {
               }}
               className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-x border-slate-200/20 dark:border-slate-800/40 pl-9 pr-9 py-2.5 flex items-center gap-5.5"
             >
+              {/* Module-refresh spinner — a small circle that spins briefly
+                  while the module we just navigated into re-pulls its data.
+                  Space is reserved always so it never shifts the dock layout. */}
+              <div className="w-4 h-4 flex items-center justify-center shrink-0" title="Refreshing latest data…">
+                <div className={`w-4 h-4 rounded-full border-2 border-blue-500/70 border-t-transparent transition-opacity duration-200 ${refreshingModule ? 'opacity-100 animate-spin' : 'opacity-0'}`} />
+              </div>
+
               {/* Chat Icon Button — hover for an unread-messages preview,
                   click to open the full Chat module as before. */}
               <button
