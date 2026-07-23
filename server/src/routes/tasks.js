@@ -36,6 +36,28 @@ router.get('/', asyncHandler(async (req, res) => {
   res.json({ tasks: visible.map((r) => r.payload) });
 }));
 
+// GET /api/tasks/closed-for-client/:clientId — CLOSED tasks (Completed/Lost)
+// for a specific client, visible to ANYONE who can view that client, not just
+// the task's participants. Open/in-progress tasks stay confidential (only the
+// assigner/assignee/sub-person see them, via GET /); but once a task is closed
+// it surfaces in the client's profile "Closed Activities" for the whole team,
+// for transparency on completed work.
+router.get('/closed-for-client/:clientId', asyncHandler(async (req, res) => {
+  const { clientId } = req.params;
+  const client = await prisma.client.findFirst({ where: { id: clientId, deletedAt: null } });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  if (!can(req.user, 'clients', 'view', client)) return res.status(403).json({ error: 'Not allowed' });
+
+  const rows = await prisma.task.findMany({ where: { deletedAt: null }, orderBy: { createdAt: 'desc' } });
+  const closed = rows.filter((r) => {
+    const p = r.payload || {};
+    const forClient = p.groupLeaderId === clientId || p.groupLeader === client.name;
+    const isClosed = p.stage === 'Completed' || p.stage === 'Lost';
+    return forClient && isClosed;
+  });
+  res.json({ tasks: closed.map((r) => r.payload) });
+}));
+
 router.put('/', asyncHandler(async (req, res) => {
   const { tasks } = parseBody(bulkSchema, req.body);
   const { list, stats, events } = await syncBulk(prisma, {

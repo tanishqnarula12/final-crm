@@ -44,6 +44,10 @@ function computeResults(clients, query) {
 function ResultRow({ name, sub, badge, onClick }) {
   return (
     <button
+      // preventDefault on mousedown keeps the search input from blurring before
+      // the click lands — otherwise the dropdown can unmount mid-click and the
+      // selection is lost (the row looks unclickable).
+      onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50/60 dark:hover:bg-slate-800/60 transition-colors cursor-pointer text-left"
     >

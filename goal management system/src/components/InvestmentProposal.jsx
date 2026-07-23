@@ -31,7 +31,17 @@ const CATEGORIES = [
   "Multi Cap",
   "Multi Asset",
   "Gold",
-  "Debt"
+  "Debt",
+  "Balanced Advantage",
+  "Hybrid",
+  "Arbitrage",
+  "ELSS",
+  "Value Oriented",
+  "Focused",
+  "Thematic",
+  "Sectoral",
+  "Index",
+  "Others"
 ];
 
 // Helper to clean commas and parse floats

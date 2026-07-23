@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { CoolSelect } from './UI';
 import { saveGeneratedDocument, wrapStandaloneHtml, snapshotElementHtml } from '../utils/documents';
+import { teamName } from '../services/team';
 
 const CHART_JS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
 const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxR_YWt7vbldI57ZxqX3WrnvZrp0gTLWPa8Fqo-YmMjRvo760WT_gd62njXd3q9e7n0/exec';
@@ -137,7 +138,10 @@ export default function PolicyReview({ client, onBack }) {
     if (client) {
       setClientName(client.name || '');
       setClientPan(client.pan || '');
-      setGroupLeader(client.clientDetails?.relationshipManager || '');
+      // relationshipManager is stored as a user id — show the person's NAME,
+      // not the raw id. teamName() returns the id verbatim if it isn't a known
+      // account (legacy name strings), so this is safe either way.
+      setGroupLeader(teamName(client.clientDetails?.relationshipManager) || '');
     }
   }, [client]);
 

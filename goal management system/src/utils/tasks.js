@@ -21,6 +21,21 @@ export async function hydrateTasks() {
   return cache;
 }
 
+// CLOSED tasks (Completed/Lost) for one client, visible to ANYONE who can view
+// that client — not just the task participants. Used by the Client Profile's
+// "Closed Activities" so completed work is transparent to the whole team,
+// while open/in-progress tasks stay confidential (those come from the normal
+// RBAC-filtered cache above). Not cached — fetched per profile open.
+export async function fetchClosedTasksForClient(clientId) {
+  if (!clientId) return [];
+  try {
+    const { tasks } = await api.get(`/tasks/closed-for-client/${clientId}`);
+    return Array.isArray(tasks) ? tasks : [];
+  } catch {
+    return []; // client not viewable / server hiccup — show nothing extra
+  }
+}
+
 export const saveTasks = (tasks) => {
   cache = tasks;
   window.dispatchEvent(new Event('crm:tasks-updated'));

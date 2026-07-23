@@ -135,7 +135,7 @@ export default function QueriesView({ isViewer, activeQueryId, setActiveQueryId,
                     <td className="px-6 py-4 max-w-[320px]">
                       <div className="text-slate-700 dark:text-slate-300 font-medium truncate">{q.query || '—'}</div>
                     </td>
-                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{q.createdBy ? teamName(q.createdBy) : '—'}</td>
+                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{(q.createdBy || q.departmentOwner) ? teamName(q.createdBy || q.departmentOwner) : '—'}</td>
                     <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{q.assignedTo ? teamName(q.assignedTo) : '—'}</td>
                     <td className="px-6 py-4 text-slate-600 dark:text-slate-400 tabular-nums">{q.createdAt ? fmtQueryStamp(q.createdAt) : '—'}</td>
                     <td className="px-6 py-4 text-center">
@@ -225,6 +225,11 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
       assignedTo,
       stage: isEdit ? stage : 'Open',
       remarks: finalRemarks,
+      // Stamp the raiser locally so "Raised By" shows immediately (before the
+      // server reconciles). The server keeps createdBy immutable regardless, so
+      // this can only ever match what the server will confirm.
+      createdBy: initial?.createdBy || me?.id || '',
+      departmentOwner: initial?.departmentOwner || me?.id || '',
       createdAt: initial?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -244,7 +249,7 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
         <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
           {isEdit && (
             <div className="text-xs text-slate-500 dark:text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
-              <span>Raised by <strong className="text-slate-700 dark:text-slate-300">{teamName(initial.createdBy) || '—'}</strong></span>
+              <span>Raised by <strong className="text-slate-700 dark:text-slate-300">{teamName(initial.createdBy || initial.departmentOwner) || '—'}</strong></span>
               <span>{fmtQueryStamp(initial.createdAt)}</span>
             </div>
           )}

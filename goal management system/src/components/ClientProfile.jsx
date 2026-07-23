@@ -12,7 +12,7 @@ import { MANAGER_ROLES } from '../utils/team';
 import { teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
 import { canEditClient, canDeleteClient } from '../utils/permissions';
-import { loadTasks } from '../utils/tasks';
+import { loadTasks, fetchClosedTasksForClient } from '../utils/tasks';
 import { loadProspects, CATEGORY_THEME, ALL_STAGE_THEME, fmtAmountINR } from '../utils/prospects';
 import { loadMeetings, MEETING_STATUS_THEME, MODE_THEME, fmtMeetingWhen, meetingDateTime } from '../utils/meetings';
 import { updateClient, deleteMom } from '../services/db';
@@ -368,12 +368,28 @@ export default function ClientProfileView({
     );
   }, [client, tasks]);
 
+  // Closed tasks for this client that the current user isn't a participant on
+  // — once a task is CLOSED it becomes visible to the whole team in the client
+  // profile (open/in-progress ones stay confidential, so they're not fetched
+  // here — those only ever come from the RBAC-filtered `tasks` cache).
+  const [extraClosedTasks, setExtraClosedTasks] = React.useState([]);
+  React.useEffect(() => {
+    let cancelled = false;
+    fetchClosedTasksForClient(client.id).then((list) => { if (!cancelled) setExtraClosedTasks(list); });
+    return () => { cancelled = true; };
+  }, [client.id, tasksChangeCounter]);
+
   const closedTasks = React.useMemo(() => {
-    return tasks.filter(t =>
+    const localClosed = tasks.filter(t =>
       (t.groupLeaderId === client.id || t.groupLeader === client.name) &&
       (t.stage === 'Completed' || t.stage === 'Lost')
     );
-  }, [client, tasks]);
+    // Merge the team-visible closed tasks in, de-duplicated by id (a task the
+    // user IS a participant on appears in both — keep one copy).
+    const byId = new Map(localClosed.map(t => [t.id, t]));
+    for (const t of extraClosedTasks) if (!byId.has(t.id)) byId.set(t.id, t);
+    return [...byId.values()];
+  }, [client, tasks, extraClosedTasks]);
 
   // COBR (Change of Broker) requests for this client — same Task rows already
   // counted above in Open/Closed Activities, surfaced again here with the
