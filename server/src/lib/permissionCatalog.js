@@ -58,11 +58,12 @@ export const ACTION_LABELS = {
 
 // How "owned / assigned" and "is RM of this record" are computed per module.
 //   self    — record.assignedTo / createdBy is a user id (leads, clients)
-//   creator — only the creator (createdBy) owns it (mom, meetings)
+//   creator — only the creator (createdBy) owns it (mom)
 //   task    — assigner = departmentOwner, assignee = assignedTo (handled by overlay)
+//   meeting — creator, or the host/attendee (matched by NAME — see permissions.js)
 //   client  — ownership flows from the parent client's RM / createdBy
 export const OWNERSHIP = {
-  leads: 'self', clients: 'self', tasks: 'task', cobr: 'task', queries: 'task', mom: 'creator', meetings: 'creator',
+  leads: 'self', clients: 'self', tasks: 'task', cobr: 'task', queries: 'task', mom: 'creator', meetings: 'meeting',
   goals: 'client', assetAllocation: 'client', investmentProposal: 'client', insuranceProposal: 'client',
   portfolioReview: 'client', policyReview: 'client', investmentProspects: 'client', insuranceProspects: 'client',
   documents: 'client', leave: 'creator',

@@ -8,6 +8,7 @@ import {
 import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, Field, CoolSelect, Avatar } from './UI';
 import { loadTeam } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
+import { canEditMeeting, canDeleteMeeting, isAdmin } from '../utils/permissions';
 import {
   loadMeetings, saveMeetings, MEETING_MODES, MEETING_STATUSES, MEETING_STATUS_THEME,
   MODE_THEME, meetingDateTime, fmtMeetingWhen, fmtMeetingStamp,
@@ -284,7 +285,9 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
                           <Video size={14} /> Join
                         </a>
                       )}
-                      {!isViewer && (
+                      {/* Delete only shows when the matrix actually grants
+                          meeting-delete (Admin-only by default). */}
+                      {!isViewer && canDeleteMeeting(getCurrentUser(), m) && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onDelete(m.id); }}
                           className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100"
@@ -669,7 +672,13 @@ export function MeetingFormModal({ initial, clients = [], isViewer, lockClient =
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const canSave = !isViewer && clientName && title.trim() && date && time;
+  // RBAC gating (mirrors the server): only the creator, the host, or an
+  // attendee (or Admin/Internal Manager per the matrix) may edit / mark-done /
+  // cancel / reschedule. Everyone else may only view. Legacy meetings with no
+  // createdBy fall back to editable (predates this restriction).
+  const me = getCurrentUser();
+  const canEditThis = !isEdit || isAdmin(me) || !initial?.createdBy || canEditMeeting(me, initial);
+  const canSave = !isViewer && canEditThis && clientName && title.trim() && date && time;
 
   const buildMeeting = (overrides = {}) => ({
     id: initial?.id || uid(),
@@ -930,7 +939,11 @@ export function MeetingFormModal({ initial, clients = [], isViewer, lockClient =
         {/* Footer */}
         <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 rounded-b-2xl flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            {isEdit && status === 'Scheduled' && !isViewer && (
+            {/* Mark-done/reschedule/cancel are the same "edit" right as the
+                fields above — creator, host, attendee, or Admin/Internal
+                Manager per the matrix. Everyone else (view-only) doesn't see
+                these, since the server would reject them anyway. */}
+            {isEdit && status === 'Scheduled' && !isViewer && canEditThis && (
               <>
                 <button onClick={handleMarkDone} className={btnSecondary + ' py-2 px-3 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50'}>
                   <CheckCircle2 size={14} /> Mark as Done
@@ -968,9 +981,14 @@ export function MeetingFormModal({ initial, clients = [], isViewer, lockClient =
                   {isEdit ? 'Save Changes' : 'Schedule Meeting'}
                 </button>
               ) : (
-                <button onClick={() => setIsEditingMode(true)} className={btnPrimary}>
-                  <Pencil size={14} /> Edit Meeting
-                </button>
+                // Only the creator/host/attendee (or Admin/Internal Manager)
+                // sees an Edit button — everyone else viewing this meeting
+                // (matrix view is broad) gets Close only.
+                canEditThis && (
+                  <button onClick={() => setIsEditingMode(true)} className={btnPrimary}>
+                    <Pencil size={14} /> Edit Meeting
+                  </button>
+                )
               )
             )}
           </div>

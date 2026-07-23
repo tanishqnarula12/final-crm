@@ -667,6 +667,23 @@ export default function InsuranceProposal({ client, isViewer }) {
     setShowProspectModal(true);
   };
 
+  // Browser "Print / Save PDF" defaults its filename to document.title — set
+  // it to "<Insurance Type(s)> Insurance Proposal of <Client>" right before
+  // printing (comma-joined when more than one type is filled in), then
+  // restore the app's normal title once the print dialog closes.
+  const handlePrint = () => {
+    const typeLabels = [
+      types.medical && 'Medical',
+      types.term && 'Term',
+      types.accidental && 'Accidental',
+    ].filter(Boolean);
+    const who = proposer || client?.name || 'Client';
+    const prevTitle = document.title;
+    document.title = `${typeLabels.length ? typeLabels.join(', ') + ' ' : ''}Insurance Proposal of ${who}`;
+    window.print();
+    document.title = prevTitle;
+  };
+
   const handleProspectConfirm = (list) => {
     addProspects(list);
     window.dispatchEvent(new Event('crm:prospects-updated'));
@@ -1395,7 +1412,7 @@ export default function InsuranceProposal({ client, isViewer }) {
               <button onClick={openCreateProspect} className={btnSecondary + ' py-2 px-4'}>
                 <Briefcase size={15} /> Create Prospect
               </button>
-              <button onClick={() => window.print()} className={btnPrimary + ' py-2 px-5'}>
+              <button onClick={handlePrint} className={btnPrimary + ' py-2 px-5'}>
                 <Printer size={15} /> Print / Save PDF
               </button>
             </div>

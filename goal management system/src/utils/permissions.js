@@ -45,6 +45,13 @@ export const canChangeQueryStage = (_me, query, fromStage, toStage) =>
   can('queries', 'changeStage', query, { fromStage, toStage });
 export const canLogQuery = (_me, query) => can('queries', 'editLog', query);
 
+// ---- Meetings ---------------------------------------------------------------
+// Only the creator, host, or an attendee (or Admin/Internal Manager per the
+// matrix) may edit, mark-done, cancel, or reschedule a meeting — everyone
+// else can view it.
+export const canEditMeeting = (_me, meeting) => can('meetings', 'edit', meeting);
+export const canDeleteMeeting = (_me, meeting) => can('meetings', 'delete', meeting);
+
 // ---- Leave -----------------------------------------------------------------
 export const canCreateLeave = () => can('leave', 'create');
 export const canEditLeave = (_me, leaveRequest) => can('leave', 'editDetails', leaveRequest);

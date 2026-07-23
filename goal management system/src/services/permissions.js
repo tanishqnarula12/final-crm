@@ -53,12 +53,27 @@ function isClientRm(record, uid) {
 // it's read directly; `.payload` fallback keeps it safe either way.
 const taskSubPerson = (record) => record?.subPerson ?? record?.payload?.subPerson ?? null;
 
-function ownsRecord(module, record, uid) {
+// A meeting's host (assignedTo) and attendees are stored as plain NAME
+// strings, not user ids (mirrors server/src/lib/permissions.js exactly — see
+// its comment for why). Matched case-insensitively by name.
+function isMeetingParticipant(record, user) {
   if (!record) return false;
+  if (record.createdBy === user.id) return true;
+  const myName = (user.name || '').trim().toLowerCase();
+  if (!myName) return false;
+  if ((record.assignedTo || '').trim().toLowerCase() === myName) return true;
+  const attendees = record.attendees ?? record.payload?.attendees;
+  return Array.isArray(attendees) && attendees.some((a) => (a || '').trim().toLowerCase() === myName);
+}
+
+function ownsRecord(module, record, user) {
+  if (!record) return false;
+  const uid = user.id;
   const kind = ownershipKind(module);
   if (kind === 'creator') return record.createdBy === uid;
   // The three people on a task: assigner, assignee and sub-person.
   if (kind === 'task') return record.departmentOwner === uid || record.assignedTo === uid || taskSubPerson(record) === uid;
+  if (kind === 'meeting') return isMeetingParticipant(record, user);
   if (kind === 'client') return isClientRm(record, uid) || record.createdBy === uid;
   return record.assignedTo === uid || record.createdBy === uid;
 }
@@ -126,7 +141,11 @@ export function can(module, action, record = null, ctx = {}) {
   if (scope === 'NONE') return false;
 
   if (['tasks', 'cobr', 'queries'].includes(module) && ['editDetails', 'changeStage', 'editLog'].includes(action) && record) {
-    if (scope === 'ALL') return true;
+    // Queries: this two-party rule is a hard confidentiality requirement, even
+    // for a role matrix-configured to ALL — only the raiser edits, only the
+    // recipient moves the stage. Tasks/COBR keep the ALL-bypass (Internal
+    // Manager's oversight exception). Mirrors the server engine exactly.
+    if (scope === 'ALL' && module !== 'queries') return true;
     const isAssigner = record.departmentOwner === user.id;
     const isAssignee = record.assignedTo === user.id;
     const isSubPerson = taskSubPerson(record) === user.id;
@@ -142,5 +161,5 @@ export function can(module, action, record = null, ctx = {}) {
   // ASSIGNED with no record to check ownership against must deny, not guess —
   // mirrors the server engine (server/src/lib/permissions.js).
   if (!record) return false;
-  return ownsRecord(module, record, user.id);
+  return ownsRecord(module, record, user);
 }

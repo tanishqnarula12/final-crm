@@ -1173,6 +1173,20 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     });
   })();
 
+  // Browser "Print / Save PDF" defaults its filename to document.title — set
+  // it to "<Proposal Type(s)> of <Client>" right before printing (comma-
+  // joined when multiple types are selected), then restore the app's normal
+  // title once the print dialog closes, so this never leaks into the tab
+  // title elsewhere in the app.
+  const handlePrint = () => {
+    const typeLabels = selTypes.map((tId) => TYPES.find((t) => t.id === tId)?.label).filter(Boolean);
+    const who = clientName || client?.name || 'Client';
+    const prevTitle = document.title;
+    document.title = `${typeLabels.join(', ') || 'Investment Proposal'} of ${who}`;
+    window.print();
+    document.title = prevTitle;
+  };
+
   if (isPreview) {
     return (
       <div className="space-y-6 animate-scale-up">
@@ -1189,7 +1203,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
             <button onClick={openCreateProspect} className={btnSecondary + ' py-2 px-4'}>
               <Briefcase size={15} /> Create Prospect
             </button>
-            <button onClick={() => window.print()} className={btnPrimary + ' py-2 px-5'}>
+            <button onClick={handlePrint} className={btnPrimary + ' py-2 px-5'}>
               <Printer size={15} /> Print / Save PDF
             </button>
           </div>

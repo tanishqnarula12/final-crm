@@ -67,13 +67,32 @@ function isClientRm(record, uid) {
 // the raw payload directly, or a stored Prisma row's `.payload`.
 const taskSubPerson = (record) => record?.subPerson ?? record?.payload?.subPerson ?? null;
 
-function ownsRecord(module, record, uid) {
+// A meeting's host (assignedTo) and attendees are stored as plain NAME
+// strings, not user ids (predates the id-based assignment used elsewhere —
+// e.g. Tasks). So "is this user on the meeting" has to be matched by name,
+// case-insensitively. Fragile against a later name change (the exact
+// gotcha this app hit with its own admin rename), but there's no id to key
+// off today.
+function isMeetingParticipant(record, user) {
   if (!record) return false;
+  if (record.createdBy === user.id) return true;
+  const myName = (user.name || '').trim().toLowerCase();
+  if (!myName) return false;
+  if ((record.assignedTo || '').trim().toLowerCase() === myName) return true;
+  const attendees = record.attendees ?? record.payload?.attendees;
+  return Array.isArray(attendees) && attendees.some((a) => (a || '').trim().toLowerCase() === myName);
+}
+
+function ownsRecord(module, record, user) {
+  if (!record) return false;
+  const uid = user.id;
   const kind = OWNERSHIP[module] || 'self';
   if (kind === 'creator') return record.createdBy === uid;
   // task = the three people on it: assigner (departmentOwner), assignee
   // (assignedTo) and the sub-person. Nobody else "owns" (sees) it.
   if (kind === 'task') return record.departmentOwner === uid || record.assignedTo === uid || taskSubPerson(record) === uid;
+  // meeting = the creator, the host, or an attendee (by name — see above).
+  if (kind === 'meeting') return isMeetingParticipant(record, user);
   if (kind === 'client') return isClientRm(record, uid) || record.createdBy === uid;
   return record.assignedTo === uid || record.createdBy === uid; // self
 }
@@ -130,7 +149,13 @@ export function can(user, module, action, record = null, ctx = {}) {
   // two-party shape (raisedBy = departmentOwner, raisedTo = assignedTo), just
   // its own stage vocabulary (see STAGE_ORDER below).
   if (['tasks', 'cobr', 'queries'].includes(module) && ['editDetails', 'changeStage', 'editLog'].includes(action) && record) {
-    if (scope === 'ALL') return true;
+    // For Queries specifically, this two-party rule is a hard confidentiality
+    // requirement — even a role matrix-configured to ALL (e.g. an oversight
+    // role, or an admin having broadened everyone's scope) must NOT bypass
+    // it: only the raiser edits, only the recipient moves the stage, anyone
+    // else may view but never touch. Tasks/COBR keep the ALL-bypass
+    // (Internal Manager's deliberate "close to Admin" oversight exception).
+    if (scope === 'ALL' && module !== 'queries') return true;
     const isAssigner = record.departmentOwner === user.id;
     const isAssignee = record.assignedTo === user.id;
     const isSubPerson = taskSubPerson(record) === user.id;
@@ -152,7 +177,7 @@ export function can(user, module, action, record = null, ctx = {}) {
   // a record. Deny; callers that need contextual-RM create rights must pass
   // the record (or its parent client) they're creating against.
   if (!record) return false;
-  return ownsRecord(module, record, user.id);
+  return ownsRecord(module, record, user);
 }
 
 // ---- stage direction (per module — each task-shaped module has its own
