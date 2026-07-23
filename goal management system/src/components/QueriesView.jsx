@@ -202,11 +202,31 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
   const hasStageChanged = isEdit && stage !== (initial?.stage || 'Open');
 
   // RBAC gating (mirrors the server): only the raiser (departmentOwner) or
-  // Admin may edit the query's own text/category; the recipient can't move
-  // the stage backward. Legacy/edge rows with no departmentOwner stay editable.
+  // Admin may edit the query's own text/category; the recipient (assignedTo)
+  // may change the stage forward + add a remark, but not the text/category;
+  // anyone else who can merely VIEW the query (the matrix grants broad view
+  // access) gets neither — they can read it, not touch it. Legacy/edge rows
+  // with no departmentOwner stay fully editable (predate this restriction).
   const canEditThis = !isEdit || isAdmin(me) || !initial?.departmentOwner || canEditQuery(me, initial);
+  const mayParticipate = !isEdit || isAdmin(me) || !initial?.departmentOwner
+    || initial.departmentOwner === me?.id || initial.assignedTo === me?.id;
   const stageOk = !hasStageChanged || canChangeQueryStage(me, initial, initial?.stage || 'Open', stage);
-  const canSave = !isViewer && canEditThis && stageOk && category && queryText.trim() && assignedTo;
+
+  // Only treat this as a "details edit" (needing the raiser-only right) if
+  // category/query/assignedTo actually changed — a plain stage move or
+  // remark by the recipient must not be blocked by a right they don't need.
+  // The fields themselves are also disabled for non-editors below, so this
+  // mainly guards against a stale/forced value rather than gating the happy path.
+  const detailsChanged = isEdit && (
+    category !== (initial?.category || '')
+    || queryText.trim() !== (initial?.query || '')
+    || assignedTo !== (initial?.assignedTo || '')
+  );
+  const canSave = !isViewer
+    && (!detailsChanged || canEditThis)
+    && (!hasStageChanged && !remark.trim() ? true : mayParticipate)
+    && stageOk
+    && category && queryText.trim() && assignedTo;
 
   const handleSubmit = () => {
     if (!canSave) return;
@@ -281,7 +301,7 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
 
           {isEdit && (
             <Field label="Stage *">
-              <CoolSelect value={stage} onChange={(e) => setStage(e.target.value)} className={selectCls}>
+              <CoolSelect value={stage} onChange={(e) => setStage(e.target.value)} className={selectCls + (!mayParticipate ? ' opacity-60 cursor-not-allowed' : '')} disabled={!mayParticipate}>
                 {QUERY_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
               </CoolSelect>
             </Field>
@@ -328,7 +348,9 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
             </div>
           )}
 
-          {isEdit && !isViewer && (
+          {/* Only the raiser or recipient may add a remark — someone who can
+              merely view this query (broad matrix access) doesn't see the box. */}
+          {isEdit && !isViewer && mayParticipate && (
             <div className="pt-2">
               <Field label={hasStageChanged ? `Reason for stage change → ${stage}` : 'Add a remark'}>
                 <textarea
