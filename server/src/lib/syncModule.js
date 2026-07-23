@@ -25,14 +25,15 @@ import { logActivity, diffFields } from './activityLog.js';
 // log-tier too — the assignee is the one actually processing each broker-
 // change entry, so marking done/rejected must not require the assigner-only
 // `editDetails` right (mirrors how the assignee may add a comment/log).
-const TASK_LOG_KEYS = new Set(['comments', 'stageRemark', 'cobrEntries']);
+// `remarks` is Queries' equivalent of `comments` (its raise/response thread).
+const TASK_LOG_KEYS = new Set(['comments', 'stageRemark', 'cobrEntries', 'remarks']);
 const TASK_STAGE_KEYS = new Set(['stage']);
 
 // Keys excluded from the UPDATE field-diff (owner/audit noise + big arrays that
 // have their own in-payload logs). Assignment/stage get their own log entries.
 const NOISE_KEYS = new Set([
   'createdBy', 'assignedTo', 'departmentOwner', 'createdAt', 'updatedAt', 'deletedAt',
-  'timeline', 'history', 'notes', 'followups', 'actuals', 'comments', 'cobrEntries',
+  'timeline', 'history', 'notes', 'followups', 'actuals', 'comments', 'cobrEntries', 'remarks',
 ]);
 
 // Who may set/change the assignment field, per module policy.
@@ -129,11 +130,12 @@ export async function syncBulk(prisma, spec) {
 
       const mod = moduleFor(existing);
       let allowed;
-      if (mod === 'tasks' || mod === 'cobr') {
+      if (mod === 'tasks' || mod === 'cobr' || mod === 'queries') {
         // Split the change into details / stage / log and require the matching
         // permission for each part (assigner edits details; assignee may change
         // stage forward + add log). COBR rows are Tasks (relatedTo: 'COBR')
-        // under their own matrix column — same split applies.
+        // under their own matrix column, and Queries share the identical
+        // two-party (raiser/recipient) shape — same split applies to both.
         const changed = Object.keys(diffFields(existing.payload, rec));
         const detailChanged = changed.some((k) => !TASK_LOG_KEYS.has(k) && !TASK_STAGE_KEYS.has(k) && !NOISE_KEYS.has(k));
         const logChanged = changed.some((k) => TASK_LOG_KEYS.has(k));
