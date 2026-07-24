@@ -8,7 +8,7 @@ import {
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip
 } from 'recharts';
-import { Card } from './UI';
+import { Card, Avatar } from './UI';
 import { fmtINR } from '../utils/calc';
 import { loadProspects, ALL_STAGE_THEME } from '../utils/prospects';
 import { loadTasks, TASK_STAGES, STAGE_THEME } from '../utils/tasks';
@@ -638,9 +638,7 @@ export default function DashboardView({
                   {/* Attendee Stack */}
                   <div className="shrink-0 flex -space-x-1 overflow-hidden self-center pr-1">
                     {Array.isArray(m.attendees) && m.attendees.slice(0, 2).map((att, i) => (
-                      <span key={i} className="w-5.5 h-5.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-605 dark:text-indigo-400 flex items-center justify-center text-[7px] font-black border border-white dark:border-slate-900 shadow-sm" title={att}>
-                        {att.split(' ').map(n=>n[0]).join('').substring(0, 2)}
-                      </span>
+                      <Avatar key={i} name={att} size="xs" className="border border-white dark:border-slate-900" />
                     ))}
                     {Array.isArray(m.attendees) && m.attendees.length > 2 && (
                       <span className="w-5.5 h-5.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 flex items-center justify-center text-[7px] font-black border border-white dark:border-slate-900 shadow-sm">

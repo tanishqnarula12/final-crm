@@ -9,8 +9,8 @@ import { teamPhoto } from '../services/team';
 // from the team directory by `name` (so every existing `<Avatar name={...} />`
 // that renders an internal user automatically gets their picture — clients /
 // applicants who aren't team members simply fall through to initials).
-export function Avatar({ name, size = 'md', photo }) {
-  const sizeClass = size === 'lg' ? 'w-12 h-12 text-base' : size === 'sm' ? 'w-7 h-7 text-[10px]' : 'w-9 h-9 text-xs';
+export function Avatar({ name, size = 'md', photo, className = '' }) {
+  const sizeClass = size === 'lg' ? 'w-12 h-12 text-base' : size === 'sm' ? 'w-7 h-7 text-[10px]' : size === 'xs' ? 'w-5 h-5 text-[7px]' : 'w-9 h-9 text-xs';
   const [broken, setBroken] = useState(false);
   const src = photo || teamPhoto(name);
   if (src && !broken) {
@@ -19,12 +19,12 @@ export function Avatar({ name, size = 'md', photo }) {
         src={src}
         alt={name || ''}
         onError={() => setBroken(true)}
-        className={`${sizeClass} rounded-full object-cover shadow-sm shrink-0 transition-all hover:scale-105 active:scale-95`}
+        className={`${sizeClass} rounded-full object-cover shadow-sm shrink-0 transition-all hover:scale-105 active:scale-95 ${className}`}
       />
     );
   }
   return (
-    <div className={`${sizeClass} ${avatarColor(name)} rounded-full flex items-center justify-center text-white font-bold shadow-sm shrink-0 transition-all hover:scale-105 active:scale-95`}>
+    <div className={`${sizeClass} ${avatarColor(name)} rounded-full flex items-center justify-center text-white font-bold shadow-sm shrink-0 transition-all hover:scale-105 active:scale-95 ${className}`}>
       {initials(name)}
     </div>
   );

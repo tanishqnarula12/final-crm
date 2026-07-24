@@ -217,7 +217,7 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
                       <div className="flex items-center gap-1 mt-1.5" title={m.attendees.join(', ')}>
                         <div className="flex -space-x-1.5">
                           {m.attendees.slice(0, 4).map(a => (
-                            <span key={a} className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-[7px] font-black ring-2 ring-white dark:ring-slate-900 ${avatarColor(a)}`}>{initials(a)}</span>
+                            <Avatar key={a} name={a} size="xs" className="ring-2 ring-white dark:ring-slate-900" />
                           ))}
                         </div>
                         <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 ml-1 inline-flex items-center gap-0.5">
@@ -545,7 +545,7 @@ function CalendarView({ meetings, onOpenMeeting, statusFilter, query }) {
                 <Users size={11} className="text-slate-400 shrink-0" />
                 <div className="flex -space-x-1.5">
                   {hover.meeting.attendees.slice(0, 5).map(a => (
-                    <span key={a} className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-[7px] font-black ring-2 ring-white dark:ring-slate-900 ${avatarColor(a)}`}>{initials(a)}</span>
+                    <Avatar key={a} name={a} size="xs" className="ring-2 ring-white dark:ring-slate-900" />
                   ))}
                 </div>
                 {hover.meeting.attendees.length > 5 && <span className="text-[10px] font-semibold">+{hover.meeting.attendees.length - 5}</span>}
@@ -850,7 +850,7 @@ export function MeetingFormModal({ initial, clients = [], isViewer, lockClient =
                   <div className="flex flex-wrap gap-1.5 mt-2.5">
                     {attendees.map(a => (
                       <span key={a} className="inline-flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-full bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-200/60 dark:ring-blue-900/40 text-[11px] font-bold">
-                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-[8px] font-black ${avatarColor(a)}`}>{initials(a)}</span>
+                        <Avatar name={a} size="xs" />
                         {a}
                         {isEditingMode && (
                           <button type="button" onClick={() => removeAttendee(a)} className="text-blue-400 hover:text-rose-500 transition-colors cursor-pointer ml-0.5"><X size={11} /></button>
