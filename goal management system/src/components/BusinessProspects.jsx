@@ -12,7 +12,7 @@ import {
 } from '../utils/prospects';
 import { uid } from '../utils/calc';
 import { RELATIONS } from '../utils/team';
-import { teamName } from '../services/team';
+import { teamName, loadTeam } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
 import { canDo, isAdmin } from '../utils/permissions';
 import { updateClient } from '../services/db';
@@ -469,15 +469,18 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
   const [applicant, setApplicant] = useState(seed.applicant || '');
   const [pan, setPan] = useState(seed.pan || '');
   const [closingDate, setClosingDate] = useState(seed.closingDate || '');
-  // Inherited from the client's Internal Team Assignments — these are ids used
-  // for RBAC (contextual RM/manager rights), so they're read-only here rather
-  // than free-text editable (typing over an id would silently break access).
-  const serviceManager = seed.serviceManager || '';
-  const relationshipManager = seed.relationshipManager || '';
-  const owner = seed.owner || '';
-  const internalManager = seed.internalManager || '';
-  const insuranceManager = seed.insuranceManager || '';
-  const portfolioManager = seed.portfolioManager || '';
+  // Inherited from the client's Internal Team Assignments (ids used for RBAC).
+  // Prefilled from the client profile but EDITABLE via a team-member dropdown
+  // on create — one person can be the manager on many things, so the advisor
+  // can reassign here and the chosen value is what the prospect is created
+  // with. A dropdown (not free text) keeps the value a valid team id, so
+  // access can't silently break the way typing over an id would.
+  const [serviceManager, setServiceManager] = useState(seed.serviceManager || '');
+  const [relationshipManager, setRelationshipManager] = useState(seed.relationshipManager || '');
+  const [owner, setOwner] = useState(seed.owner || '');
+  const [internalManager, setInternalManager] = useState(seed.internalManager || '');
+  const [insuranceManager, setInsuranceManager] = useState(seed.insuranceManager || '');
+  const [portfolioManager, setPortfolioManager] = useState(seed.portfolioManager || '');
 
   // KYC & health questionnaire — collected once per applicant, applies to every
   // proposal in this confirmation (shown only when an insurance proposal is involved)
@@ -909,12 +912,12 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
             <Field label="Closing Date">
               <input type="date" value={closingDate} onChange={(e) => setClosingDate(e.target.value)} className={inputCls} />
             </Field>
-            <Field label="Service Manager" hint="From client profile"><ReadOnlyTeamField id={serviceManager} /></Field>
-            <Field label="Relationship Manager" hint="From client profile"><ReadOnlyTeamField id={relationshipManager} /></Field>
-            <Field label="Owner" hint="From client profile"><ReadOnlyTeamField id={owner} /></Field>
-            <Field label="Internal Manager" hint="From client profile"><ReadOnlyTeamField id={internalManager} /></Field>
-            <Field label="Insurance Manager" hint="From client profile"><ReadOnlyTeamField id={insuranceManager} /></Field>
-            <Field label="Portfolio Manager" hint="From client profile"><ReadOnlyTeamField id={portfolioManager} /></Field>
+            <Field label="Service Manager" hint="Prefilled from profile — editable"><TeamSelect value={serviceManager} onChange={setServiceManager} /></Field>
+            <Field label="Relationship Manager" hint="Prefilled from profile — editable"><TeamSelect value={relationshipManager} onChange={setRelationshipManager} /></Field>
+            <Field label="Owner" hint="Prefilled from profile — editable"><TeamSelect value={owner} onChange={setOwner} /></Field>
+            <Field label="Internal Manager" hint="Prefilled from profile — editable"><TeamSelect value={internalManager} onChange={setInternalManager} /></Field>
+            <Field label="Insurance Manager" hint="Prefilled from profile — editable"><TeamSelect value={insuranceManager} onChange={setInsuranceManager} /></Field>
+            <Field label="Portfolio Manager" hint="Prefilled from profile — editable"><TeamSelect value={portfolioManager} onChange={setPortfolioManager} /></Field>
           </div>
           </fieldset>
 
@@ -1209,6 +1212,18 @@ function ReadOnlyTeamField({ id }) {
     <div className="w-full px-3.5 py-2.5 text-sm border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400">
       {teamName(id) || '—'}
     </div>
+  );
+}
+
+// Editable team-member picker (value = user id) — prefilled from the client
+// profile but changeable at prospect-create time. Auto-disables inside the
+// modal's locked <fieldset> once the prospect exists.
+function TeamSelect({ value, onChange }) {
+  return (
+    <CoolSelect value={value} onChange={(e) => onChange(e.target.value)} className={selectCls}>
+      <option value="">Select…</option>
+      {loadTeam().map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+    </CoolSelect>
   );
 }
 

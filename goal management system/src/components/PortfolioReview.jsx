@@ -13,10 +13,15 @@
 // canvases) intact rather than translating it into React state — the least
 // risky way to carry over a large, already-tuned tool byte-for-byte.
 import React, { useEffect, useRef } from 'react';
+// Chart.js is BUNDLED (not loaded from a CDN) — a CDN <script> can be blocked
+// by the user's ad-blocker / privacy extension / corporate proxy, and the
+// ported tool's upload handler then waits forever on `window.Chart` and the
+// dashboard never renders ("no data after upload"). `chart.js/auto`
+// pre-registers every controller/scale/element, so the ported code that does
+// `new window.Chart(...)` works unchanged once we expose it on window.
+import Chart from 'chart.js/auto';
 import { api } from '../services/api';
 import { saveGeneratedDocument, wrapStandaloneHtml, snapshotElementHtml } from '../utils/documents';
-
-const CHART_JS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
 
 // ---------------------------------------------------------------------------
 // Styles — copied verbatim from the standalone tool's <style> block.
@@ -1691,24 +1696,10 @@ export default function PortfolioReview({ client }) {
   const chartsRef = useRef({});
   const removeUnwantedFnRef = useRef(null);
 
-  // Dynamic script loader for Chart.js. Unlike PolicyReview.jsx (which needs
-  // a "loaded" state to gate a separate chart-building effect), this
-  // component's own mount effect below already waits on `window.Chart`
-  // itself (inside handleFile) — so loading doesn't need to drive a state
-  // update/re-render here. Deliberately state-free: any state change here
-  // would re-render this component, and since its dashboard markup is
-  // injected via dangerouslySetInnerHTML and then owned entirely by
-  // imperative DOM code afterwards, an extra re-render can cause React to
-  // recreate that subtree and silently detach the event listeners the
-  // mount effect below attached to it.
-  useEffect(() => {
-    if (window.Chart) return;
-    if (document.querySelector(`script[src="${CHART_JS_URL}"]`)) return;
-    const script = document.createElement('script');
-    script.src = CHART_JS_URL;
-    script.onerror = () => console.error('Failed to load Chart.js');
-    document.head.appendChild(script);
-  }, []);
+  // Expose the BUNDLED Chart.js on window so the ported imperative render code
+  // (which calls `new window.Chart(...)`) finds it synchronously — no CDN, no
+  // network wait, nothing an ad-blocker can strip out. Set once at module use.
+  if (typeof window !== 'undefined' && !window.Chart) window.Chart = Chart;
 
   // Mounts the tool's own logic exactly once. Ported near-verbatim from the
   // standalone tool's <script> tag — same element ids, same render functions,
@@ -1854,13 +1845,12 @@ export default function PortfolioReview({ client }) {
 
     async function handleFile(file) {
       if (!file) return;
-      // Chart.js loads via a dynamic script tag (see the component's mount
-      // effect below) instead of a synchronous <head> tag like the original
-      // standalone tool assumed — wait for it so the dashboard's charts never
-      // race a not-yet-loaded library. In practice this never adds a
-      // perceptible delay: the library loads in well under a second, and the
-      // upload + AI analysis below takes several seconds regardless.
-      while (!window.Chart) { await sleep(50); }
+      // Chart.js is now bundled and set on window synchronously, so this is
+      // effectively immediate — but keep a BOUNDED wait (never an infinite
+      // loop) so that if it's ever somehow missing, the user gets a clear
+      // error instead of a silent forever-hang ("no data after upload").
+      for (let i = 0; i < 100 && !window.Chart; i++) { await sleep(50); }
+      if (!window.Chart) { showErr('Charts library failed to load. Please refresh and try again.'); return; }
       hideErr();
       qs('pw').style.display = 'block';
       qs('steps-el').style.display = 'block';
