@@ -33,6 +33,18 @@ export function teamName(idOrName) {
 
 export const teamMember = (id) => cache.find((m) => m.id === id) || null;
 
+// The uploaded profile photo (base64 data URL) for a team member, resolved by
+// account id OR display name — so any avatar keyed by either can show the real
+// picture. Returns '' when the person isn't a team member or has no photo (the
+// caller then falls back to coloured initials).
+export function teamPhoto(idOrName) {
+  if (!idOrName) return '';
+  const v = String(idOrName).trim();
+  const hit = cache.find((m) => m.id === v)
+    || cache.find((m) => (m.name || '').trim().toLowerCase() === v.toLowerCase());
+  return hit?.photo || '';
+}
+
 // Resolve a manager reference from an imported sheet — a team member's id
 // verbatim, or their display name (case-insensitively) — to a UNIQUE active
 // team-member id. Returns { id, status } with status:

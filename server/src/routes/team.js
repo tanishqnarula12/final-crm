@@ -23,6 +23,9 @@ router.get('/', asyncHandler(async (req, res) => {
       email: u.email,
       roles: u.roles,
       jobTitle: u.profile?.data?.role || '',
+      // The team member's uploaded profile photo (base64 data URL), so
+      // avatars across the app can show the real picture instead of initials.
+      photo: u.profile?.data?.photo || '',
     })),
   });
 }));
