@@ -456,16 +456,6 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
     [clients, seed, initial, groupLeader]
   );
 
-  // Applicants = the subset: the group leader (Self) + all their family members.
-  const applicantOptions = useMemo(() => {
-    if (!linkedClient) return [];
-    const opts = [{ name: linkedClient.name, relation: 'Self', pan: linkedClient.pan || '' }];
-    (linkedClient.clientDetails?.familyDetails || []).forEach(f => {
-      if (f.name) opts.push({ name: f.name, relation: f.relation || 'Member', pan: f.pan || '' });
-    });
-    return opts;
-  }, [linkedClient]);
-
   const [applicant, setApplicant] = useState(seed.applicant || '');
   const [pan, setPan] = useState(seed.pan || '');
   const [closingDate, setClosingDate] = useState(seed.closingDate || '');
@@ -876,33 +866,20 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
           {/* Shared prospect fields */}
           <fieldset disabled={locked} className="contents">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Field label="Group Leader Name *">
-              <input value={groupLeader} onChange={(e) => setGroupLeader(e.target.value)} className={inputCls} placeholder="Family / group head" />
+            <Field label="Group Leader Name *" hint="Locked — set from the client record">
+              <div className="w-full px-3.5 py-2.5 text-sm border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400">
+                {groupLeader || '—'}
+              </div>
             </Field>
-            <Field label="Applicant Name *">
-              {applicantOptions.length > 0 ? (
-                <CoolSelect
-                  showValueOnSelect={true}
-                  value={applicant}
-                  onChange={(e) => {
-                    const selectedName = e.target.value;
-                    setApplicant(selectedName);
-                    const opt = applicantOptions.find(o => o.name === selectedName);
-                    if (opt) setPan(opt.pan || '');
-                  }}
-                  className={selectCls}
-                >
-                  <option value="">Select applicant…</option>
-                  {applicantOptions.map(o => (
-                    <option key={o.name} value={o.name}>{o.name} — {o.relation}</option>
-                  ))}
-                </CoolSelect>
-              ) : (
-                <input value={applicant} onChange={(e) => setApplicant(e.target.value)} className={inputCls} placeholder="Applicant" />
-              )}
+            <Field label="Applicant Name *" hint="Locked — set from the client record">
+              <div className="w-full px-3.5 py-2.5 text-sm border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400">
+                {applicant || '—'}
+              </div>
             </Field>
-            <Field label="PAN of Applicant">
-              <input value={pan} onChange={(e) => setPan(e.target.value.toUpperCase().slice(0, 10))} className={inputCls + ' font-mono tracking-widest uppercase'} placeholder="ABCDE1234F" />
+            <Field label="PAN of Applicant" hint="Locked — set from the client record">
+              <div className="w-full px-3.5 py-2.5 text-sm border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 font-mono tracking-widest uppercase">
+                {pan || '—'}
+              </div>
             </Field>
             <Field label="Created Date & Time" hint="Set automatically">
               <div className="w-full px-3.5 py-2.5 text-sm border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 tabular-nums">
