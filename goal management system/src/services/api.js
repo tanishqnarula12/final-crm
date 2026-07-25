@@ -8,7 +8,14 @@
 // Base URL is configurable via VITE_API_URL so the same build can point at a
 // local server now or a self-hosted (Mac Mini) server later.
 
-const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api').replace(/\/$/, '');
+// NOTE the `.trim()`: an env var pasted into a hosting dashboard often carries a
+// stray trailing newline/space (e.g. VITE_API_URL="…/api\n"). The browser
+// silently strips such whitespace when building a fetch URL, so REST keeps
+// working and the junk goes unnoticed — but it quietly breaks anything that
+// parses this value itself (most painfully the Socket.IO URL in services/chat.js,
+// where a trailing "\n" defeats the "/api" strip and the socket ends up asking
+// for an invalid namespace). Trimming here fixes it at the source for everyone.
+const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api').trim().replace(/\/+$/, '');
 
 export class ApiError extends Error {
   constructor(message, status, details) {

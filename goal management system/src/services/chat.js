@@ -11,7 +11,23 @@ import { api } from './api';
 // Socket singleton
 // ---------------------------------------------------------------------------
 
-const SOCKET_URL = api.baseUrl.replace(/\/api$/, '');
+// The socket must connect to the API ORIGIN only. Socket.IO interprets any PATH
+// in the URL as a NAMESPACE — so the REST "/api" suffix, if left on, makes the
+// client ask for the "/api" namespace, which the server never registered. The
+// server then rejects the connection ("Invalid namespace") and closes it,
+// silently killing EVERY real-time feature (online presence, live messages,
+// read receipts, typing, notifications) and forcing a manual refresh.
+// `new URL(...).origin` strips the path unconditionally — including any trailing
+// whitespace/newline the old `/\/api$/` regex couldn't (see api.js) — so the
+// namespace is always the default "/".
+const SOCKET_URL = (() => {
+  try {
+    return new URL(api.baseUrl).origin;
+  } catch {
+    // api.baseUrl isn't absolute (shouldn't happen in practice) — best-effort strip.
+    return api.baseUrl.trim().replace(/\/api\/?$/, '');
+  }
+})();
 
 let socket = null;
 
