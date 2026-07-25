@@ -21,6 +21,11 @@ import { QUICK_REACTIONS } from './emojiData';
 import ProfileCard from './ProfileCard';
 import GroupInfoPanel from './GroupInfoPanel';
 
+// A message can only be edited within 15 minutes of being sent — after that the
+// Edit option disappears and the text is locked (the server enforces the same
+// window). Keeps the chat history accountable: no silent late edits.
+const EDIT_WINDOW_MS = 15 * 60 * 1000;
+
 export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAction, onBackToList, onConversationUpdate, onConversationRemoved, initialMessageId }) {
   const [messages, setMessages] = useState([]); // ascending by createdAt
   const [hasMore, setHasMore] = useState(false);
@@ -662,7 +667,8 @@ function MessageBubble({
   const caretRef = useRef(null);
   const smileyRef = useRef(null);
 
-  const canEdit = mine && !m.deleted && (m.content || '').length > 0 && m.type !== 'poll';
+  const canEdit = mine && !m.deleted && !m.pending && (m.content || '').length > 0 && m.type !== 'poll'
+    && (Date.now() - new Date(m.createdAt).getTime() < EDIT_WINDOW_MS);
   const canDelete = (mine || isAdmin) && !m.deleted;
 
   const bubbleCls = mine
@@ -853,7 +859,14 @@ function MessageBubble({
 
           {/* Meta line */}
           <div className={`flex items-center gap-1 justify-end mt-0.5 ${mine ? 'text-white/70' : 'text-slate-400'}`}>
-            {m.editedAt && !m.deleted && <span className="text-[8.5px] italic mr-0.5">edited</span>}
+            {m.editedAt && !m.deleted && (
+              <span
+                title={`Edited ${fmtTime(m.editedAt)}`}
+                className={`text-[9px] italic font-semibold mr-0.5 ${mine ? 'text-white/80' : 'text-slate-500 dark:text-slate-400'}`}
+              >
+                Edited ·
+              </span>
+            )}
             {m.failed ? (
               <button onClick={onRetry} title="Failed to send — tap to retry" className="flex items-center gap-1 text-rose-300 hover:text-rose-200 cursor-pointer">
                 <span className="text-[9px] font-bold">Failed — retry</span>

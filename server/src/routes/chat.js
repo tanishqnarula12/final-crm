@@ -19,6 +19,12 @@ import { sendWebPush } from '../lib/webpush.js';
 const router = Router();
 router.use(requireAuth);
 
+// A message can be edited only within this window of being sent. After that the
+// text is locked for everyone (sender included) so the chat history stays
+// accountable — no silent late edits. Enforced here on the server as the real
+// gate; the client hides the Edit option past the window too.
+const EDIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
 // ---------------------------------------------------------------------------
 // Schemas & helpers
 // ---------------------------------------------------------------------------
@@ -469,6 +475,9 @@ router.patch('/messages/:id', asyncHandler(async (req, res) => {
   const msg = await prisma.chatMessage.findUnique({ where: { id: req.params.id } });
   if (!msg || msg.deletedAt) return res.status(404).json({ error: 'Message not found.' });
   if (msg.senderId !== req.user.id) return res.status(403).json({ error: 'You can only edit your own messages.' });
+  if (Date.now() - new Date(msg.createdAt).getTime() > EDIT_WINDOW_MS) {
+    return res.status(403).json({ error: 'The 15-minute edit window has passed — this message can no longer be edited.' });
+  }
 
   const url = firstUrlIn(content);
   const updated = await prisma.chatMessage.update({
