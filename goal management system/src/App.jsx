@@ -292,6 +292,49 @@ export default function App() {
     return () => window.removeEventListener('crm:meetings-updated', bump);
   }, []);
 
+  // Latest values for the always-on chat desktop-notification listener below.
+  // That listener's socket subscription is set up once (on login), so it reads
+  // through this ref to avoid stale closures over view / directory / previews.
+  const chatNotifCtx = useRef({ view, chatUsersById, chatConversationsPreview });
+  useEffect(() => {
+    chatNotifCtx.current = { view, chatUsersById, chatConversationsPreview };
+  }, [view, chatUsersById, chatConversationsPreview]);
+
+  // Show a native desktop notification for an incoming chat message — but only
+  // when the user isn't already watching it live (tab hidden, or they're on a
+  // different module). Uses the same OS Notification permission that push asks
+  // for on login. (Recipients whose tab is fully CLOSED are covered separately
+  // by the server's Web Push — see routes/chat.js — so the two never overlap.)
+  const notifyChatMessage = (message) => {
+    try {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      const { view: curView, chatUsersById: users, chatConversationsPreview: convs } = chatNotifCtx.current;
+      if (!document.hidden && curView === 'chat') return; // actively in chat — they see it live
+      const sender = users.get(message.senderId);
+      const conv = convs.find((c) => c.id === message.conversationId);
+      const isGroup = conv?.type === 'GROUP';
+      const senderName = sender?.name || 'New message';
+      const preview = message.type === 'poll' ? '📊 Poll'
+        : (message.content && message.content.trim()) ? message.content.trim()
+        : ((message.attachments || []).length ? '📎 Attachment' : 'New message');
+      const title = isGroup ? (conv?.name || 'Group chat') : senderName;
+      const body = (isGroup ? `${senderName}: ${preview}` : preview).slice(0, 140);
+      const notif = new Notification(title, {
+        body,
+        tag: `chat-${message.conversationId}`, // collapse a burst from the same chat
+        renotify: true,
+        icon: sender?.photo || '/pwa-192x192.png',
+      });
+      notif.onclick = () => {
+        window.focus();
+        setPendingChatOpen({ conversationId: message.conversationId, messageId: message.id });
+        setActiveDropdown(null);
+        setView('chat');
+        notif.close();
+      };
+    } catch { /* Notification can throw on some platforms — never break chat over it */ }
+  };
+
   // Chat: keep one socket alive for the whole session so real-time messages
   // (and the topbar/sidebar unread badge) work from any screen, not just the
   // chat view. The badge is re-derived from the server on every relevant
@@ -316,7 +359,7 @@ export default function App() {
     }).catch(() => {});
     const meId = getCurrentUser()?.id;
     const offNew = onChatEvent('message:new', ({ message }) => {
-      if (message.senderId !== meId) refreshChatPreview();
+      if (message.senderId !== meId) { refreshChatPreview(); notifyChatMessage(message); }
     });
     const offRead = onChatEvent('read', ({ userId }) => {
       if (userId === meId) refreshChatPreview();
@@ -1117,9 +1160,17 @@ export default function App() {
   // deep-linking; for now we land on the module view.
   const handleOpenNotification = (n) => {
     setActiveDropdown(null);
+    const link = n?.link;
+    // A chat push (OS notification for a message received while offline) deep-
+    // links straight into that conversation. Its id is the tag ("chat-<id>"),
+    // not a real bell-notification row, so don't try to mark it read.
+    if (link?.view === 'chat' && link.conversationId) {
+      setPendingChatOpen({ conversationId: link.conversationId, messageId: link.messageId || null });
+      setView('chat');
+      return;
+    }
     if (n?.id) markNotificationRead(n.id);
-    const target = n?.link?.view;
-    if (target) handleSetView(target);
+    if (link?.view) handleSetView(link.view);
   };
 
   const handleNavDoubleClick = async (id) => {

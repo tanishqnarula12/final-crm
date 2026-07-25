@@ -14,6 +14,7 @@ import { fetchLinkPreview, firstUrlIn } from '../lib/linkPreview.js';
 import {
   emitToConversation, emitToUser, joinMembersToConversation, getOnlineUserIds,
 } from '../chat/socket.js';
+import { sendWebPush } from '../lib/webpush.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -330,6 +331,47 @@ router.get('/conversations/:id/pinned', asyncHandler(async (req, res) => {
   res.json({ messages: await withReplies(messages) });
 }));
 
+// Fire an OS-level Web Push for a new message — but ONLY to members who are
+// currently OFFLINE (no live socket). Online members receive the message over
+// the socket and get a precise in-app desktop notification from the client
+// (suppressed while they're actually looking at the chat), so pushing to them
+// too would double-notify. The `tag` collapses repeated messages from the same
+// chat into one popup. Never awaited by the request — a push hiccup must never
+// affect message delivery.
+async function pushChatMessageToOffline(conversationId, message, sender) {
+  try {
+    const online = new Set(getOnlineUserIds());
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { type: true, name: true, members: { select: { userId: true } } },
+    });
+    if (!conv) return;
+    const recipients = conv.members
+      .map((m) => m.userId)
+      .filter((uid) => uid !== sender.id && !online.has(uid));
+    if (!recipients.length) return;
+
+    const isGroup = conv.type === 'GROUP';
+    const preview = message.type === 'poll'
+      ? '📊 Poll'
+      : (message.content && message.content.trim())
+        ? message.content.trim()
+        : (Array.isArray(message.attachments) && message.attachments.length ? '📎 Attachment' : 'New message');
+    const title = isGroup ? (conv.name || 'Group chat') : sender.name;
+    const body = (isGroup ? `${sender.name}: ${preview}` : preview).slice(0, 140);
+
+    await Promise.all(recipients.map((userId) => sendWebPush({
+      userId,
+      title,
+      body,
+      link: { view: 'chat', conversationId },
+      id: `chat-${conversationId}`, // tag: newer messages from the same chat replace the prior popup
+    })));
+  } catch (err) {
+    console.error('[chat] offline push failed:', err?.message || err);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Messages
 // ---------------------------------------------------------------------------
@@ -413,8 +455,11 @@ router.post('/conversations/:id/messages', asyncHandler(async (req, res) => {
   emitToConversation(req.params.id, 'message:new', { message: serialized });
   res.status(201).json({ message: serialized });
 
-  // Fire-and-forget: enrich with a link preview once fetched, then patch +
-  // notify. Never awaited — the request above has already been answered.
+  // Fire-and-forget (never awaited — the request above is already answered):
+  // OS-level desktop push to any recipients whose tab is closed/offline.
+  pushChatMessageToOffline(req.params.id, message, req.user)
+    .catch((err) => console.error('[chat] offline push error:', err?.message || err));
+  // Enrich with a link preview once fetched, then patch + notify.
   if (url) attachLinkPreviewAsync(message.id, req.params.id, url);
 }));
 
