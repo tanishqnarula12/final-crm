@@ -332,6 +332,7 @@ model ConversationMember {
   userId         String
   lastReadAt     DateTime  @default(now())
   clearedAt      DateTime? // "Clear chat" — hides messages before this instant, for THIS member only
+  hiddenAt       DateTime? // "Delete chat" — removes the conversation from THIS member's list (delete-for-me); a message newer than this un-hides it (WhatsApp-style)
   joinedAt       DateTime  @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)

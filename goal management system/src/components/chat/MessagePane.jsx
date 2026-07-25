@@ -8,7 +8,7 @@ import {
 import {
   fetchMessages, sendMessage, editMessage, deleteMessage, pinMessage,
   markRead, searchMessages, fetchPinned, onChatEvent,
-  reactToMessage, votePoll, clearChat,
+  reactToMessage, votePoll, clearChat, deleteChatForMe,
 } from '../../services/chat';
 import { ChatAvatar, GroupAvatar } from './Avatars';
 import {
@@ -43,6 +43,7 @@ export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAct
   const [pinnedIndex, setPinnedIndex] = useState(0);
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [deletingChat, setDeletingChat] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -293,6 +294,23 @@ export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAct
     }
   };
 
+  // "Delete chat" — removes THIS conversation from my list (and hides its
+  // history from my view). Nothing is deleted for the other side; it reappears
+  // if they message me again. This is how duplicate/empty chat entries get
+  // cleared out of the list.
+  const handleDeleteChat = async () => {
+    setHeaderMenuOpen(false);
+    if (!window.confirm('Delete this chat? It will be removed from your list. Nothing is deleted for the other person, and it reappears if they message you again.')) return;
+    setDeletingChat(true);
+    try {
+      await deleteChatForMe(convId);
+      onConversationRemoved?.(convId); // drop from the list + close this pane
+    } catch (err) {
+      alert(err?.message || 'Failed to delete chat.');
+      setDeletingChat(false);
+    }
+  };
+
   const runSearch = async (q) => {
     setSearchQ(q);
     if (!q.trim()) { setSearchResults(null); return; }
@@ -381,6 +399,7 @@ export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAct
               <MenuItem icon={Info} label="Details" onClick={() => { setHeaderMenuOpen(false); openHeaderInfo(); }} />
               <MenuItem icon={Search} label="Search" onClick={() => { setHeaderMenuOpen(false); setSearchOpen((o) => !o); setSearchQ(''); setSearchResults(null); }} />
               <MenuItem icon={Eraser} label={clearing ? 'Clearing…' : 'Clear chat'} onClick={handleClearChat} danger disabled={clearing} />
+              <MenuItem icon={Trash2} label={deletingChat ? 'Deleting…' : 'Delete chat'} onClick={handleDeleteChat} danger disabled={deletingChat} />
             </div>
           </AnchoredPopover>
         )}

@@ -91,6 +91,8 @@ export const updateConversation = (conversationId, payload) => api.patch(`/chat/
 export const deleteConversation = (conversationId) => api.del(`/chat/conversations/${conversationId}`);
 export const markRead = (conversationId) => api.post(`/chat/conversations/${conversationId}/read`);
 export const clearChat = (conversationId) => api.post(`/chat/conversations/${conversationId}/clear`);
+// "Delete chat" (delete-for-me): removes it from my list; reappears on a new message.
+export const deleteChatForMe = (conversationId) => api.post(`/chat/conversations/${conversationId}/delete`);
 export const searchMessages = (conversationId, q) =>
   api.get(`/chat/conversations/${conversationId}/search?q=${encodeURIComponent(q)}`);
 export const fetchPinned = (conversationId) => api.get(`/chat/conversations/${conversationId}/pinned`);

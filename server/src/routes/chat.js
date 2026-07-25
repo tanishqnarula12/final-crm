@@ -187,9 +187,15 @@ router.get('/conversations', asyncHandler(async (req, res) => {
         orderBy: { createdAt: 'desc' },
       }),
     ]);
+    // "Delete chat" (delete-for-me): stay hidden from my list until a message
+    // newer than hiddenAt arrives, which un-hides it (WhatsApp-style). Empty
+    // duplicate conversations therefore stay gone for good.
+    if (me.hiddenAt && (!lastMessage || new Date(lastMessage.createdAt) <= new Date(me.hiddenAt))) {
+      return null;
+    }
     return serializeConversation(c, meId, unread, lastMessage);
   }));
-  res.json({ conversations: result });
+  res.json({ conversations: result.filter(Boolean) });
 }));
 
 // POST /api/chat/conversations — start a DM (deduped) or create a group.
@@ -214,6 +220,12 @@ router.post('/conversations', asyncHandler(async (req, res) => {
       },
     });
     if (existing) {
+      // Explicitly reopening a chat I'd previously deleted-for-me un-hides it
+      // (clearedAt stays, so history remains hidden — a fresh start).
+      await prisma.conversationMember.updateMany({
+        where: { conversationId: existing.id, userId: meId, hiddenAt: { not: null } },
+        data: { hiddenAt: null },
+      });
       return res.json({ conversation: await loadConversationForUser(existing.id, meId) });
     }
   } else if (!name?.trim()) {
@@ -264,6 +276,25 @@ router.post('/conversations/:id/clear', asyncHandler(async (req, res) => {
   const member = await requireMembership(req, res, req.params.id);
   if (!member) return;
   await prisma.conversationMember.update({ where: { id: member.id }, data: { clearedAt: new Date() } });
+  res.json({ ok: true });
+}));
+
+// POST /api/chat/conversations/:id/delete — "Delete chat" (delete-for-me):
+// removes the conversation from MY list and hides its history from MY view.
+// Nothing is deleted for the other member(s), and I stay a member + in the
+// socket room — so if they message me again the chat reappears (WhatsApp-style).
+// This is what clears duplicate/empty DM entries from the list. Distinct from
+// DELETE /conversations/:id, which destroys a GROUP for everyone.
+router.post('/conversations/:id/delete', asyncHandler(async (req, res) => {
+  const member = await requireMembership(req, res, req.params.id);
+  if (!member) return;
+  const now = new Date();
+  // clearedAt too, so a reappearance (new message) starts fresh, not with the
+  // old history — matching how WhatsApp's "Delete chat" behaves.
+  await prisma.conversationMember.update({
+    where: { id: member.id },
+    data: { hiddenAt: now, clearedAt: now },
+  });
   res.json({ ok: true });
 }));
 
