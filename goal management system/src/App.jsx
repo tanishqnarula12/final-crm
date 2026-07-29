@@ -419,6 +419,7 @@ export default function App() {
         LEAD_NEW: hydrateLeads,
         LEAD_RM_ASSIGNED: hydrateLeads,
         QUERY_RAISED: hydrateQueries,
+        QUERY_RESOLVED: hydrateQueries,
         LEAVE_APPLIED: hydrateLeave,
         LEAVE_RESPONDED: hydrateLeave,
       };

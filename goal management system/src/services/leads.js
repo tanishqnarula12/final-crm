@@ -272,6 +272,48 @@ export function updateLead(id, patch = {}, actor = 'System') {
   return next;
 }
 
+// Admin-only escape hatch: move a lead BACKWARD to an earlier stage. Every
+// other stage transition in this file only ever moves forward (assignLead,
+// winInitialCall, syncMeetingToLead, etc.) — this is the one deliberate
+// exception, for correcting a lead that was advanced by mistake. A remark is
+// mandatory (enforced here, not just in the UI) so the log entry always
+// explains WHY it was reverted — the timeline stays a trustworthy audit
+// trail even when someone moves a lead backward.
+export function revertLeadStage(id, targetStage, remark, actor = 'System') {
+  const trimmed = (remark || '').trim();
+  if (!trimmed) throw new Error('A remark is required to revert a lead\'s stage.');
+  const leads = loadLeads();
+  const idx = leads.findIndex(l => l.id === id);
+  if (idx === -1) return null;
+  const prev = leads[idx];
+  if (!LEAD_STAGES.includes(targetStage) || LEAD_STAGES.indexOf(targetStage) >= LEAD_STAGES.indexOf(prev.stage)) {
+    throw new Error('Can only revert to an earlier stage.');
+  }
+  const next = {
+    ...prev,
+    stage: targetStage,
+    updatedAt: new Date().toISOString(),
+    timeline: [
+      activity('STAGE_REVERTED', 'Stage reverted', `Stage manually reverted from ${prev.stage} to ${targetStage} by ${actor}. Reason: ${trimmed}`, { from: prev.stage, to: targetStage }, actor),
+      ...(prev.timeline || []),
+    ],
+  };
+  next.leadScore = computeScore(next);
+  leads[idx] = next;
+  saveLeads(leads);
+  return next;
+}
+
+// Local (not UTC) YYYY-MM-DD, matching the format <input type="date"> stores —
+// toISOString() would shift the date backward for anyone west of UTC.
+const todayString = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 // Internal Manager assigns an RM (+ optional others) → lead becomes Qualified
 // and an "Initial Call" task is auto-created in the Tasks module for the RM.
 export function assignLead(id, { ownerId, contributors = [] }, actor = 'System') {
@@ -307,7 +349,7 @@ export function assignLead(id, { ownerId, contributors = [] }, actor = 'System')
       taskName: `${leadName(lead)} - Initial Call`,
       stage: 'Open', groupLeader: leadName(lead), applicant: leadName(lead),
       pan: '', relatedTo: 'Others', otherSpecify: 'Initial Call', amcs: [],
-      assignedBy: actor, assignedTo: ownerId, dueDate: '',
+      assignedBy: actor, assignedTo: ownerId, dueDate: todayString(),
       description: `Initial Call for ${leadName(lead)} (${lead.mobile}). Marking this task Completed moves the lead to Connected.`,
       comments: [], createdAt: now, updatedAt: now,
     });

@@ -22,27 +22,10 @@ const TYPES = [
   { id: "switch", label: "Switch Proposal" }
 ];
 
-const CATEGORIES = [
-  "Small Cap",
-  "Mid Cap",
-  "Large Cap",
-  "Large and Mid Cap",
-  "Flexi Cap",
-  "Multi Cap",
-  "Multi Asset",
-  "Gold",
-  "Debt",
-  "Balanced Advantage",
-  "Hybrid",
-  "Arbitrage",
-  "ELSS",
-  "Value Oriented",
-  "Focused",
-  "Thematic",
-  "Sectoral",
-  "Index",
-  "Others"
-];
+// Derived from schemes.json's own keys, not a hand-maintained duplicate —
+// see BusinessProspects.jsx's CATEGORIES for why: a separate hardcoded list
+// there had silently drifted to only 9 of these 19 categories.
+const CATEGORIES = Object.keys(SCHEMES);
 
 // Helper to clean commas and parse floats
 const parseNum = (v) => {
@@ -947,7 +930,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
         <strong style='color:#92400e;text-transform:uppercase;font-size:11px;letter-spacing:1px;display:flex;align-items:center;gap:4px;margin-right:4px;'>
           <span style='font-size:14px;'>💡</span> Applicable Tax Rates:
         </strong>
-        <span style='font-weight:700;color:#0d2b5e;'>Equity:</span> Short Term <strong>20%</strong>, Long Term <strong>12%</strong>
+        <span style='font-weight:700;color:#0d2b5e;'>Equity:</span> Short Term <strong>20%</strong>, Long Term <strong>12.5%</strong>
         <span style='color:#f59e0b;margin:0 6px;'>|</span>
         <span style='font-weight:700;color:#0d2b5e;'>Debt:</span> Short Term <strong>As Per Tax Slab</strong>, Long Term <strong>12.5%</strong>
       </div>`;

@@ -9,10 +9,10 @@ import {
 import { Card, Avatar, Field, inputCls, selectCls, btnPrimary, btnSecondary, btnGhost, CoolSelect } from './UI';
 import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
-import { canAssignLead, canCreateLead, canDeleteLead } from '../utils/permissions';
+import { canAssignLead, canCreateLead, canDeleteLead, isAdmin } from '../utils/permissions';
 import {
   loadLeads, intakeLead, updateLead, addNote, addFollowUp, completeFollowUp, deleteLead,
-  assignLead, winInitialCall,
+  assignLead, winInitialCall, revertLeadStage,
   LEAD_STAGES, LEAD_SOURCES, CLIENT_TYPES, RELATED_TO_OPTIONS, LOST_REASONS, FOLLOWUP_TYPES,
   STAGE_THEME, STATUS_THEME, SOURCE_THEME, scoreBand, computeScore, leadName, fmtStamp,
 } from '../services/leads';
@@ -458,10 +458,16 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
   // Inline initial-call remark panel (replaces window.prompt)
   const [showCallRemarkForm, setShowCallRemarkForm] = useState(false);
   const [callRemark, setCallRemark] = useState('');
+  // Admin-only: revert to an earlier stage (a remark is mandatory).
+  const [showRevert, setShowRevert] = useState(false);
+  const [revertTarget, setRevertTarget] = useState('');
+  const [revertRemark, setRevertRemark] = useState('');
+  const [revertError, setRevertError] = useState('');
 
   const me = getCurrentUser();
   const meName = me?.name || 'System';
   const canAssign = canAssignLead(me); // only Admin assigns the RM
+  const amAdmin = isAdmin(me);
 
   const setStatus = (status, reason) => {
     updateLead(lead.id, { status, ...(reason ? { lostReason: reason } : {}) }, meName);
@@ -482,6 +488,21 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
     setCallRemark('');
     setShowCallRemarkForm(false);
     onRefresh();
+  };
+
+  const doRevertStage = () => {
+    setRevertError('');
+    if (!revertTarget) { setRevertError('Pick a stage to revert to.'); return; }
+    if (!revertRemark.trim()) { setRevertError('A remark is required to revert the stage.'); return; }
+    try {
+      revertLeadStage(lead.id, revertTarget, revertRemark.trim(), meName);
+      setShowRevert(false);
+      setRevertTarget('');
+      setRevertRemark('');
+      onRefresh();
+    } catch (err) {
+      setRevertError(err?.message || 'Failed to revert stage.');
+    }
   };
 
   const doOpenMeetingForm = () => {
@@ -548,6 +569,45 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
             ))}
           </div>
         </div>
+
+        {/* Admin-only: revert to an earlier stage. Every other transition in
+            this module only moves forward — this is the deliberate exception
+            for correcting a lead advanced by mistake. A remark is mandatory,
+            enforced both here and in revertLeadStage() itself, so the timeline
+            always explains why a lead went backward. */}
+        {amAdmin && stageIdx > 0 && lead.status === 'Active' && (
+          <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+            {!showRevert ? (
+              <button onClick={() => { setShowRevert(true); setRevertTarget(''); setRevertRemark(''); setRevertError(''); }} className={btnGhost + ' py-1.5 px-3 text-[11px] text-amber-600 dark:text-amber-400'}>
+                <RefreshCw size={12} /> Admin: Revert to earlier stage
+              </button>
+            ) : (
+              <div className="p-3 rounded-xl bg-amber-50/50 dark:bg-amber-950/15 border border-amber-200/60 dark:border-amber-900/40 space-y-2.5">
+                <div className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">Admin — Revert Stage</div>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="w-52">
+                    <Field label="Revert to *">
+                      <CoolSelect value={revertTarget} onChange={(e) => setRevertTarget(e.target.value)} className={selectCls + ' text-xs py-1.5'}>
+                        <option value="">Select stage…</option>
+                        {LEAD_STAGES.slice(0, stageIdx).map(s => <option key={s} value={s}>{s}</option>)}
+                      </CoolSelect>
+                    </Field>
+                  </div>
+                </div>
+                <Field label="Reason for reverting *" hint="Required — this is logged in the timeline">
+                  <textarea rows={2} value={revertRemark} onChange={(e) => setRevertRemark(e.target.value)} placeholder="e.g. RM assigned in error, moving back to Waiting for Assignment…" className={inputCls + ' resize-y text-xs'} />
+                </Field>
+                {revertError && <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400">{revertError}</p>}
+                <div className="flex items-center gap-2 justify-end">
+                  <button onClick={() => setShowRevert(false)} className={btnGhost + ' py-1.5 px-3 text-[11px]'}>Cancel</button>
+                  <button onClick={doRevertStage} className={btnPrimary + ' py-1.5 px-3 text-[11px] bg-amber-600 hover:bg-amber-700'}>
+                    <RefreshCw size={12} /> Confirm Revert
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Quick actions + stage-contextual control */}
         {!isViewer && lead.status === 'Active' && (

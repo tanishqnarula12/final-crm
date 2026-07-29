@@ -21,6 +21,7 @@ export const NOTIF = {
   LEAD_RM_ASSIGNED: 'LEAD_RM_ASSIGNED',
   BIRTHDAY: 'BIRTHDAY',
   QUERY_RAISED: 'QUERY_RAISED',
+  QUERY_RESOLVED: 'QUERY_RESOLVED',
   LEAVE_APPLIED: 'LEAVE_APPLIED',
   LEAVE_RESPONDED: 'LEAVE_RESPONDED',
 };
@@ -169,8 +170,15 @@ export async function notifyFromEvents(prisma, events) {
         });
       }
     } else if (ev.type === 'CREATE' && (ev.module === 'investmentProspects' || ev.module === 'insuranceProspects')) {
-      const target = rec.assignedTo || rec.relationshipManager;
-      if (target && target !== ev.actorId) {
+      // Notify the RM (assignedTo, or relationshipManager for the normal
+      // advisor-created flow) AND the Service Manager selected on the
+      // prospect — Service Manager owns changeStage on it, so they need to
+      // know a new one landed too. Deduped so the same person holding both
+      // roles (or being the creator) isn't notified twice / about themself.
+      const seen = new Set();
+      for (const target of [rec.assignedTo || rec.relationshipManager, rec.serviceManager]) {
+        if (!target || target === ev.actorId || seen.has(target)) continue;
+        seen.add(target);
         items.push({
           userId: target, type: NOTIF.PROSPECT_ASSIGNED,
           title: 'Business prospect assigned to you', body: prospectLabel(rec),
@@ -198,6 +206,17 @@ export async function notifyFromEvents(prisma, events) {
         items.push({
           userId: ev.to, type: NOTIF.QUERY_RAISED,
           title: 'A query has been raised to you', body: queryLabel(rec),
+          link: { view: 'queries', id: rec.id },
+        });
+      }
+    } else if (ev.type === 'STAGE_CHANGE' && ev.module === 'queries' && ev.to === 'Resolved') {
+      // departmentOwner = raisedBy (deptOwnerIsActor on the queries route) —
+      // tell the person who raised it that their query was resolved, unless
+      // they somehow resolved it themselves.
+      if (rec.departmentOwner && rec.departmentOwner !== ev.actorId) {
+        items.push({
+          userId: rec.departmentOwner, type: NOTIF.QUERY_RESOLVED,
+          title: 'Your query has been resolved', body: queryLabel(rec),
           link: { view: 'queries', id: rec.id },
         });
       }

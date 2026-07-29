@@ -6,12 +6,12 @@ import {
   Globe, Building, Pencil, User, FileText, Users, Copy, Check, Send
 } from 'lucide-react';
 import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, Field, CoolSelect, Avatar } from './UI';
-import { loadTeam } from '../services/team';
+import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
 import { canEditMeeting, canDeleteMeeting, isAdmin } from '../utils/permissions';
 import {
   loadMeetings, saveMeetings, MEETING_MODES, MEETING_STATUSES, MEETING_STATUS_THEME,
-  MODE_THEME, meetingDateTime, fmtMeetingWhen, fmtMeetingStamp,
+  MODE_THEME, meetingDateTime, fmtMeetingWhen, fmtMeetingStamp, isOverdue,
 } from '../utils/meetings';
 import { uid, initials, avatarColor } from '../utils/calc';
 
@@ -23,10 +23,23 @@ export default function MeetingsView({ clients = [], isViewer, onOpenMeeting, on
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'calendar'
+  const [toast, setToast] = useState('');
 
   useEffect(() => {
     setMeetings(loadMeetings());
   }, [meetingsChangeCounter]);
+
+  // Surfaces a rejected reschedule/cancel/edit (e.g. someone who isn't the
+  // creator/host/attendee trying to change a meeting) instead of it silently
+  // reverting on the next refresh with no explanation.
+  useEffect(() => {
+    const onSyncWarning = (e) => {
+      setToast(`⚠ ${e.detail?.message || 'Some changes could not be saved.'}`);
+      setTimeout(() => setToast(''), 5000);
+    };
+    window.addEventListener('crm:meetings-sync-warning', onSyncWarning);
+    return () => window.removeEventListener('crm:meetings-sync-warning', onSyncWarning);
+  }, []);
 
   useEffect(() => {
     const sync = () => setMeetings(loadMeetings());
@@ -176,6 +189,13 @@ export default function MeetingsView({ clients = [], isViewer, onOpenMeeting, on
           ))}
         </div>
       )}
+
+      {toast && createPortal(
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold animate-scale-up">
+          {toast}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -249,12 +269,28 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
                   </td>
                   <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{m.assignedTo || '—'}</td>
                   <td className="px-6 py-4 text-center">
-                    <span className={`inline-flex items-center px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg ring-1 ${MEETING_STATUS_THEME[m.status] || MEETING_STATUS_THEME.Scheduled}`}>
-                      {m.status || 'Scheduled'}
-                    </span>
+                    <div className="flex items-center justify-center gap-1.5">
+                      <span className={`inline-flex items-center px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg ring-1 ${MEETING_STATUS_THEME[m.status] || MEETING_STATUS_THEME.Scheduled}`}>
+                        {m.status || 'Scheduled'}
+                      </span>
+                      {isOverdue(m) && (
+                        <span title="This meeting's date/time has passed with no action taken" className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg ring-1 bg-amber-50 text-amber-700 ring-amber-200/60 dark:bg-amber-950/30 dark:text-amber-400 dark:ring-amber-900/40 animate-pulse">
+                          <Clock size={11} /> Overdue
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-1.5">
+                      {isOverdue(m) && !isViewer && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onOpen(m); }}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm hover:shadow-amber-500/25"
+                          title="Reschedule this overdue meeting"
+                        >
+                          <RotateCcw size={13} /> Reschedule
+                        </button>
+                      )}
                       {m.status === 'Completed' && m.leadId && onConvertLead && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onConvertLead(m); }}
@@ -540,6 +576,7 @@ function CalendarView({ meetings, onOpenMeeting, statusFilter, query }) {
               {hover.meeting.mode === 'Offline' && hover.meeting.location && <span className="truncate">· {hover.meeting.location}</span>}
             </div>
             {hover.meeting.assignedTo && <div className="flex items-center gap-1.5"><User size={11} className="text-slate-400 shrink-0" /> With {hover.meeting.assignedTo}</div>}
+            {hover.meeting.createdBy && <div className="flex items-center gap-1.5"><Pencil size={11} className="text-slate-400 shrink-0" /> Created by {teamName(hover.meeting.createdBy) || '—'}</div>}
             {Array.isArray(hover.meeting.attendees) && hover.meeting.attendees.length > 0 && (
               <div className="flex items-center gap-1.5">
                 <Users size={11} className="text-slate-400 shrink-0" />
@@ -757,6 +794,11 @@ export function MeetingFormModal({ initial, clients = [], isViewer, lockClient =
                 {status}
               </span>
             )}
+            {isEdit && isOverdue({ status, date, time }) && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full ring-1 bg-amber-50 text-amber-700 ring-amber-200/60 dark:bg-amber-950/30 dark:text-amber-400 dark:ring-amber-900/40">
+                <Clock size={11} /> Overdue
+              </span>
+            )}
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
             <X size={18} />
@@ -765,6 +807,17 @@ export function MeetingFormModal({ initial, clients = [], isViewer, lockClient =
 
         {/* Body */}
         <div className="p-5 space-y-5 max-h-[68vh] overflow-y-auto">
+          {isEdit && isOverdue({ status, date, time }) && canEditThis && (
+            <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/15 border border-amber-200/60 dark:border-amber-900/40">
+              <Clock size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
+              <span className="text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+                This meeting's date/time has passed with no action taken — reschedule it or mark it Cancelled below.
+              </span>
+              <button onClick={() => setRescheduling(true)} className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl shadow-sm transition-all cursor-pointer">
+                <RotateCcw size={12} /> Reschedule Now
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field label="Client *" hint={lockClient ? 'Locked to this client' : 'The client this meeting is with'}>
               {lockClient ? (
@@ -796,6 +849,14 @@ export function MeetingFormModal({ initial, clients = [], isViewer, lockClient =
                 </CoolSelect>
               )}
             </Field>
+
+            {isEdit && initial?.createdBy && (
+              <Field label="Meeting Created By" hint="Set automatically — who scheduled this meeting">
+                <div className="w-full px-3.5 py-2.5 text-sm border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950 font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <Avatar name={teamName(initial.createdBy)} size="sm" /> {teamName(initial.createdBy) || '—'}
+                </div>
+              </Field>
+            )}
 
             <div className="md:col-span-2">
               <Field label="Meeting Title *">

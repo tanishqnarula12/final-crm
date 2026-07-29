@@ -181,6 +181,7 @@ export async function syncBulk(prisma, spec) {
           module: mod, recordId: rec.id, action: 'STAGE_CHANGE',
           oldValue: { stage: from }, newValue: { stage: to }, performedBy: actor.id,
         });
+        events.push({ type: 'STAGE_CHANGE', module: mod, record: payload, from, to, actorId: actor.id });
       }
       const fieldDiff = diffFields(existing.payload, payload,
         Object.keys(payload).filter((k) => !NOISE_KEYS.has(k) && k !== stageField));

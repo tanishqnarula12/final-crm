@@ -97,17 +97,12 @@ const docTypeLabel = (key) => INSURANCE_DOC_TYPES.find(d => d.key === key)?.labe
 // Composite key separator — must not appear in doc-type keys or applicant names
 const DOC_KEY_SEP = '|||';
 
-const CATEGORIES = [
-  "Small Cap",
-  "Mid Cap",
-  "Large Cap",
-  "Large and Mid Cap",
-  "Flexi Cap",
-  "Multi Cap",
-  "Multi Asset",
-  "Gold",
-  "Debt"
-];
+// Derived from schemes.json's own keys (not a separately hand-maintained list)
+// so every fund category that has schemes is always selectable here — a
+// hardcoded duplicate list previously only had 9 of the 19 categories, so
+// picking (e.g.) "ELSS" or "Index" was impossible even though schemes.json
+// already had scheme data for them.
+const CATEGORIES = Object.keys(SCHEMES);
 
 const getSchemesForCategory = (cat) => {
   if (cat && SCHEMES[cat]) {

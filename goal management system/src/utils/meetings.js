@@ -29,7 +29,32 @@ export async function hydrateMeetings() {
 export const saveMeetings = (meetings) => {
   cache = meetings;
   window.dispatchEvent(new Event('crm:meetings-updated'));
-  api.put('/meetings', { meetings }).catch((err) => console.error('Failed to persist meetings:', err));
+  // The server validates every change (RBAC — creator/host/attendee) and
+  // returns the authoritative list; reconcile so a rejected edit reverts in
+  // the UI — and tell the user when that happens. Without this, a blocked
+  // reschedule/cancel (e.g. someone who isn't the creator/host/attendee
+  // trying to change it) looked like it saved (the optimistic cache update
+  // stuck) but silently reverted on the next refresh — exactly what made
+  // rescheduling look broken, with zero explanation why.
+  api.put('/meetings', { meetings })
+    .then((res) => {
+      if (Array.isArray(res?.meetings)) {
+        cache = res.meetings;
+        window.dispatchEvent(new Event('crm:meetings-updated'));
+      }
+      if (res?.stats?.rejected > 0) {
+        window.dispatchEvent(new CustomEvent('crm:meetings-sync-warning', {
+          detail: { message: `${res.stats.rejected} change${res.stats.rejected === 1 ? '' : 's'} could not be saved — you may not have permission to edit this meeting. The list has been refreshed.` },
+        }));
+      }
+    })
+    .catch((err) => {
+      console.error('Failed to persist meetings:', err);
+      hydrateMeetings().catch(() => {});
+      window.dispatchEvent(new CustomEvent('crm:meetings-sync-warning', {
+        detail: { message: 'Your change could not be saved. The list has been refreshed.' },
+      }));
+    });
 };
 
 export const MEETING_MODES = ['Online', 'Offline'];
@@ -60,6 +85,16 @@ export const isUpcoming = (m) => {
   if (m.status !== 'Scheduled') return false;
   const dt = meetingDateTime(m);
   return dt ? dt.getTime() >= Date.now() - 60 * 60 * 1000 : true; // 1hr grace
+};
+
+// True when a meeting is still sitting at "Scheduled" past its date/time (the
+// same 1hr grace as isUpcoming) — nobody marked it Done or Cancelled, so it
+// needs a reschedule or a cancel. Surfaced as an "Overdue" flag so these don't
+// just quietly pile up looking like normal upcoming meetings.
+export const isOverdue = (m) => {
+  if (m.status !== 'Scheduled') return false;
+  const dt = meetingDateTime(m);
+  return dt ? dt.getTime() < Date.now() - 60 * 60 * 1000 : false;
 };
 
 export const fmtMeetingStamp = (iso) => {
