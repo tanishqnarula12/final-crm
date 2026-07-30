@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, X, Search, Trash2, HelpCircle, MessageSquare, ArrowRight, Paperclip, Download, FileText, Image as ImageIcon } from 'lucide-react';
+import { Plus, X, Search, Trash2, HelpCircle, MessageSquare, ArrowRight, Paperclip, Download, FileText, Image as ImageIcon, Film, Eye } from 'lucide-react';
 import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
 import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
@@ -8,7 +8,7 @@ import { canCreateQuery, canEditQuery, canChangeQueryStage, isAdmin } from '../u
 import {
   loadQueries, saveQueries, QUERY_STAGES, QUERY_CATEGORIES, STAGE_THEME, fmtQueryStamp,
   fetchQueryAttachments, fetchQueryAttachment, uploadQueryAttachment, deleteQueryAttachment,
-  MAX_ATTACHMENT_BYTES, ATTACHMENT_ACCEPT, humanFileSize,
+  MAX_ATTACHMENT_BYTES, ATTACHMENT_ACCEPT, humanFileSize, previewKind,
 } from '../utils/queries';
 import { uid } from '../utils/calc';
 
@@ -207,6 +207,10 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
   // off. Uploads/removals hit their own endpoints immediately, independently of
   // this form's Save, so they never ride along in the bulk query payload.) ---
   const [attachments, setAttachments] = useState([]);
+  // Files picked while RAISING a query: there's no query row to hang them off
+  // yet, so they're held here and uploaded right after the query is created
+  // (App.handleSaveQueryGlobal does it, since this modal unmounts on save).
+  const [pendingFiles, setPendingFiles] = useState([]);
   const [attBusy, setAttBusy] = useState(false);
   const [attError, setAttError] = useState('');
   const fileRef = useRef(null);
@@ -239,18 +243,63 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
           continue;
         }
         const dataUrl = await readAsDataUrl(file);
-        const { attachment } = await uploadQueryAttachment(initial.id, {
+        const meta = {
           name: file.name,
           type: file.type || 'application/octet-stream',
           size: file.size,
           dataUrl,
-        });
-        setAttachments((prev) => [...prev, attachment]);
+        };
+        if (isEdit) {
+          const { attachment } = await uploadQueryAttachment(initial.id, meta);
+          setAttachments((prev) => [...prev, attachment]);
+        } else {
+          setPendingFiles((prev) => [...prev, meta]);
+        }
       }
     } catch (err) {
       setAttError(err?.message || 'Upload failed.');
     } finally {
       setAttBusy(false);
+    }
+  };
+
+  // --- Previews -------------------------------------------------------------
+  // Images, videos and PDFs render inline (hover for a peek, click the eye for
+  // a full view) so nobody has to download a file just to look at it. Blobs are
+  // fetched on demand and cached per attachment, so hovering the same row
+  // repeatedly costs one request, not one per hover.
+  const blobCache = useRef(new Map());
+  const [hoverPreview, setHoverPreview] = useState(null); // { att, dataUrl, top, left }
+  const [lightbox, setLightbox] = useState(null);         // { att, dataUrl }
+  const hoverToken = useRef(0);
+
+  const loadBlob = async (att) => {
+    if (blobCache.current.has(att.id)) return blobCache.current.get(att.id);
+    const { attachment } = await fetchQueryAttachment(initial.id, att.id);
+    blobCache.current.set(att.id, attachment.dataUrl);
+    return attachment.dataUrl;
+  };
+
+  const showHoverPreview = async (att, e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const token = ++hoverToken.current;
+    try {
+      const dataUrl = await loadBlob(att);
+      // The pointer may have moved on while the blob was loading — only show
+      // the preview if this is still the row being hovered.
+      if (hoverToken.current !== token) return;
+      setHoverPreview({ att, dataUrl, top: rect.top, left: rect.right + 12 });
+    } catch { /* preview is a nicety — failing silently is fine, download still works */ }
+  };
+  const hideHoverPreview = () => { hoverToken.current++; setHoverPreview(null); };
+
+  const openPreview = async (att) => {
+    setAttError('');
+    hideHoverPreview();
+    try {
+      setLightbox({ att, dataUrl: await loadBlob(att) });
+    } catch (err) {
+      setAttError(err?.message || 'Could not preview that file.');
     }
   };
 
@@ -336,7 +385,9 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
       createdAt: initial?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    onSave(record);
+    // On an existing query the files are already uploaded; on a new one they
+    // ride along so they can be attached once the query row exists.
+    onSave(record, isEdit ? [] : pendingFiles);
   };
 
   return (
@@ -433,7 +484,7 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
 
           {/* Attachments — PDFs, images, statements etc. Uploaded/removed
               immediately via their own endpoints (not part of Save). */}
-          {isEdit ? (
+          {(
             <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
               <div className="flex items-center justify-between gap-2">
                 <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
@@ -461,14 +512,50 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
                 )}
               </div>
 
-              {attachments.length > 0 ? (
+              {/* Files staged while raising — not uploaded until the query is created. */}
+              {!isEdit && pendingFiles.length > 0 && (
+                <ul className="space-y-1.5">
+                  {pendingFiles.map((f, i) => {
+                    const kind = previewKind(f.type, f.name);
+                    const Icon = kind === 'image' ? ImageIcon : kind === 'video' ? Film : FileText;
+                    const tint = kind === 'image' ? 'text-violet-500' : kind === 'video' ? 'text-rose-500' : 'text-blue-500';
+                    return (
+                      <li key={`${f.name}-${i}`} className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/30">
+                        <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-white dark:bg-slate-900 ${tint}`}>
+                          <Icon size={15} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{f.name}</span>
+                          <span className="block text-[10px] text-slate-400 dark:text-slate-500">{humanFileSize(f.size)} · attaches when you raise the query</span>
+                        </span>
+                        <button type="button" onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))} title="Remove" className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/60 dark:hover:bg-rose-950/30 transition-colors cursor-pointer shrink-0">
+                          <Trash2 size={14} />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {!isEdit && pendingFiles.length === 0 && (
+                <p className="text-xs text-slate-400 dark:text-slate-500 italic">No attachments yet.</p>
+              )}
+
+              {isEdit && (attachments.length > 0 ? (
                 <ul className="space-y-1.5">
                   {attachments.map((att) => {
-                    const isImage = (att.type || '').startsWith('image/');
+                    const kind = previewKind(att.type, att.name);
+                    const Icon = kind === 'image' ? ImageIcon : kind === 'video' ? Film : FileText;
+                    const tint = kind === 'image' ? 'text-violet-500' : kind === 'video' ? 'text-rose-500' : 'text-blue-500';
                     return (
-                      <li key={att.id} className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/30">
-                        <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-white dark:bg-slate-900 ${isImage ? 'text-violet-500' : 'text-blue-500'}`}>
-                          {isImage ? <ImageIcon size={15} /> : <FileText size={15} />}
+                      <li
+                        key={att.id}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/30"
+                        onMouseEnter={kind ? (e) => showHoverPreview(att, e) : undefined}
+                        onMouseLeave={kind ? hideHoverPreview : undefined}
+                      >
+                        <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-white dark:bg-slate-900 ${tint}`}>
+                          <Icon size={15} />
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{att.name}</span>
@@ -476,6 +563,11 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
                             {humanFileSize(att.size)} · {teamName(att.uploadedBy) || 'Unknown'} · {fmtQueryStamp(att.createdAt)}
                           </span>
                         </span>
+                        {kind && (
+                          <button type="button" onClick={() => openPreview(att)} title="Preview" className="text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 p-1.5 rounded-lg hover:bg-violet-50/60 dark:hover:bg-violet-950/30 transition-colors cursor-pointer shrink-0">
+                            <Eye size={14} />
+                          </button>
+                        )}
                         <button type="button" onClick={() => openAttachment(att)} title="Download" className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 p-1.5 rounded-lg hover:bg-blue-50/60 dark:hover:bg-blue-950/30 transition-colors cursor-pointer shrink-0">
                           <Download size={14} />
                         </button>
@@ -490,14 +582,10 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
                 </ul>
               ) : (
                 <p className="text-xs text-slate-400 dark:text-slate-500 italic">No attachments yet.</p>
-              )}
+              ))}
 
               {attError && <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400">{attError}</p>}
             </div>
-          ) : (
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 italic flex items-center gap-1.5 pt-1">
-              <Paperclip size={12} /> You can attach files once the query is raised.
-            </p>
           )}
 
           {/* Only the raiser or recipient may add a remark — someone who can
@@ -526,6 +614,55 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
           )}
         </div>
       </div>
+
+      {/* Hover peek — a small floating preview beside the row, so you can see
+          what a file is without opening or downloading it. Portaled so the
+          modal's own scroll/overflow can't clip it. */}
+      {hoverPreview && createPortal(
+        <div
+          style={{ position: 'fixed', top: Math.min(hoverPreview.top, window.innerHeight - 240), left: Math.min(hoverPreview.left, window.innerWidth - 260), zIndex: 9999 }}
+          className="w-60 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-2 pointer-events-none animate-fade-in"
+        >
+          {previewKind(hoverPreview.att.type, hoverPreview.att.name) === 'image' && (
+            <img src={hoverPreview.dataUrl} alt={hoverPreview.att.name} className="w-full max-h-48 object-contain rounded-lg" />
+          )}
+          {previewKind(hoverPreview.att.type, hoverPreview.att.name) === 'video' && (
+            <video src={hoverPreview.dataUrl} muted className="w-full max-h-48 rounded-lg" />
+          )}
+          {previewKind(hoverPreview.att.type, hoverPreview.att.name) === 'pdf' && (
+            <embed src={hoverPreview.dataUrl} type="application/pdf" className="w-full h-48 rounded-lg" />
+          )}
+          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate mt-1.5 px-1">{hoverPreview.att.name}</p>
+        </div>,
+        document.body
+      )}
+
+      {/* Full preview */}
+      {lightbox && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 md:p-8 animate-fade-in" onClick={() => setLightbox(null)}>
+          <div className="w-full max-w-5xl max-h-full flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3 text-white/90 shrink-0">
+              <span className="text-sm font-bold truncate">{lightbox.att.name}</span>
+              <div className="flex items-center gap-3 shrink-0">
+                <button onClick={() => openAttachment(lightbox.att)} className="inline-flex items-center gap-1.5 text-xs font-bold hover:text-white cursor-pointer">
+                  <Download size={14} /> Download
+                </button>
+                <button onClick={() => setLightbox(null)} className="hover:text-white cursor-pointer"><X size={20} /></button>
+              </div>
+            </div>
+            {previewKind(lightbox.att.type, lightbox.att.name) === 'image' && (
+              <img src={lightbox.dataUrl} alt={lightbox.att.name} className="max-h-[80vh] w-auto mx-auto rounded-2xl object-contain shadow-2xl animate-scale-up" />
+            )}
+            {previewKind(lightbox.att.type, lightbox.att.name) === 'video' && (
+              <video src={lightbox.dataUrl} controls autoPlay className="max-h-[80vh] w-full rounded-2xl shadow-2xl animate-scale-up" />
+            )}
+            {previewKind(lightbox.att.type, lightbox.att.name) === 'pdf' && (
+              <iframe src={lightbox.dataUrl} title={lightbox.att.name} className="w-full h-[80vh] rounded-2xl bg-white shadow-2xl animate-scale-up" />
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

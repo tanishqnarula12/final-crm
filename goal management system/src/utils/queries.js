@@ -20,6 +20,10 @@ export async function hydrateQueries() {
   return cache;
 }
 
+// Returns a promise that settles once the server has reconciled, so a caller
+// that needs the query to actually EXIST server-side before doing something
+// else (attaching files to a brand-new query — see App.handleSaveQueryGlobal)
+// can await it. Callers that don't care simply ignore the return value.
 export const saveQueries = (queries) => {
   cache = queries;
   window.dispatchEvent(new Event('crm:queries-updated'));
@@ -27,7 +31,7 @@ export const saveQueries = (queries) => {
   // list; reconcile so any rejected edit reverts in the UI — and tell the user
   // when that happens (e.g. someone other than the raiser trying to edit the
   // query's own text, or the recipient trying to move the stage backward).
-  api.put('/queries', { queries })
+  return api.put('/queries', { queries })
     .then((res) => {
       if (Array.isArray(res?.queries)) {
         cache = res.queries;
@@ -53,7 +57,23 @@ export const saveQueries = (queries) => {
 // QueryAttachment model. `fetchQueryAttachments` returns metadata only; the
 // base64 blob is pulled per-file, on demand, by `fetchQueryAttachment`.
 export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
-export const ATTACHMENT_ACCEPT = 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt';
+export const ATTACHMENT_ACCEPT = 'image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt';
+
+// What a file can be shown as inline — 'image' | 'video' | 'pdf', or null when
+// it can only be downloaded (Word/Excel/etc. have no in-browser renderer).
+// Falls back to the filename extension, since some browsers report an empty
+// MIME type for files dragged in from certain sources.
+export const previewKind = (type = '', name = '') => {
+  const t = String(type).toLowerCase();
+  if (t.startsWith('image/')) return 'image';
+  if (t.startsWith('video/')) return 'video';
+  if (t === 'application/pdf') return 'pdf';
+  const ext = String(name).toLowerCase().split('.').pop();
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'avif'].includes(ext)) return 'image';
+  if (['mp4', 'webm', 'ogg', 'mov', 'm4v'].includes(ext)) return 'video';
+  if (ext === 'pdf') return 'pdf';
+  return null;
+};
 
 export const fetchQueryAttachments = (queryId) => api.get(`/queries/${queryId}/attachments`);
 export const fetchQueryAttachment = (queryId, attachmentId) =>

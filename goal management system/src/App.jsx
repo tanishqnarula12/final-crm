@@ -58,7 +58,7 @@ import LeadsView from './components/LeadsView';
 import OthersView from './components/OthersView';
 import { loadLeads, hydrateLeads, updateLead, clientPayloadFromLead, markConnectedFromTask, syncMeetingToLead, leadName as leadNameOf } from './services/leads';
 import { loadTasks, saveTasks, hydrateTasks } from './utils/tasks';
-import { loadQueries, saveQueries, hydrateQueries, QUERY_STAGES } from './utils/queries';
+import { loadQueries, saveQueries, hydrateQueries, QUERY_STAGES, uploadQueryAttachment } from './utils/queries';
 import { loadLeave, hydrateLeave } from './utils/leave';
 import { canRespondToLeave } from './utils/permissions';
 import { loadProspects, saveProspects, hydrateProspects } from './utils/prospects';
@@ -568,16 +568,33 @@ export default function App() {
     setShowQueryForm(true);
   };
 
-  const handleSaveQueryGlobal = (q) => {
+  // `pendingAttachments` are files picked while RAISING a query: they can only
+  // be attached once the query row exists server-side (they hang off it), so
+  // they're uploaded here after the save has landed rather than in the modal,
+  // which unmounts as soon as this closes it.
+  const handleSaveQueryGlobal = (q, pendingAttachments = []) => {
     const allQueries = loadQueries();
     const exists = allQueries.some(x => x.id === q.id);
     const updatedQueries = exists
       ? allQueries.map(x => x.id === q.id ? q : x)
       : [q, ...allQueries];
-    saveQueries(updatedQueries);
+    const saved = saveQueries(updatedQueries);
     setShowQueryForm(false);
     setEditingQuery(null);
     setQueriesChangeCounter(prev => prev + 1);
+
+    if (pendingAttachments.length) {
+      Promise.resolve(saved)
+        .then(() => pendingAttachments.reduce(
+          (chain, file) => chain.then(() => uploadQueryAttachment(q.id, file)),
+          Promise.resolve()
+        ))
+        .then(() => setQueriesChangeCounter(prev => prev + 1))
+        .catch((err) => {
+          console.error('Failed to attach files to the new query:', err);
+          alert('The query was raised, but one or more attachments could not be uploaded. You can attach them again from the query.');
+        });
+    }
   };
 
   // COBR (Change of Broker) records are Task rows — same save pipeline as
