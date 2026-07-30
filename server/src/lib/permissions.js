@@ -94,7 +94,13 @@ function ownsRecord(module, record, user) {
   // meeting = the creator, the host, or an attendee (by name — see above).
   if (kind === 'meeting') return isMeetingParticipant(record, user);
   if (kind === 'client') return isClientRm(record, uid) || record.createdBy === uid;
-  return record.assignedTo === uid || record.createdBy === uid; // self
+  // self (leads): `ownerId` is checked alongside `assignedTo` — some leads
+  // predate the `assignedTo` RBAC column (assigned before it existed) and
+  // never got backfilled, so `assignedTo` is null there even though `ownerId`
+  // (the field the UI actually shows as "RM") is correctly set. Without this,
+  // the assigned RM on those older leads is invisible to the RBAC engine —
+  // scope resolves to NONE and every edit/stage-change/remark gets rejected.
+  return record.assignedTo === uid || record.ownerId === uid || record.createdBy === uid;
 }
 
 // Is this user the assigned RM of the record (grants the contextual RM role)?
@@ -103,7 +109,9 @@ function isRmOf(module, record, uid) {
   const kind = OWNERSHIP[module] || 'self';
   if (kind === 'client') return isClientRm(record, uid);
   if (kind === 'task') return false; // RM isn't a task concept
-  return record.assignedTo === uid; // self / creator
+  // self (leads): see ownsRecord() above — ownerId is the legacy/authoritative
+  // "who's the RM" field; assignedTo can lag behind it on older leads.
+  return record.assignedTo === uid || record.ownerId === uid;
 }
 
 // The user's effective roles for this record (permanent + contextual RM).

@@ -75,7 +75,10 @@ function ownsRecord(module, record, user) {
   if (kind === 'task') return record.departmentOwner === uid || record.assignedTo === uid || taskSubPerson(record) === uid;
   if (kind === 'meeting') return isMeetingParticipant(record, user);
   if (kind === 'client') return isClientRm(record, uid) || record.createdBy === uid;
-  return record.assignedTo === uid || record.createdBy === uid;
+  // self (leads): ownerId alongside assignedTo — mirrors the server engine,
+  // see its comment. Some leads predate the assignedTo RBAC column, so
+  // ownerId (what the UI shows as "RM") is the only reliable signal on them.
+  return record.assignedTo === uid || record.ownerId === uid || record.createdBy === uid;
 }
 
 function isRmOf(module, record, uid) {
@@ -83,7 +86,7 @@ function isRmOf(module, record, uid) {
   const kind = ownershipKind(module);
   if (kind === 'client') return isClientRm(record, uid);
   if (kind === 'task') return false;
-  return record.assignedTo === uid;
+  return record.assignedTo === uid || record.ownerId === uid;
 }
 
 function rolesFor(user, module, record) {
