@@ -22,6 +22,7 @@ export const NOTIF = {
   BIRTHDAY: 'BIRTHDAY',
   QUERY_RAISED: 'QUERY_RAISED',
   QUERY_RESOLVED: 'QUERY_RESOLVED',
+  QUERY_COMMENTED: 'QUERY_COMMENTED',
   LEAVE_APPLIED: 'LEAVE_APPLIED',
   LEAVE_RESPONDED: 'LEAVE_RESPONDED',
 };
@@ -141,12 +142,34 @@ async function pipelineManagerIds(prisma) {
  *   • prospects CREATE        → RM/assignee: "Business prospect assigned"
  *   • leads ASSIGN (RM set)   → new RM: "You are now the RM for a lead"
  *   • queries CREATE/ASSIGN   → recipient: "A query has been raised to you"
+ *   • queries STAGE→Resolved  → raiser: "Your query has been resolved"
+ *   • queries LOG_APPEND      → the other party: "<name> commented on a query"
  * Never notifies the actor about their own action.
  */
 export async function notifyFromEvents(prisma, events) {
   if (!events?.length) return;
   const items = [];
   let managers = null;
+
+  // Records whose stage moved in this same save. A stage change also appends a
+  // remark explaining it, so without this the one action would fire BOTH a
+  // stage notification and a "commented" one. The stage notification is the
+  // more meaningful of the two, so the comment ping is suppressed for these.
+  const stageMoved = new Set(
+    events.filter((e) => e.type === 'STAGE_CHANGE').map((e) => `${e.module}:${e.record?.id}`)
+  );
+
+  // Every event in one call shares the same actor, so this resolves at most once.
+  let actorNameCache;
+  const actorName = async () => {
+    if (actorNameCache === undefined) {
+      const u = events[0]?.actorId
+        ? await prisma.user.findUnique({ where: { id: events[0].actorId }, select: { name: true } })
+        : null;
+      actorNameCache = u?.name || 'Someone';
+    }
+    return actorNameCache;
+  };
 
   for (const ev of events) {
     const rec = ev.record || {};
@@ -208,6 +231,22 @@ export async function notifyFromEvents(prisma, events) {
           title: 'A query has been raised to you', body: queryLabel(rec),
           link: { view: 'queries', id: rec.id },
         });
+      }
+    } else if (ev.type === 'LOG_APPEND' && ev.module === 'queries') {
+      // Someone added a remark on a query — tell the OTHER party (the raiser
+      // if the recipient commented, and vice versa). departmentOwner = raisedBy.
+      if (!stageMoved.has(`${ev.module}:${rec.id}`)) {
+        const who = await actorName();
+        const body = String(ev.entry?.text || '').trim().slice(0, 140) || queryLabel(rec);
+        for (const target of [rec.departmentOwner, rec.assignedTo]) {
+          if (!target || target === ev.actorId) continue;
+          if (items.some((i) => i.userId === target && i.type === NOTIF.QUERY_COMMENTED)) continue;
+          items.push({
+            userId: target, type: NOTIF.QUERY_COMMENTED,
+            title: `${who} commented on a query`, body,
+            link: { view: 'queries', id: rec.id },
+          });
+        }
       }
     } else if (ev.type === 'STAGE_CHANGE' && ev.module === 'queries' && ev.to === 'Resolved') {
       // departmentOwner = raisedBy (deptOwnerIsActor on the queries route) —

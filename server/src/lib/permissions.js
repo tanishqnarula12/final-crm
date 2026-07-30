@@ -61,11 +61,19 @@ function isClientRm(record, uid) {
 }
 
 // ---- ownership resolvers ---------------------------------------------------
-// A task's "sub person" is a third participant (e.g. an RM assigns a task to
-// an ops person AND tags a sub-person who also works it). Stored in the task
-// payload (not a promoted column), so it's read from either shape can() gets:
-// the raw payload directly, or a stored Prisma row's `.payload`.
-const taskSubPerson = (record) => record?.subPerson ?? record?.payload?.subPerson ?? null;
+// A task's "sub people" are the extra participants beyond the assigner and the
+// assignee (e.g. an RM assigns a task to an ops person AND tags colleagues who
+// also work it). Stored in the task payload (not a promoted column), so it's
+// read from either shape can() gets: the raw payload directly, or a stored
+// Prisma row's `.payload`. Reads the `subPersons` ARRAY, falling back to the
+// legacy single `subPerson` string on tasks created before multi-select — so
+// existing tasks keep their sub-person's rights with no data migration.
+function taskSubPersons(record) {
+  const list = record?.subPersons ?? record?.payload?.subPersons;
+  if (Array.isArray(list)) return list.filter(Boolean);
+  const legacy = record?.subPerson ?? record?.payload?.subPerson;
+  return legacy ? [legacy] : [];
+}
 
 // A meeting's host (assignedTo) and attendees are stored as plain NAME
 // strings, not user ids (predates the id-based assignment used elsewhere —
@@ -88,9 +96,9 @@ function ownsRecord(module, record, user) {
   const uid = user.id;
   const kind = OWNERSHIP[module] || 'self';
   if (kind === 'creator') return record.createdBy === uid;
-  // task = the three people on it: assigner (departmentOwner), assignee
-  // (assignedTo) and the sub-person. Nobody else "owns" (sees) it.
-  if (kind === 'task') return record.departmentOwner === uid || record.assignedTo === uid || taskSubPerson(record) === uid;
+  // task = the people on it: assigner (departmentOwner), assignee (assignedTo)
+  // and any sub-people. Nobody else "owns" (sees) it.
+  if (kind === 'task') return record.departmentOwner === uid || record.assignedTo === uid || taskSubPersons(record).includes(uid);
   // meeting = the creator, the host, or an attendee (by name — see above).
   if (kind === 'meeting') return isMeetingParticipant(record, user);
   if (kind === 'client') return isClientRm(record, uid) || record.createdBy === uid;
@@ -166,13 +174,13 @@ export function can(user, module, action, record = null, ctx = {}) {
     if (scope === 'ALL' && module !== 'queries') return true;
     const isAssigner = record.departmentOwner === user.id;
     const isAssignee = record.assignedTo === user.id;
-    const isSubPerson = taskSubPerson(record) === user.id;
+    const isSubPerson = taskSubPersons(record).includes(user.id);
     if (action === 'editDetails') return isAssigner; // only the assigner edits details
     if (isAssigner) return true;
-    // editLog (comment): the assignee AND the sub-person may both add a log.
+    // editLog (comment): the assignee AND any sub-person may add a log.
     if (action === 'editLog') return isAssignee || isSubPerson;
     // changeStage: the assignee may move it forward (no reopen / backward);
-    // the sub-person may NOT change the stage — comment only.
+    // sub-people may NOT change the stage — comment only.
     if (!isAssignee) return false;
     return !isBackwardStage(module, ctx.fromStage, ctx.toStage);
   }

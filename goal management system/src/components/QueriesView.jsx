@@ -1,11 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, X, Search, Trash2, HelpCircle, MessageSquare, ArrowRight } from 'lucide-react';
+import { Plus, X, Search, Trash2, HelpCircle, MessageSquare, ArrowRight, Paperclip, Download, FileText, Image as ImageIcon } from 'lucide-react';
 import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
 import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
 import { canCreateQuery, canEditQuery, canChangeQueryStage, isAdmin } from '../utils/permissions';
-import { loadQueries, saveQueries, QUERY_STAGES, QUERY_CATEGORIES, STAGE_THEME, fmtQueryStamp } from '../utils/queries';
+import {
+  loadQueries, saveQueries, QUERY_STAGES, QUERY_CATEGORIES, STAGE_THEME, fmtQueryStamp,
+  fetchQueryAttachments, fetchQueryAttachment, uploadQueryAttachment, deleteQueryAttachment,
+  MAX_ATTACHMENT_BYTES, ATTACHMENT_ACCEPT, humanFileSize,
+} from '../utils/queries';
 import { uid } from '../utils/calc';
 
 export default function QueriesView({ isViewer, activeQueryId, setActiveQueryId, onOpenQuery, queriesChangeCounter }) {
@@ -199,6 +203,85 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
   const [remarks, setRemarks] = useState(Array.isArray(initial?.remarks) ? initial.remarks : []);
   const team = loadTeam();
 
+  // --- Attachments (existing queries only — a file needs a saved query to hang
+  // off. Uploads/removals hit their own endpoints immediately, independently of
+  // this form's Save, so they never ride along in the bulk query payload.) ---
+  const [attachments, setAttachments] = useState([]);
+  const [attBusy, setAttBusy] = useState(false);
+  const [attError, setAttError] = useState('');
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+    if (!isEdit || !initial?.id) return;
+    let cancelled = false;
+    fetchQueryAttachments(initial.id)
+      .then(({ attachments: list }) => { if (!cancelled) setAttachments(list || []); })
+      .catch(() => { if (!cancelled) setAttError('Could not load attachments.'); });
+    return () => { cancelled = true; };
+  }, [isEdit, initial?.id]);
+
+  const readAsDataUrl = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => resolve(ev.target.result);
+    reader.onerror = () => reject(new Error('Could not read that file.'));
+    reader.readAsDataURL(file);
+  });
+
+  const handleFiles = async (files) => {
+    const list = Array.from(files || []);
+    if (!list.length) return;
+    setAttError('');
+    setAttBusy(true);
+    try {
+      for (const file of list) {
+        if (file.size > MAX_ATTACHMENT_BYTES) {
+          setAttError(`"${file.name}" is larger than 5MB.`);
+          continue;
+        }
+        const dataUrl = await readAsDataUrl(file);
+        const { attachment } = await uploadQueryAttachment(initial.id, {
+          name: file.name,
+          type: file.type || 'application/octet-stream',
+          size: file.size,
+          dataUrl,
+        });
+        setAttachments((prev) => [...prev, attachment]);
+      }
+    } catch (err) {
+      setAttError(err?.message || 'Upload failed.');
+    } finally {
+      setAttBusy(false);
+    }
+  };
+
+  // Pull the blob only when the user actually opens the file, then hand it to
+  // the browser as a download.
+  const openAttachment = async (att) => {
+    setAttError('');
+    try {
+      const { attachment } = await fetchQueryAttachment(initial.id, att.id);
+      const a = document.createElement('a');
+      a.href = attachment.dataUrl;
+      a.download = attachment.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      setAttError(err?.message || 'Could not open that file.');
+    }
+  };
+
+  const removeAttachment = async (att) => {
+    if (!window.confirm(`Remove "${att.name}"?`)) return;
+    setAttError('');
+    try {
+      await deleteQueryAttachment(initial.id, att.id);
+      setAttachments((prev) => prev.filter((x) => x.id !== att.id));
+    } catch (err) {
+      setAttError(err?.message || 'Could not remove that file.');
+    }
+  };
+
   const hasStageChanged = isEdit && stage !== (initial?.stage || 'Open');
 
   // RBAC gating (mirrors the server): only the raiser (departmentOwner) or
@@ -346,6 +429,75 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
                 <p className="text-xs text-slate-400 dark:text-slate-500 italic">No remarks yet.</p>
               )}
             </div>
+          )}
+
+          {/* Attachments — PDFs, images, statements etc. Uploaded/removed
+              immediately via their own endpoints (not part of Save). */}
+          {isEdit ? (
+            <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                  <Paperclip size={14} /> Attachments
+                </h4>
+                {!isViewer && mayParticipate && (
+                  <>
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      multiple
+                      accept={ATTACHMENT_ACCEPT}
+                      className="hidden"
+                      onChange={(e) => { handleFiles(e.target.files); e.target.value = ''; }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileRef.current?.click()}
+                      disabled={attBusy}
+                      className={btnSecondary + ' py-1.5 px-3 text-[11px]'}
+                    >
+                      <Paperclip size={12} /> {attBusy ? 'Uploading…' : 'Attach file'}
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {attachments.length > 0 ? (
+                <ul className="space-y-1.5">
+                  {attachments.map((att) => {
+                    const isImage = (att.type || '').startsWith('image/');
+                    return (
+                      <li key={att.id} className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/30">
+                        <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-white dark:bg-slate-900 ${isImage ? 'text-violet-500' : 'text-blue-500'}`}>
+                          {isImage ? <ImageIcon size={15} /> : <FileText size={15} />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{att.name}</span>
+                          <span className="block text-[10px] text-slate-400 dark:text-slate-500">
+                            {humanFileSize(att.size)} · {teamName(att.uploadedBy) || 'Unknown'} · {fmtQueryStamp(att.createdAt)}
+                          </span>
+                        </span>
+                        <button type="button" onClick={() => openAttachment(att)} title="Download" className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 p-1.5 rounded-lg hover:bg-blue-50/60 dark:hover:bg-blue-950/30 transition-colors cursor-pointer shrink-0">
+                          <Download size={14} />
+                        </button>
+                        {!isViewer && (att.uploadedBy === me?.id || isAdmin(me)) && (
+                          <button type="button" onClick={() => removeAttachment(att)} title="Remove" className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/60 dark:hover:bg-rose-950/30 transition-colors cursor-pointer shrink-0">
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="text-xs text-slate-400 dark:text-slate-500 italic">No attachments yet.</p>
+              )}
+
+              {attError && <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400">{attError}</p>}
+            </div>
+          ) : (
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 italic flex items-center gap-1.5 pt-1">
+              <Paperclip size={12} /> You can attach files once the query is raised.
+            </p>
           )}
 
           {/* Only the raiser or recipient may add a remark — someone who can

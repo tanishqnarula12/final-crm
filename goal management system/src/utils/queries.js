@@ -48,6 +48,28 @@ export const saveQueries = (queries) => {
     });
 };
 
+// --- Attachments ------------------------------------------------------------
+// Served by dedicated endpoints, NOT carried in the query payload — see the
+// QueryAttachment model. `fetchQueryAttachments` returns metadata only; the
+// base64 blob is pulled per-file, on demand, by `fetchQueryAttachment`.
+export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+export const ATTACHMENT_ACCEPT = 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt';
+
+export const fetchQueryAttachments = (queryId) => api.get(`/queries/${queryId}/attachments`);
+export const fetchQueryAttachment = (queryId, attachmentId) =>
+  api.get(`/queries/${queryId}/attachments/${attachmentId}`);
+export const uploadQueryAttachment = (queryId, file) =>
+  api.post(`/queries/${queryId}/attachments`, file);
+export const deleteQueryAttachment = (queryId, attachmentId) =>
+  api.del(`/queries/${queryId}/attachments/${attachmentId}`);
+
+export const humanFileSize = (bytes) => {
+  const n = Number(bytes) || 0;
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 export const QUERY_STAGES = ['Open', 'In Progress', 'Resolved', 'Closed'];
 
 // Visual theme per stage (badge colours) — same palette convention as Tasks.

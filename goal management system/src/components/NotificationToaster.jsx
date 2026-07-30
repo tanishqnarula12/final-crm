@@ -27,6 +27,7 @@ const TYPE_META = {
   BIRTHDAY:         { icon: Cake,          ring: 'ring-pink-500/30',   dot: 'bg-pink-500' },
   QUERY_RAISED:     { icon: HelpCircle,    ring: 'ring-indigo-500/30', dot: 'bg-indigo-500' },
   QUERY_RESOLVED:   { icon: CheckCircle2,  ring: 'ring-emerald-500/30',dot: 'bg-emerald-500' },
+  QUERY_COMMENTED:  { icon: MessageSquare, ring: 'ring-sky-500/30',    dot: 'bg-sky-500' },
   LEAVE_APPLIED:    { icon: CalendarClock, ring: 'ring-amber-500/30',  dot: 'bg-amber-500' },
   LEAVE_RESPONDED:  { icon: CalendarCheck2,ring: 'ring-emerald-500/30',dot: 'bg-emerald-500' },
 };

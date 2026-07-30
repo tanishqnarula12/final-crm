@@ -7,11 +7,11 @@
 // syncBulk → RBAC → activity-log → notification pipeline as any other task.
 import React, { useState, useMemo } from 'react';
 import { X, Check, ArrowRight } from 'lucide-react';
-import { btnPrimary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
+import { Avatar, btnPrimary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
 import { GroupLeaderSelect, AmcRepeatableFields } from './TasksView';
 import { AMC_LIST } from '../utils/tasks';
 import { COBR_TYPES, emptyCobrRow } from '../utils/cobr';
-import { loadTeam } from '../services/team';
+import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
 import { uid } from '../utils/calc';
 import { canDo } from '../utils/permissions';
@@ -26,7 +26,7 @@ export default function CobrFormModal({ clients = [], onClose, onSave }) {
   const [cobrEntries, setCobrEntries] = useState({});
   const [assignedBy, setAssignedBy] = useState(getCurrentUser()?.id || '');
   const [assignedTo, setAssignedTo] = useState('');
-  const [subPerson, setSubPerson] = useState('');
+  const [subPersons, setSubPersons] = useState([]);
   const getTomorrowString = () => {
     const t = new Date();
     t.setDate(t.getDate() + 1);
@@ -89,7 +89,9 @@ export default function CobrFormModal({ clients = [], onClose, onSave }) {
       stage: 'Open',
       assignedBy,
       assignedTo,
-      subPerson,
+      subPersons,
+      // Legacy mirror — see TasksView for why.
+      subPerson: subPersons[0] || '',
       dueDate,
       comments: [{
         at: new Date().toISOString(),
@@ -240,11 +242,30 @@ export default function CobrFormModal({ clients = [], onClose, onSave }) {
                 {loadTeam().map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </CoolSelect>
             </Field>
-            <Field label="Sub Person">
-              <CoolSelect value={subPerson} onChange={(e) => setSubPerson(e.target.value)} className={selectCls}>
+            <Field label="Sub Persons" hint="Optional — anyone else working this request">
+              <CoolSelect
+                value=""
+                onChange={(e) => { const id = e.target.value; if (id && !subPersons.includes(id)) setSubPersons((p) => [...p, id]); }}
+                placeholder="Add a sub person…"
+                emptyHint="No more people to add"
+                className={selectCls}
+              >
                 <option value="">Select…</option>
-                {loadTeam().map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                {loadTeam().filter((m) => !subPersons.includes(m.id)).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </CoolSelect>
+              {subPersons.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                  {subPersons.map((id) => (
+                    <span key={id} className="inline-flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-full bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-200/60 dark:ring-blue-900/40 text-[11px] font-bold">
+                      <Avatar name={teamName(id)} size="xs" />
+                      {teamName(id) || '—'}
+                      <button type="button" onClick={() => setSubPersons((p) => p.filter((x) => x !== id))} title="Remove" className="text-blue-400 hover:text-rose-500 transition-colors cursor-pointer ml-0.5">
+                        <X size={11} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </Field>
           </div>
         </form>

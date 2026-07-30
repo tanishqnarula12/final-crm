@@ -183,6 +183,20 @@ export async function syncBulk(prisma, spec) {
         });
         events.push({ type: 'STAGE_CHANGE', module: mod, record: payload, from, to, actorId: actor.id });
       }
+      // A new entry appended to the record's discussion thread (Queries'
+      // `remarks`, Tasks/COBR's `comments`) — surfaced as a domain event so the
+      // notification layer can tell the OTHER participant someone commented.
+      // Only GROWTH counts: editing or reordering an existing entry isn't a
+      // new comment and must not ping anyone.
+      const threadKey = mod === 'queries' ? 'remarks' : 'comments';
+      const threadBefore = Array.isArray(existing.payload?.[threadKey]) ? existing.payload[threadKey] : [];
+      const threadAfter = Array.isArray(payload?.[threadKey]) ? payload[threadKey] : [];
+      if (threadAfter.length > threadBefore.length) {
+        events.push({
+          type: 'LOG_APPEND', module: mod, record: payload, actorId: actor.id,
+          entry: threadAfter[threadAfter.length - 1],
+        });
+      }
       const fieldDiff = diffFields(existing.payload, payload,
         Object.keys(payload).filter((k) => !NOISE_KEYS.has(k) && k !== stageField));
       if (Object.keys(fieldDiff).length) {

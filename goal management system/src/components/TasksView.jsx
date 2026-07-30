@@ -4,13 +4,14 @@ import {
   Plus, X, Search, Trash2, ListChecks, MessageSquare, Send, Pencil, Check, ChevronDown, Crown, ArrowRight,
   Upload, Paperclip, Eye, Download, History
 } from 'lucide-react';
-import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
+import { Card, Avatar, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
 import { RELATIONS } from '../utils/team';
 import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
 import { canCreateTask, canEditTask, canDeleteTask, canChangeTaskStage, isAdmin } from '../utils/permissions';
 import {
-  loadTasks, saveTasks, TASK_STAGES, STAGE_THEME, RELATED_OPTIONS, NFT_TYPES, AMC_LIST, fmtTaskStamp
+  loadTasks, saveTasks, TASK_STAGES, STAGE_THEME, RELATED_OPTIONS, NFT_TYPES, AMC_LIST, fmtTaskStamp,
+  readSubPersons,
 } from '../utils/tasks';
 import { uid } from '../utils/calc';
 import { updateClient } from '../services/db';
@@ -586,7 +587,10 @@ export function TaskFormModal({ initial, clients, isViewer, onClose, onSave }) {
   // assigned_by is auto-captured as the current account for new tasks.
   const [assignedBy, setAssignedBy] = useState(initial?.assignedBy || getCurrentUser()?.id || '');
   const [assignedTo, setAssignedTo] = useState(initial?.assignedTo || '');
-  const [subPerson, setSubPerson] = useState(initial?.subPerson || '');
+  // A task can have SEVERAL sub-people (each may comment/log, none may change
+  // the stage). Stored as an array; `readSubPersons` also understands the
+  // legacy single-`subPerson` shape on older tasks.
+  const [subPersons, setSubPersons] = useState(() => readSubPersons(initial));
   const getTomorrowString = () => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -889,7 +893,7 @@ export function TaskFormModal({ initial, clients, isViewer, onClose, onSave }) {
       setAmcs(Array.isArray(initial?.amcs) ? initial.amcs : []);
       setAssignedBy(initial?.assignedBy || '');
       setAssignedTo(initial?.assignedTo || '');
-      setSubPerson(initial?.subPerson || '');
+      setSubPersons(readSubPersons(initial));
       setDueDate(initial?.dueDate || getTomorrowString());
       setDescription(initial?.description || '');
       setComments(Array.isArray(initial?.comments) ? initial.comments : []);
@@ -904,6 +908,16 @@ export function TaskFormModal({ initial, clients, isViewer, onClose, onSave }) {
 
   const hasStageChanged = isEdit && stage !== (initial?.stage || 'Open');
   const logEntryCompulsory = hasStageChanged && !stageRemark.trim();
+
+  // Sub-people picker: offer only teammates not already added.
+  const subPersonOptions = useMemo(
+    () => loadTeam().filter(m => !subPersons.includes(m.id)),
+    [subPersons]
+  );
+  const addSubPerson = (id) => {
+    if (id && !subPersons.includes(id)) setSubPersons(prev => [...prev, id]);
+  };
+  const removeSubPerson = (id) => setSubPersons(prev => prev.filter(x => x !== id));
 
   // RBAC gating (mirrors the server overlay). Roles on an existing task:
   //   • assigner (departmentOwner) or Admin — edit everything, incl. reopen
@@ -980,7 +994,11 @@ export function TaskFormModal({ initial, clients, isViewer, onClose, onSave }) {
       documents: relatedTo === 'NFT' ? safeDocuments : {},
       assignedBy,
       assignedTo,
-      subPerson,
+      subPersons,
+      // Mirror the first sub-person into the legacy single field so a browser
+      // still running an older bundle (which only knows `subPerson`) keeps
+      // showing one instead of none.
+      subPerson: subPersons[0] || '',
       dueDate,
       description,
       comments: finalComments,
@@ -1689,11 +1707,33 @@ export function TaskFormModal({ initial, clients, isViewer, onClose, onSave }) {
                 {loadTeam().map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </CoolSelect>
             </Field>
-            <Field label="Sub Person">
-              <CoolSelect value={subPerson} onChange={(e) => setSubPerson(e.target.value)} disabled={!isEditingMode} className={selectCls + (!isEditingMode ? ' opacity-60 cursor-not-allowed bg-slate-50 dark:bg-slate-955/20' : '')}>
+            <Field label="Sub Persons" hint="Optional — anyone else working this task; each can add comments">
+              <CoolSelect
+                value=""
+                onChange={(e) => addSubPerson(e.target.value)}
+                disabled={!isEditingMode}
+                placeholder={subPersonOptions.length ? 'Add a sub person…' : 'Everyone added'}
+                emptyHint="No more people to add"
+                className={selectCls + (!isEditingMode ? ' opacity-60 cursor-not-allowed bg-slate-50 dark:bg-slate-955/20' : '')}
+              >
                 <option value="">Select…</option>
-                {loadTeam().map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                {subPersonOptions.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </CoolSelect>
+              {subPersons.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                  {subPersons.map(id => (
+                    <span key={id} className="inline-flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-full bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-200/60 dark:ring-blue-900/40 text-[11px] font-bold">
+                      <Avatar name={teamName(id)} size="xs" />
+                      {teamName(id) || '—'}
+                      {isEditingMode && (
+                        <button type="button" onClick={() => removeSubPerson(id)} title="Remove" className="text-blue-400 hover:text-rose-500 transition-colors cursor-pointer ml-0.5">
+                          <X size={11} />
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              )}
             </Field>
 
             <div className="md:col-span-2">

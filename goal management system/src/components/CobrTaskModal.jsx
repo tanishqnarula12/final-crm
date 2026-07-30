@@ -8,10 +8,10 @@
 // handleSaveTaskGlobal, shared with the plain Task module).
 import React, { useState } from 'react';
 import { X, Check, XCircle, RotateCcw, Lock, MessageSquare } from 'lucide-react';
-import { btnPrimary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
-import { STAGE_THEME, fmtTaskStamp } from '../utils/tasks';
+import { Avatar, btnPrimary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
+import { STAGE_THEME, fmtTaskStamp, readSubPersons } from '../utils/tasks';
 import { COBR_STAGES, cobrTotals, clearRejectedEntries } from '../utils/cobr';
-import { loadTeam } from '../services/team';
+import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
 import { fmtINR } from '../utils/calc';
 import { canDo } from '../utils/permissions';
@@ -24,7 +24,9 @@ import { canDo } from '../utils/permissions';
 export default function CobrTaskModal({ task, interactive = true, allowReopen = false, onClose, onSave }) {
   const [stage, setStage] = useState(task.stage || 'Open');
   const [assignedTo, setAssignedTo] = useState(task.assignedTo || '');
-  const [subPerson, setSubPerson] = useState(task.subPerson || '');
+  // Several sub-people may be tagged on a COBR task (same rule as Tasks: each
+  // can add comments/logs, none can change the stage).
+  const [subPersons, setSubPersons] = useState(() => readSubPersons(task));
   const [dueDate, setDueDate] = useState(task.dueDate || '');
   const [cobrEntries, setCobrEntries] = useState(task.cobrEntries || {});
   const [comments, setComments] = useState(Array.isArray(task.comments) ? task.comments : []);
@@ -113,7 +115,9 @@ export default function CobrTaskModal({ task, interactive = true, allowReopen = 
       ...task,
       stage,
       assignedTo,
-      subPerson,
+      subPersons,
+      // Legacy mirror — see TasksView for why.
+      subPerson: subPersons[0] || '',
       dueDate,
       cobrEntries: finalEntries,
       comments: [...comments, ...extra],
@@ -167,13 +171,34 @@ export default function CobrTaskModal({ task, interactive = true, allowReopen = 
                 </CoolSelect>
               </fieldset>
             </Field>
-            <Field label="Sub Person">
+            <Field label="Sub Persons">
               <fieldset disabled={!detailsEditable} className="contents">
-                <CoolSelect value={subPerson} onChange={(e) => setSubPerson(e.target.value)} className={selectCls + (!detailsEditable ? ' opacity-60 cursor-not-allowed' : '')}>
+                <CoolSelect
+                  value=""
+                  onChange={(e) => { const id = e.target.value; if (id && !subPersons.includes(id)) setSubPersons((p) => [...p, id]); }}
+                  placeholder="Add a sub person…"
+                  emptyHint="No more people to add"
+                  className={selectCls + (!detailsEditable ? ' opacity-60 cursor-not-allowed' : '')}
+                >
                   <option value="">Select…</option>
-                  {loadTeam().map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  {loadTeam().filter((m) => !subPersons.includes(m.id)).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </CoolSelect>
               </fieldset>
+              {subPersons.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                  {subPersons.map((id) => (
+                    <span key={id} className="inline-flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-full bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-200/60 dark:ring-blue-900/40 text-[11px] font-bold">
+                      <Avatar name={teamName(id)} size="xs" />
+                      {teamName(id) || '—'}
+                      {detailsEditable && (
+                        <button type="button" onClick={() => setSubPersons((p) => p.filter((x) => x !== id))} title="Remove" className="text-blue-400 hover:text-rose-500 transition-colors cursor-pointer ml-0.5">
+                          <X size={11} />
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              )}
             </Field>
           </div>
 

@@ -49,9 +49,16 @@ function isClientRm(record, uid) {
     || record?.client?.clientDetails?.relationshipManager === uid;
 }
 
-// A task's third participant (sub-person). Client records ARE the payload, so
-// it's read directly; `.payload` fallback keeps it safe either way.
-const taskSubPerson = (record) => record?.subPerson ?? record?.payload?.subPerson ?? null;
+// A task's extra participants (sub-people). Client records ARE the payload, so
+// it's read directly; `.payload` fallback keeps it safe either way. Mirrors the
+// server: reads the `subPersons` array, falling back to the legacy single
+// `subPerson` string on tasks created before multi-select.
+function taskSubPersons(record) {
+  const list = record?.subPersons ?? record?.payload?.subPersons;
+  if (Array.isArray(list)) return list.filter(Boolean);
+  const legacy = record?.subPerson ?? record?.payload?.subPerson;
+  return legacy ? [legacy] : [];
+}
 
 // A meeting's host (assignedTo) and attendees are stored as plain NAME
 // strings, not user ids (mirrors server/src/lib/permissions.js exactly — see
@@ -71,8 +78,8 @@ function ownsRecord(module, record, user) {
   const uid = user.id;
   const kind = ownershipKind(module);
   if (kind === 'creator') return record.createdBy === uid;
-  // The three people on a task: assigner, assignee and sub-person.
-  if (kind === 'task') return record.departmentOwner === uid || record.assignedTo === uid || taskSubPerson(record) === uid;
+  // The people on a task: assigner, assignee and any sub-people.
+  if (kind === 'task') return record.departmentOwner === uid || record.assignedTo === uid || taskSubPersons(record).includes(uid);
   if (kind === 'meeting') return isMeetingParticipant(record, user);
   if (kind === 'client') return isClientRm(record, uid) || record.createdBy === uid;
   // self (leads): ownerId alongside assignedTo — mirrors the server engine,
@@ -151,7 +158,7 @@ export function can(module, action, record = null, ctx = {}) {
     if (scope === 'ALL' && module !== 'queries') return true;
     const isAssigner = record.departmentOwner === user.id;
     const isAssignee = record.assignedTo === user.id;
-    const isSubPerson = taskSubPerson(record) === user.id;
+    const isSubPerson = taskSubPersons(record).includes(user.id);
     if (action === 'editDetails') return isAssigner;
     if (isAssigner) return true;
     // Comment: assignee + sub-person. Change stage: assignee only (not sub-person).

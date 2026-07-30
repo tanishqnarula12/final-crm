@@ -73,6 +73,17 @@ export const TASK_STAGES = [
   'Lost',
 ];
 
+// Sub-people on a task/COBR record: the extra participants beyond the assigner
+// and assignee, each of whom may add comments/logs (but not change the stage).
+// Stored as the `subPersons` ARRAY; records created before multi-select carry a
+// single `subPerson` string instead, so both shapes are read here — and both
+// are written on save (see the modals), which keeps a browser still running an
+// older bundle working. Mirrors taskSubPersons() in the permission engines.
+export const readSubPersons = (t) => {
+  if (Array.isArray(t?.subPersons)) return t.subPersons.filter(Boolean);
+  return t?.subPerson ? [t.subPerson] : [];
+};
+
 // Visual theme per stage (badge colours)
 export const STAGE_THEME = {
   'Open': 'bg-blue-50 text-blue-700 ring-blue-200/60 dark:bg-blue-950/30 dark:text-blue-400 dark:ring-blue-900/40',

@@ -255,8 +255,33 @@ model Query {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  attachments QueryAttachment[]
+
   @@index([stage])
   @@map("queries")
+}
+
+// Files attached to a query (PDFs, images, statements…). Deliberately its OWN
+// table rather than a field inside Query.payload: queries persist via a bulk
+// PUT of the WHOLE array (see routes/queries.js), so a base64 blob living in
+// the payload would be re-uploaded on every save of every query and would blow
+// past the request body limit once a few files accumulate — breaking saving
+// for everyone. Kept separate, a file is uploaded exactly once and the bulk
+// payload stays small; the client only ever fetches a blob on demand.
+model QueryAttachment {
+  id         String   @id @default(cuid())
+  queryId    String
+  name       String
+  type       String   @default("application/octet-stream")
+  size       Int      @default(0)
+  dataUrl    String // base64 data URL
+  uploadedBy String // User.id
+  createdAt  DateTime @default(now())
+
+  query Query @relation(fields: [queryId], references: [id], onDelete: Cascade)
+
+  @@index([queryId])
+  @@map("query_attachments")
 }
 
 // Leave requests — a plain typed table (not the Task-style JSONB payload
