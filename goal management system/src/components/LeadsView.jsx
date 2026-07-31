@@ -9,7 +9,7 @@ import {
 import { Card, Avatar, Field, inputCls, selectCls, btnPrimary, btnSecondary, btnGhost, CoolSelect } from './UI';
 import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
-import { canAssignLead, canCreateLead, canDeleteLead, isAdmin } from '../utils/permissions';
+import { canAssignLead, canCreateLead, canDeleteLead, canEditLead, isAdmin } from '../utils/permissions';
 import {
   loadLeads, intakeLead, updateLead, addNote, addFollowUp, completeFollowUp, deleteLead,
   assignLead, winInitialCall, revertLeadStage,
@@ -468,6 +468,13 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
   const meName = me?.name || 'System';
   const canAssign = canAssignLead(me); // only Admin assigns the RM
   const amAdmin = isAdmin(me);
+  // Only the assigned RM (or Admin/Internal Manager per the matrix) may
+  // actually DO anything to this lead — edit, mark lost/junk, progress the
+  // stage, reopen, add a remark or a follow-up. Everyone else who can merely
+  // VIEW it (the matrix grants broad view access by default) sees the
+  // timeline/details read-only, with none of these controls rendered at all
+  // — not just disabled, so there's nothing to click in the first place.
+  const canOperate = canEditLead(me, lead);
 
   const setStatus = (status, reason) => {
     updateLead(lead.id, { status, ...(reason ? { lostReason: reason } : {}) }, meName);
@@ -548,7 +555,7 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {!isViewer && <button onClick={onEdit} className={btnSecondary + ' py-2 px-3'}><Pencil size={13} /> Edit</button>}
+            {!isViewer && canOperate && <button onClick={onEdit} className={btnSecondary + ' py-2 px-3'}><Pencil size={13} /> Edit</button>}
             <button onClick={onClose} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"><X size={18} /></button>
           </div>
         </div>
@@ -616,20 +623,22 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
               {lead.mobile && <a href={`tel:${lead.mobile}`} className={btnSecondary + ' py-1.5 px-3 text-[11px]'}><Phone size={12} /> Call</a>}
               {lead.mobile && <a href={`https://wa.me/${(lead.mobile || '').replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className={btnSecondary + ' py-1.5 px-3 text-[11px] text-emerald-600 dark:text-emerald-400'}><MessageCircle size={12} /> WhatsApp</a>}
               {lead.email && <a href={`mailto:${lead.email}`} className={btnSecondary + ' py-1.5 px-3 text-[11px]'}><Mail size={12} /> Email</a>}
-              <span className="ml-auto flex items-center gap-2">
-                {!showLost ? (
-                  <>
-                    <button onClick={() => setShowLost(true)} className={btnGhost + ' py-1.5 px-2.5 text-[11px] text-rose-600 dark:text-rose-400'}>Mark Lost</button>
-                    <button onClick={() => setStatus('Junk')} className={btnGhost + ' py-1.5 px-2.5 text-[11px]'}>Junk</button>
-                  </>
-                ) : (
-                  <span className="flex items-center gap-1.5">
-                    <div className="w-40"><CoolSelect value={lostReason} onChange={(e) => setLostReason(e.target.value)} className={selectCls + ' text-xs py-1.5'}>{LOST_REASONS.map(r => <option key={r} value={r}>{r}</option>)}</CoolSelect></div>
-                    <button onClick={() => setStatus('Lost', lostReason)} className={btnPrimary + ' py-1.5 px-3 text-[11px]'}>Confirm Lost</button>
-                    <button onClick={() => setShowLost(false)} className={btnGhost + ' py-1.5 px-2 text-[11px]'}>Cancel</button>
-                  </span>
-                )}
-              </span>
+              {canOperate && (
+                <span className="ml-auto flex items-center gap-2">
+                  {!showLost ? (
+                    <>
+                      <button onClick={() => setShowLost(true)} className={btnGhost + ' py-1.5 px-2.5 text-[11px] text-rose-600 dark:text-rose-400'}>Mark Lost</button>
+                      <button onClick={() => setStatus('Junk')} className={btnGhost + ' py-1.5 px-2.5 text-[11px]'}>Junk</button>
+                    </>
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      <div className="w-40"><CoolSelect value={lostReason} onChange={(e) => setLostReason(e.target.value)} className={selectCls + ' text-xs py-1.5'}>{LOST_REASONS.map(r => <option key={r} value={r}>{r}</option>)}</CoolSelect></div>
+                      <button onClick={() => setStatus('Lost', lostReason)} className={btnPrimary + ' py-1.5 px-3 text-[11px]'}>Confirm Lost</button>
+                      <button onClick={() => setShowLost(false)} className={btnGhost + ' py-1.5 px-2 text-[11px]'}>Cancel</button>
+                    </span>
+                  )}
+                </span>
+              )}
             </div>
 
             {/* Stage-specific next action — assigning the RM is Admin-only. */}
@@ -654,7 +663,7 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
               </div>
             )}
 
-            {lead.stage === 'Qualified' && (
+            {lead.stage === 'Qualified' && canOperate && (
               <div className="p-3 rounded-xl bg-cyan-50/50 dark:bg-cyan-950/15 border border-cyan-200/60 dark:border-cyan-900/40 space-y-2.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
@@ -688,7 +697,7 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
               </div>
             )}
 
-            {lead.stage === 'Connected' && (
+            {lead.stage === 'Connected' && canOperate && (
               <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-violet-50/50 dark:bg-violet-950/15 border border-violet-200/60 dark:border-violet-900/40">
                 <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Lead is connected — schedule a meeting to proceed.</span>
                 <button onClick={doOpenMeetingForm} className={btnPrimary + ' py-1.5 px-3 text-[11px] ml-auto'}>
@@ -697,14 +706,14 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
               </div>
             )}
 
-            {lead.stage === 'Meeting Pending' && (
+            {lead.stage === 'Meeting Pending' && canOperate && (
               <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/15 border border-indigo-200/60 dark:border-indigo-900/40">
                 <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Meeting scheduled (visible in the Meetings module). Mark it done to proceed.</span>
                 <button onClick={doMeetingDone} className={btnPrimary + ' py-1.5 px-3 text-[11px] ml-auto'}><CheckCircle2 size={12} /> Mark Meeting Done</button>
               </div>
             )}
 
-            {lead.stage === 'Meeting Done' && (
+            {lead.stage === 'Meeting Done' && canOperate && (
               <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/15 border border-emerald-200/60 dark:border-emerald-900/40">
                 <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Ready to convert — this opens the New Client form prefilled with the lead's details.</span>
                 <button onClick={handleConvert} className="ml-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wider bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl shadow-lg shadow-emerald-500/15 transition-all cursor-pointer">
@@ -714,7 +723,7 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
             )}
           </div>
         )}
-        {lead.status !== 'Active' && !isViewer && (
+        {lead.status !== 'Active' && !isViewer && canOperate && (
           <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
             <button onClick={() => setStatus('Active')} className={btnSecondary + ' py-1.5 px-3 text-[11px]'}><RefreshCw size={12} /> Reopen Lead</button>
           </div>
@@ -733,7 +742,7 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
         <div className="p-5 overflow-y-auto flex-1">
           {tab === 'timeline' && (
             <div className="space-y-5">
-              {!isViewer && (
+              {!isViewer && canOperate && (
                 <div className="flex items-start gap-2">
                   <input value={noteText} onChange={(e) => setNoteText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleAddNote(); }} placeholder="Add a remark…" className={inputCls + ' text-xs'} />
                   <button onClick={handleAddNote} disabled={!noteText.trim()} className={btnPrimary + ' py-2.5 px-3 shrink-0'}><Send size={13} /></button>
@@ -755,7 +764,7 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
 
           {tab === 'followups' && (
             <div className="space-y-4">
-              {!isViewer && (
+              {!isViewer && canOperate && (
                 <div className="flex flex-wrap items-end gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800">
                   <div className="w-36"><Field label="Type"><CoolSelect value={fuType} onChange={(e) => setFuType(e.target.value)} className={selectCls + ' text-xs py-1.5'}>{FOLLOWUP_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</CoolSelect></Field></div>
                   <div className="flex-1 min-w-[180px]"><Field label="When"><input type="datetime-local" value={fuDate} onChange={(e) => setFuDate(e.target.value)} className={inputCls + ' text-xs py-1.5'} /></Field></div>
@@ -772,7 +781,7 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
                       <div className="text-xs font-bold text-slate-800 dark:text-slate-200">{fu.type} <span className="text-slate-400 font-normal">· {fmtStamp(fu.dueAt)}</span></div>
                       {fu.outcome && <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{fu.outcome}</div>}
                     </div>
-                    {fu.status === 'Pending' && !isViewer ? (
+                    {fu.status === 'Pending' && !isViewer && canOperate ? (
                       <button onClick={() => { const o = window.prompt('Outcome / note for this follow-up:', 'Connected'); if (o !== null) { completeFollowUp(lead.id, fu.id, o, meName); onRefresh(); } }} className={btnSecondary + ' py-1 px-2.5 text-[10px]'}><Check size={11} /> Complete</button>
                     ) : (
                       <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-md ${fu.status === 'Done' ? 'text-emerald-600' : 'text-slate-400'}`}>{fu.status}</span>
