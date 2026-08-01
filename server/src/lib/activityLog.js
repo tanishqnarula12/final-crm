@@ -2,16 +2,33 @@
 // a row to `activity_logs`. `performedBy` is always a real User.id; the
 // activity-log API resolves it to the user's name for display.
 
+// JSON.stringify with object keys sorted at every level, so two objects with
+// identical content but different key ORDER compare equal. This matters
+// because Postgres JSONB does NOT preserve object key insertion order — a
+// value read back from a `Json` column can have its keys in a completely
+// different order than what was originally written, even though nothing in
+// it actually changed. Array element order IS preserved and stays significant.
+function stableStringify(v) {
+  if (Array.isArray(v)) return `[${v.map(stableStringify).join(',')}]`;
+  if (v && typeof v === 'object') {
+    return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stableStringify(v[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(v);
+}
+
 // Compute changed fields between two plain objects. Returns { field: {from,to} }
-// for keys whose (JSON-compared) values differ. Used to build compact old/new
-// snapshots and to skip no-op logging.
+// for keys whose (order-insensitive JSON-compared) values differ. Used to build
+// compact old/new snapshots and to skip no-op logging — including the
+// tasks/cobr/queries overlay's "did details actually change" check, so a
+// nested object field (e.g. a task's `nftFields`) round-tripping through
+// Postgres JSONB doesn't get flagged as changed when only its key order shifted.
 export function diffFields(oldObj = {}, newObj = {}, keys = null) {
   const out = {};
   const ks = keys || [...new Set([...Object.keys(oldObj || {}), ...Object.keys(newObj || {})])];
   for (const k of ks) {
     const a = oldObj?.[k];
     const b = newObj?.[k];
-    if (JSON.stringify(a) !== JSON.stringify(b)) out[k] = { from: a ?? null, to: b ?? null };
+    if (stableStringify(a) !== stableStringify(b)) out[k] = { from: a ?? null, to: b ?? null };
   }
   return out;
 }
