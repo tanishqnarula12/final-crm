@@ -115,6 +115,16 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
   // 7. Marital Status (mapped into the MOM workspace)
   const [maritalStatus, setMaritalStatus] = useState(initialDetails.maritalStatus || '');
 
+  // 8. Applicant sub-details — extra optional fields for the PRIMARY applicant
+  // (Self). None are mandatory. Family members get their own copies of these
+  // same fields directly on each member object (see handleAddFamilyMember).
+  const [income, setIncome] = useState(initialDetails.income || '');
+  const [occupation, setOccupation] = useState(initialDetails.occupation || '');
+  const [placeOfBirth, setPlaceOfBirth] = useState(initialDetails.placeOfBirth || '');
+  const [mothersName, setMothersName] = useState(initialDetails.mothersName || '');
+  const [nomineeName, setNomineeName] = useState(initialDetails.nomineeName || '');
+  const [nomineeRelation, setNomineeRelation] = useState(initialDetails.nomineeRelation || '');
+
   // Autosave — persist this in-progress form to localStorage so a big form
   // (e.g. converting a lead to a client) never loses progress if the tab is
   // closed or the modal is dismissed accidentally. Cleared on successful save.
@@ -125,6 +135,7 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
       relationshipManager, portfolioManager, insuranceManager, serviceManager, owner, operationManager, internalManager,
       familyDetails, mutualFunds, insuranceTerm, insuranceMedical, insuranceAccidental,
       profession, professionOther, clientType, dob, maritalStatus,
+      income, occupation, placeOfBirth, mothersName, nomineeName, nomineeRelation,
     };
     try { localStorage.setItem(draftKey, JSON.stringify(snapshot)); } catch { /* storage full/unavailable — skip */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -133,6 +144,7 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
     relationshipManager, portfolioManager, insuranceManager, serviceManager, owner, operationManager, internalManager,
     familyDetails, mutualFunds, insuranceTerm, insuranceMedical, insuranceAccidental,
     profession, professionOther, clientType, dob, maritalStatus,
+    income, occupation, placeOfBirth, mothersName, nomineeName, nomineeRelation,
   ]);
 
   const clearDraft = () => { if (draftKey) { try { localStorage.removeItem(draftKey); } catch { /* noop */ } } };
@@ -155,7 +167,10 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
   const panValid = /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan);
 
   const handleAddFamilyMember = () => {
-    setFamilyDetails([...familyDetails, { name: '', relation: '', pan: '', dob: '', mobile: '', email: '' }]);
+    setFamilyDetails([...familyDetails, {
+      name: '', relation: '', pan: '', dob: '', mobile: '', email: '',
+      income: '', occupation: '', placeOfBirth: '', mothersName: '', nomineeName: '', nomineeRelation: '',
+    }]);
   };
 
   const handleRemoveFamilyMember = (idx) => {
@@ -270,6 +285,12 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
       insuranceAccidental,
       status,
       maritalStatus,
+      income,
+      occupation,
+      placeOfBirth,
+      mothersName,
+      nomineeName,
+      nomineeRelation,
       // Preserve any previously-saved CRM data (editor removed from this form)
       openActivities: initialDetails.openActivities || [],
       closedActivities: initialDetails.closedActivities || [],
@@ -394,6 +415,37 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
                 />
               )}
             </Field>
+
+            <div className="md:col-span-2 pt-2 pb-1 border-t border-slate-100 dark:border-slate-800">
+              <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Additional Details (Optional)</h4>
+            </div>
+            <Field label="Income (Annual)">
+              <input value={income} onChange={(e) => setIncome(e.target.value)} className={inputCls} placeholder="e.g. 12,00,000" />
+            </Field>
+            <Field label="Occupation">
+              <input value={occupation} onChange={(e) => setOccupation(e.target.value)} className={inputCls} placeholder="e.g. Business" />
+            </Field>
+            <Field label="Place of Birth">
+              <input value={placeOfBirth} onChange={(e) => setPlaceOfBirth(e.target.value)} className={inputCls} placeholder="City, State" />
+            </Field>
+            <Field label="Mother's Name">
+              <input value={mothersName} onChange={(e) => setMothersName(e.target.value)} className={inputCls} placeholder="Mother's full name" />
+            </Field>
+            <Field label="Nominee Name">
+              <input value={nomineeName} onChange={(e) => setNomineeName(e.target.value)} className={inputCls} placeholder="Nominee's full name" />
+            </Field>
+            <Field label="Nominee Relation">
+              <div className="relative">
+                <CoolSelect value={nomineeRelation} onChange={(e) => setNomineeRelation(e.target.value)} className={selectCls}>
+                  <option value="">Select relation…</option>
+                  {RELATIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                </CoolSelect>
+              </div>
+            </Field>
+
+            <div className="md:col-span-2 pt-2 pb-1 border-t border-slate-100 dark:border-slate-800">
+              <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Address</h4>
+            </div>
             <Field label="Address Line 1 *" error={errors.address1}>
               <input value={address1} onChange={(e) => setAddress1(e.target.value)} className={inputCls} placeholder="Flat/House No, Building Name" />
             </Field>
@@ -493,10 +545,11 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
                       </tr>
                     ) : (
                       familyDetails.map((member, idx) => (
-                        <tr key={idx} className="bg-white dark:bg-slate-950">
+                        <React.Fragment key={idx}>
+                        <tr className="bg-white dark:bg-slate-950">
                           <td className="px-4 py-2 align-top">
-                            <input 
-                              value={member.name} 
+                            <input
+                              value={member.name}
                               onChange={(e) => handleFamilyMemberChange(idx, 'name', e.target.value)} 
                               placeholder="Applicant Name" 
                               className={`${inputCls} text-xs py-1.5 ${errors.familyDetails?.[idx]?.name ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/20' : ''}`} 
@@ -562,6 +615,53 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
                             </button>
                           </td>
                         </tr>
+                        <tr className="bg-slate-50/60 dark:bg-slate-900/40">
+                          <td colSpan={7} className="px-4 pb-3 pt-1">
+                            <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">Additional Details (Optional)</p>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                              <input
+                                value={member.income || ''}
+                                onChange={(e) => handleFamilyMemberChange(idx, 'income', e.target.value)}
+                                placeholder="Income (Annual)"
+                                className={`${inputCls} text-xs py-1.5`}
+                              />
+                              <input
+                                value={member.occupation || ''}
+                                onChange={(e) => handleFamilyMemberChange(idx, 'occupation', e.target.value)}
+                                placeholder="Occupation"
+                                className={`${inputCls} text-xs py-1.5`}
+                              />
+                              <input
+                                value={member.placeOfBirth || ''}
+                                onChange={(e) => handleFamilyMemberChange(idx, 'placeOfBirth', e.target.value)}
+                                placeholder="Place of Birth"
+                                className={`${inputCls} text-xs py-1.5`}
+                              />
+                              <input
+                                value={member.mothersName || ''}
+                                onChange={(e) => handleFamilyMemberChange(idx, 'mothersName', e.target.value)}
+                                placeholder="Mother's Name"
+                                className={`${inputCls} text-xs py-1.5`}
+                              />
+                              <input
+                                value={member.nomineeName || ''}
+                                onChange={(e) => handleFamilyMemberChange(idx, 'nomineeName', e.target.value)}
+                                placeholder="Nominee Name"
+                                className={`${inputCls} text-xs py-1.5`}
+                              />
+                              <CoolSelect
+                                value={member.nomineeRelation || ''}
+                                onChange={(e) => handleFamilyMemberChange(idx, 'nomineeRelation', e.target.value)}
+                                className={selectCls + ' text-xs py-1.5'}
+                                placeholder="Nominee Relation"
+                              >
+                                <option value="">Nominee relation…</option>
+                                {RELATIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                              </CoolSelect>
+                            </div>
+                          </td>
+                        </tr>
+                        </React.Fragment>
                       ))
                     )}
                   </tbody>

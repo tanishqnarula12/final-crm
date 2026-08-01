@@ -29,9 +29,11 @@ const FIELD_LABELS = {
   relationshipManager: 'Relationship Manager', portfolioManager: 'Portfolio Manager',
   insuranceManager: 'Insurance Manager', serviceManager: 'Service Manager',
   owner: 'Owner', operationManager: 'Operation Manager', internalManager: 'Internal Manager',
-  familyDetails: 'Family Members', applicantSubDetails: 'Applicant Details', mutualFunds: 'Mutual Funds', insuranceTerm: 'Term Insurance',
+  familyDetails: 'Family Members', mutualFunds: 'Mutual Funds', insuranceTerm: 'Term Insurance',
   insuranceMedical: 'Medical Insurance', insuranceAccidental: 'Accidental Insurance',
   name: 'Name', pan: 'PAN', age: 'Age', assumptions: 'Assumptions', assignedTo: 'Assigned RM',
+  income: 'Income', occupation: 'Occupation', placeOfBirth: 'Place of Birth',
+  mothersName: "Mother's Name", nomineeName: 'Nominee Name', nomineeRelation: 'Nominee Relation',
 };
 const fieldLabel = (key) => FIELD_LABELS[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
 
