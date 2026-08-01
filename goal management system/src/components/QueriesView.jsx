@@ -25,6 +25,12 @@ const ACTIVITY_ACTION_LABEL = {
   DELETE: 'Deleted the query',
 };
 const ACTIVITY_FIELD_LABEL = { category: 'Category', query: 'Query Text', stage: 'Stage', assignedTo: 'Raised To' };
+// A CREATE entry's newValue is a compact snapshot for the admin activity-log
+// dashboard (id/stage/createdBy/assignedTo — see summarize() in
+// syncModule.js), not a "what changed" diff — there's nothing to have
+// changed FROM on the very first row. Only these actions represent an actual
+// before/after change worth breaking down field-by-field.
+const ACTIVITY_DIFF_ACTIONS = new Set(['UPDATE', 'STAGE_CHANGE', 'ASSIGN']);
 // assignedTo values are user ids (resolve to a name); everything else is
 // already a plain display string. Long free text is truncated so one entry
 // never blows out the log's height.
@@ -520,48 +526,6 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
             </div>
           )}
 
-          {/* Activity log — the audit trail: every field-level change (who
-              edited the category/text, moved the stage, or reassigned it),
-              distinct from Remarks above (the conversation). */}
-          {isEdit && (
-            <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                <ScrollText size={14} /> Activity Log
-              </h4>
-              {activityLoading ? (
-                <p className="text-xs text-slate-400 dark:text-slate-500 italic animate-pulse">Loading activity…</p>
-              ) : activity.length > 0 ? (
-                <ol className="space-y-3 max-h-48 overflow-y-auto pl-3 pr-1">
-                  {activity.map((l) => {
-                    const changed = Object.keys(l.newValue || {});
-                    return (
-                      <li key={l.id} className="relative pl-5 border-l-2 border-slate-200 dark:border-slate-800">
-                        <span className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-600 ring-2 ring-white dark:ring-slate-900" />
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">
-                          {fmtQueryStamp(l.timestamp)}
-                          <span className="text-slate-600 dark:text-slate-300 font-semibold ml-1.5">• {l.performedByName}</span>
-                        </p>
-                        <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{ACTIVITY_ACTION_LABEL[l.action] || l.action}</p>
-                        {changed.length > 0 && (
-                          <ul className="mt-0.5 space-y-0.5">
-                            {changed.map((k) => (
-                              <li key={k} className="text-[11px] text-slate-500 dark:text-slate-400">
-                                <span className="font-semibold text-slate-600 dark:text-slate-300">{ACTIVITY_FIELD_LABEL[k] || k}:</span>{' '}
-                                {fmtActivityVal(k, l.oldValue?.[k])} <span className="text-slate-350 dark:text-slate-600">→</span> {fmtActivityVal(k, l.newValue?.[k])}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ol>
-              ) : (
-                <p className="text-xs text-slate-400 dark:text-slate-500 italic">No activity recorded yet.</p>
-              )}
-            </div>
-          )}
-
           {/* Attachments — PDFs, images, statements etc. Uploaded/removed
               immediately via their own endpoints (not part of Save). */}
           {(
@@ -681,6 +645,52 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
                   placeholder={hasStageChanged ? 'Explain why the stage changed…' : 'Add a remark…'}
                 />
               </Field>
+            </div>
+          )}
+
+          {/* Activity log — the audit trail: every field-level change (who
+              edited the category/text, moved the stage, or reassigned it),
+              distinct from Remarks above (the conversation). Sits last, after
+              everything else, since it's a reference/history section rather
+              than something you act on. */}
+          {isEdit && (
+            <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                <ScrollText size={14} /> Activity Log
+              </h4>
+              {activityLoading ? (
+                <p className="text-xs text-slate-400 dark:text-slate-500 italic animate-pulse">Loading activity…</p>
+              ) : activity.length > 0 ? (
+                <ol className="space-y-3 max-h-48 overflow-y-auto pl-3 pr-1">
+                  {activity.map((l) => {
+                    const changed = ACTIVITY_DIFF_ACTIONS.has(l.action)
+                      ? Object.keys(l.newValue || {}).filter((k) => k !== 'id')
+                      : [];
+                    return (
+                      <li key={l.id} className="relative pl-5 border-l-2 border-slate-200 dark:border-slate-800">
+                        <span className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-600 ring-2 ring-white dark:ring-slate-900" />
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">
+                          {fmtQueryStamp(l.timestamp)}
+                          <span className="text-slate-600 dark:text-slate-300 font-semibold ml-1.5">• {l.performedByName}</span>
+                        </p>
+                        <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{ACTIVITY_ACTION_LABEL[l.action] || l.action}</p>
+                        {changed.length > 0 && (
+                          <ul className="mt-0.5 space-y-0.5">
+                            {changed.map((k) => (
+                              <li key={k} className="text-[11px] text-slate-500 dark:text-slate-400">
+                                <span className="font-semibold text-slate-600 dark:text-slate-300">{ACTIVITY_FIELD_LABEL[k] || k}:</span>{' '}
+                                {fmtActivityVal(k, l.oldValue?.[k])} <span className="text-slate-350 dark:text-slate-600">→</span> {fmtActivityVal(k, l.newValue?.[k])}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : (
+                <p className="text-xs text-slate-400 dark:text-slate-500 italic">No activity recorded yet.</p>
+              )}
             </div>
           )}
         </div>
