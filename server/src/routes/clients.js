@@ -49,6 +49,17 @@ async function buildClientUpdateDiff(prisma, existing, updated) {
     };
   }
 
+  // applicantSubDetails is a map of EVERY applicant's extra details keyed by
+  // PAN/name; a single-applicant save resends the whole map, so a raw
+  // from/to dump here would just repeat every unrelated applicant's data.
+  // Condense to which applicant(s) actually changed instead.
+  if (detailsDiff.applicantSubDetails) {
+    const oldMap = detailsDiff.applicantSubDetails.from || {};
+    const newMap = detailsDiff.applicantSubDetails.to || {};
+    const changedKeys = Object.keys(diffFields(oldMap, newMap));
+    detailsDiff.applicantSubDetails = { from: null, to: changedKeys.length ? `Updated for: ${changedKeys.join(', ')}` : null };
+  }
+
   const managerIds = new Set();
   for (const key of Object.keys(detailsDiff)) {
     if (!MANAGER_DETAIL_KEYS.has(key)) continue;

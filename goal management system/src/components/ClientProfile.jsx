@@ -5,10 +5,10 @@ import {
   Contact, UsersRound, Users, Briefcase,
   Activity, Archive, CalendarDays, TrendingUp, Paperclip, FileText, Skull, Clock,
   ListChecks, Plus, Trash2, Check, X, MessageSquare, Send, Wallet, FileBarChart, Printer, Eye, Target, Shield, Upload, FolderOpen,
-  Video, Globe, Building, ArrowLeftRight
+  Video, Globe, Building, ArrowLeftRight, ChevronRight, IndianRupee
 } from 'lucide-react';
 import { Avatar, Card, btnPrimary, btnSecondary, btnGhost, inputCls, CoolSelect } from './UI';
-import { MANAGER_ROLES } from '../utils/team';
+import { MANAGER_ROLES, RELATIONS } from '../utils/team';
 import { teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
 import { canEditClient, canDeleteClient } from '../utils/permissions';
@@ -49,6 +49,7 @@ export default function ClientProfileView({
     professionOther = '',
     maritalStatus = '',
     familyDetails = [],
+    applicantSubDetails = {},
     mutualFunds = 'No',
     insuranceTerm = 'No',
     insuranceMedical = 'No',
@@ -74,6 +75,18 @@ export default function ClientProfileView({
 
   // Filter State
   const [attachmentFilter, setAttachmentFilter] = React.useState('custom');
+
+  // Applicant sub-details modal — opened by clicking a row in the "Family &
+  // Applicants Details" table. Holds the clicked applicant ({ key, name,
+  // relation }) or null when closed.
+  const [subDetailApplicant, setSubDetailApplicant] = React.useState(null);
+  const handleSaveApplicantSubDetails = async (key, values) => {
+    await updateClient(client.id, {
+      clientDetails: { ...details, applicantSubDetails: { ...applicantSubDetails, [key]: values } },
+    });
+    if (window.refreshAppData) await window.refreshAppData();
+    setSubDetailApplicant(null);
+  };
 
   // Deep-link from the client search dropdown's "Applicants" results — scroll
   // to and briefly flash the matching row in the Family & Applicants Details
@@ -526,6 +539,7 @@ export default function ClientProfileView({
                     <th className="px-4 py-2.5 text-[10px]">Date of Birth</th>
                     <th className="px-4 py-2.5 text-[10px]">Mobile</th>
                     <th className="px-4 py-2.5 text-[10px]">Email</th>
+                    <th className="px-4 py-2.5 text-[10px] w-8"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -536,7 +550,9 @@ export default function ClientProfileView({
                     <tr
                       key={i}
                       id={rowKey ? `applicant-row-${rowKey}` : undefined}
-                      className={`hover:bg-blue-50/40 dark:hover:bg-slate-900/20 transition-colors ${isFlashed ? 'ring-2 ring-inset ring-amber-400 bg-amber-50/60 dark:bg-amber-950/20 animate-pulse' : ''}`}
+                      onClick={() => setSubDetailApplicant({ key: rowKey, name: f.name, relation: f.relation })}
+                      className={`hover:bg-blue-50/40 dark:hover:bg-slate-900/20 transition-colors cursor-pointer ${isFlashed ? 'ring-2 ring-inset ring-amber-400 bg-amber-50/60 dark:bg-amber-950/20 animate-pulse' : ''}`}
+                      title="View / edit additional applicant details"
                     >
                       <td className="px-4 py-2.5">
                         <span className="inline-flex items-center gap-2.5">
@@ -557,12 +573,18 @@ export default function ClientProfileView({
                       </td>
                       <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300 tabular-nums">{f.mobile || '—'}</td>
                       <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300 lowercase">{f.email || '—'}</td>
+                      <td className="px-4 py-2.5 text-slate-350 dark:text-slate-600">
+                        <ChevronRight size={14} />
+                      </td>
                     </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-2 font-medium">
+              Click a row for income, occupation, and nominee details.
+            </p>
           </SectionBox>
 
           {/* Box 4: Business Details (Products holding status) */}
@@ -1077,6 +1099,16 @@ export default function ClientProfileView({
       )}
 
       {previewDoc && <DocPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
+
+      {subDetailApplicant && (
+        <ApplicantSubDetailsModal
+          applicant={subDetailApplicant}
+          initial={applicantSubDetails[subDetailApplicant.key] || {}}
+          readOnly={!mayEditClient}
+          onClose={() => setSubDetailApplicant(null)}
+          onSave={(values) => handleSaveApplicantSubDetails(subDetailApplicant.key, values)}
+        />
+      )}
     </div>
   );
 }
@@ -1816,6 +1848,99 @@ function MeetingsBox({ meetings, onSelectMeeting, emptyText }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Applicant sub-details modal — opened by clicking a row in the "Family &
+// Applicants Details" table. Extra per-applicant fields that don't warrant
+// their own table column (income, occupation, nominee, etc.), none required.
+// Keyed by applicant PAN/name (see `applicantSubDetails` in clientDetails).
+// ---------------------------------------------------------------------------
+function ApplicantSubDetailsModal({ applicant, initial, readOnly, onClose, onSave }) {
+  const [income, setIncome] = React.useState(initial.income || '');
+  const [occupation, setOccupation] = React.useState(initial.occupation || '');
+  const [placeOfBirth, setPlaceOfBirth] = React.useState(initial.placeOfBirth || '');
+  const [mothersName, setMothersName] = React.useState(initial.mothersName || '');
+  const [nomineeName, setNomineeName] = React.useState(initial.nomineeName || '');
+  const [nomineeRelation, setNomineeRelation] = React.useState(initial.nomineeRelation || '');
+  const [saving, setSaving] = React.useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (readOnly) return;
+    setSaving(true);
+    try {
+      await onSave({ income: income.trim(), occupation: occupation.trim(), placeOfBirth: placeOfBirth.trim(), mothersName: mothersName.trim(), nomineeName: nomineeName.trim(), nomineeRelation });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const fieldCls = inputCls + (readOnly ? ' bg-slate-50 dark:bg-slate-950 cursor-not-allowed text-slate-500' : '');
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400 flex items-center justify-center shrink-0">
+              <IndianRupee size={16} />
+            </span>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white font-sans truncate">{applicant.name || 'Applicant'} Details</h3>
+              <p className="text-[10px] text-slate-450 dark:text-slate-500 font-medium">{applicant.relation || 'Self'}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer shrink-0"><X size={18} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-450 dark:text-slate-400 uppercase tracking-wider mb-1.5 font-sans">Income (Annual)</label>
+              <input value={income} onChange={(e) => setIncome(e.target.value)} disabled={readOnly} placeholder="e.g. 12,00,000" className={fieldCls} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-450 dark:text-slate-400 uppercase tracking-wider mb-1.5 font-sans">Occupation</label>
+              <input value={occupation} onChange={(e) => setOccupation(e.target.value)} disabled={readOnly} placeholder="e.g. Business" className={fieldCls} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-450 dark:text-slate-400 uppercase tracking-wider mb-1.5 font-sans">Place of Birth</label>
+            <input value={placeOfBirth} onChange={(e) => setPlaceOfBirth(e.target.value)} disabled={readOnly} placeholder="City, State" className={fieldCls} />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-450 dark:text-slate-400 uppercase tracking-wider mb-1.5 font-sans">Mother's Name</label>
+            <input value={mothersName} onChange={(e) => setMothersName(e.target.value)} disabled={readOnly} placeholder="Mother's full name" className={fieldCls} />
+          </div>
+          <div className="grid grid-cols-2 gap-3 pt-1 border-t border-slate-100 dark:border-slate-800">
+            <div className="col-span-2 -mb-1">
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Nominee</span>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-450 dark:text-slate-400 uppercase tracking-wider mb-1.5 font-sans">Nominee Name</label>
+              <input value={nomineeName} onChange={(e) => setNomineeName(e.target.value)} disabled={readOnly} placeholder="Nominee's full name" className={fieldCls} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-450 dark:text-slate-400 uppercase tracking-wider mb-1.5 font-sans">Nominee Relation</label>
+              <CoolSelect value={nomineeRelation} onChange={(e) => setNomineeRelation(e.target.value)} disabled={readOnly} className={inputCls}>
+                <option value="">Select relation…</option>
+                {RELATIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              </CoolSelect>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <button type="button" onClick={onClose} className={btnGhost + ' py-2 px-4'}>{readOnly ? 'Close' : 'Cancel'}</button>
+            {!readOnly && (
+              <button type="submit" disabled={saving} className={btnPrimary + ' py-2 px-5 disabled:opacity-50 disabled:cursor-not-allowed'}>
+                {saving ? 'Saving…' : 'Save Details'}
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
+    </div>,
+    document.body
   );
 }
 
