@@ -416,8 +416,8 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
               )}
             </Field>
 
-            <div className="md:col-span-2 pt-2 pb-1 border-t border-slate-100 dark:border-slate-800">
-              <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Additional Details (Optional)</h4>
+            <div className="md:col-span-2 pt-3 mt-1 border-t border-slate-100 dark:border-slate-800">
+              <h4 className="text-sm font-bold text-slate-700 dark:text-slate-350 uppercase tracking-wider pl-2 border-l-2 border-indigo-500">Additional Details (Optional)</h4>
             </div>
             <Field label="Income (Annual)">
               <input value={income} onChange={(e) => setIncome(e.target.value)} className={inputCls} placeholder="e.g. 12,00,000" />
@@ -443,8 +443,8 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
               </div>
             </Field>
 
-            <div className="md:col-span-2 pt-2 pb-1 border-t border-slate-100 dark:border-slate-800">
-              <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Address</h4>
+            <div className="md:col-span-2 pt-3 mt-1 border-t border-slate-100 dark:border-slate-800">
+              <h4 className="text-sm font-bold text-slate-700 dark:text-slate-350 uppercase tracking-wider pl-2 border-l-2 border-blue-500">Address</h4>
             </div>
             <Field label="Address Line 1 *" error={errors.address1}>
               <input value={address1} onChange={(e) => setAddress1(e.target.value)} className={inputCls} placeholder="Flat/House No, Building Name" />
@@ -522,154 +522,146 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
         {/* Tab 3: Family & Business Details */}
         {activeTab === 'familyBusiness' && (
           <div className="space-y-6 animate-fade-in">
-            {/* Family Details */}
+            {/* Family Details — one card per member (not a wide table) so
+                nothing gets cramped or clipped inside the modal at any width. */}
             <div className="space-y-3">
               <h4 className="text-sm font-bold text-slate-700 dark:text-slate-350 uppercase tracking-wider pl-2 border-l-2 border-blue-500">Family Details</h4>
-              <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-950 shadow-sm">
-                <table className="w-full text-xs text-left min-w-[760px]">
-                  <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
-                    <tr>
-                      <th className="px-4 py-3">Applicant Name *</th>
-                      <th className="px-4 py-3">PAN *</th>
-                      <th className="px-4 py-3">Relation</th>
-                      <th className="px-4 py-3">Date of Birth *</th>
-                      <th className="px-4 py-3">Mobile</th>
-                      <th className="px-4 py-3">Email</th>
-                      <th className="px-4 py-3 w-16 text-center">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {familyDetails.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-6 text-center text-slate-400 dark:text-slate-500 italic">No family members added yet.</td>
-                      </tr>
-                    ) : (
-                      familyDetails.map((member, idx) => (
-                        <React.Fragment key={idx}>
-                        <tr className="bg-white dark:bg-slate-950">
-                          <td className="px-4 py-2 align-top">
+              {familyDetails.length === 0 ? (
+                <div className="border border-dashed border-slate-200 dark:border-slate-800 rounded-xl py-6 text-center text-xs text-slate-400 dark:text-slate-500 italic">
+                  No family members added yet.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {familyDetails.map((member, idx) => (
+                    <div key={idx} className="border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-950 shadow-sm overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+                        <span className="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider">Family Member {idx + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFamilyMember(idx)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all cursor-pointer"
+                          title="Remove family member"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <Field label="Applicant Name *" error={errors.familyDetails?.[idx]?.name}>
+                          <input
+                            value={member.name}
+                            onChange={(e) => handleFamilyMemberChange(idx, 'name', e.target.value)}
+                            placeholder="Full name"
+                            className={`${inputCls} text-xs py-1.5 ${errors.familyDetails?.[idx]?.name ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/20' : ''}`}
+                          />
+                        </Field>
+                        <Field label="PAN *" error={errors.familyDetails?.[idx]?.pan}>
+                          <input
+                            value={member.pan || ''}
+                            onChange={(e) => handleFamilyMemberChange(idx, 'pan', e.target.value.toUpperCase().slice(0, 10))}
+                            placeholder="e.g. ABCDE1234F"
+                            className={`${inputCls} text-xs py-1.5 font-mono font-semibold uppercase ${errors.familyDetails?.[idx]?.pan ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/20' : ''}`}
+                            maxLength={10}
+                          />
+                        </Field>
+                        <Field label="Relation">
+                          <CoolSelect
+                            value={member.relation}
+                            onChange={(e) => handleFamilyMemberChange(idx, 'relation', e.target.value)}
+                            className={selectCls + ' text-xs py-1.5'}
+                          >
+                            <option value="">Select relation…</option>
+                            {RELATIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                          </CoolSelect>
+                        </Field>
+                        <Field label="Date of Birth *" error={errors.familyDetails?.[idx]?.dob}>
+                          <input
+                            type="date"
+                            value={member.dob || ''}
+                            onChange={(e) => handleFamilyMemberChange(idx, 'dob', e.target.value)}
+                            min={DOB_MIN} max={dobMax()}
+                            className={`${inputCls} text-xs py-1.5 ${errors.familyDetails?.[idx]?.dob ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/20' : ''}`}
+                          />
+                        </Field>
+                        <Field label="Mobile">
+                          <input
+                            value={member.mobile || ''}
+                            onChange={(e) => handleFamilyMemberChange(idx, 'mobile', e.target.value)}
+                            placeholder="Mobile"
+                            className={`${inputCls} text-xs py-1.5`}
+                          />
+                        </Field>
+                        <Field label="Email">
+                          <input
+                            type="email"
+                            value={member.email || ''}
+                            onChange={(e) => handleFamilyMemberChange(idx, 'email', e.target.value)}
+                            placeholder="Email"
+                            className={`${inputCls} text-xs py-1.5`}
+                          />
+                        </Field>
+                      </div>
+                      <div className="px-4 pb-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                        <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2.5">Additional Details (Optional)</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <Field label="Income (Annual)">
                             <input
-                              value={member.name}
-                              onChange={(e) => handleFamilyMemberChange(idx, 'name', e.target.value)} 
-                              placeholder="Applicant Name" 
-                              className={`${inputCls} text-xs py-1.5 ${errors.familyDetails?.[idx]?.name ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/20' : ''}`} 
-                            />
-                            {errors.familyDetails?.[idx]?.name && <p className="text-[10px] text-rose-600 font-bold mt-1">{errors.familyDetails[idx].name}</p>}
-                          </td>
-                          <td className="px-4 py-2 align-top">
-                            <input
-                              value={member.pan || ''}
-                              onChange={(e) => handleFamilyMemberChange(idx, 'pan', e.target.value.toUpperCase().slice(0, 10))}
-                              placeholder="e.g. ABCDE1234F"
-                              className={`${inputCls} text-xs py-1.5 font-mono font-semibold uppercase ${errors.familyDetails?.[idx]?.pan ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/20' : ''}`}
-                              maxLength={10}
-                            />
-                            {errors.familyDetails?.[idx]?.pan && <p className="text-[10px] text-rose-600 font-bold mt-1">{errors.familyDetails[idx].pan}</p>}
-                          </td>
-                          <td className="px-4 py-2 align-top">
-                            <div className="relative">
-                              <CoolSelect
-                                value={member.relation}
-                                onChange={(e) => handleFamilyMemberChange(idx, 'relation', e.target.value)}
-                                className={selectCls + ' text-xs py-1.5'}
-                              >
-                                <option value="">Select relation…</option>
-                                {RELATIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                              </CoolSelect>
-                            </div>
-                          </td>
-                          <td className="px-4 py-2 align-top">
-                            <input
-                              type="date"
-                              value={member.dob || ''}
-                              onChange={(e) => handleFamilyMemberChange(idx, 'dob', e.target.value)}
-                              min={DOB_MIN} max={dobMax()}
-                              className={`${inputCls} text-xs py-1.5 ${errors.familyDetails?.[idx]?.dob ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/20' : ''}`}
-                            />
-                            {errors.familyDetails?.[idx]?.dob && <p className="text-[10px] text-rose-600 font-bold mt-1">{errors.familyDetails[idx].dob}</p>}
-                          </td>
-                          <td className="px-4 py-2 align-top">
-                            <input
-                              value={member.mobile || ''}
-                              onChange={(e) => handleFamilyMemberChange(idx, 'mobile', e.target.value)}
-                              placeholder="Mobile"
+                              value={member.income || ''}
+                              onChange={(e) => handleFamilyMemberChange(idx, 'income', e.target.value)}
+                              placeholder="e.g. 12,00,000"
                               className={`${inputCls} text-xs py-1.5`}
                             />
-                          </td>
-                          <td className="px-4 py-2 align-top">
+                          </Field>
+                          <Field label="Occupation">
                             <input
-                              type="email"
-                              value={member.email || ''}
-                              onChange={(e) => handleFamilyMemberChange(idx, 'email', e.target.value)}
-                              placeholder="Email"
+                              value={member.occupation || ''}
+                              onChange={(e) => handleFamilyMemberChange(idx, 'occupation', e.target.value)}
+                              placeholder="e.g. Business"
                               className={`${inputCls} text-xs py-1.5`}
                             />
-                          </td>
-                          <td className="px-4 py-2 text-center align-top">
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveFamilyMember(idx)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all cursor-pointer"
+                          </Field>
+                          <Field label="Place of Birth">
+                            <input
+                              value={member.placeOfBirth || ''}
+                              onChange={(e) => handleFamilyMemberChange(idx, 'placeOfBirth', e.target.value)}
+                              placeholder="City, State"
+                              className={`${inputCls} text-xs py-1.5`}
+                            />
+                          </Field>
+                          <Field label="Mother's Name">
+                            <input
+                              value={member.mothersName || ''}
+                              onChange={(e) => handleFamilyMemberChange(idx, 'mothersName', e.target.value)}
+                              placeholder="Mother's full name"
+                              className={`${inputCls} text-xs py-1.5`}
+                            />
+                          </Field>
+                          <Field label="Nominee Name">
+                            <input
+                              value={member.nomineeName || ''}
+                              onChange={(e) => handleFamilyMemberChange(idx, 'nomineeName', e.target.value)}
+                              placeholder="Nominee's full name"
+                              className={`${inputCls} text-xs py-1.5`}
+                            />
+                          </Field>
+                          <Field label="Nominee Relation">
+                            <CoolSelect
+                              value={member.nomineeRelation || ''}
+                              onChange={(e) => handleFamilyMemberChange(idx, 'nomineeRelation', e.target.value)}
+                              className={selectCls + ' text-xs py-1.5'}
                             >
-                              <X size={14} />
-                            </button>
-                          </td>
-                        </tr>
-                        <tr className="bg-slate-50/60 dark:bg-slate-900/40">
-                          <td colSpan={7} className="px-4 pb-3 pt-1">
-                            <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">Additional Details (Optional)</p>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                              <input
-                                value={member.income || ''}
-                                onChange={(e) => handleFamilyMemberChange(idx, 'income', e.target.value)}
-                                placeholder="Income (Annual)"
-                                className={`${inputCls} text-xs py-1.5`}
-                              />
-                              <input
-                                value={member.occupation || ''}
-                                onChange={(e) => handleFamilyMemberChange(idx, 'occupation', e.target.value)}
-                                placeholder="Occupation"
-                                className={`${inputCls} text-xs py-1.5`}
-                              />
-                              <input
-                                value={member.placeOfBirth || ''}
-                                onChange={(e) => handleFamilyMemberChange(idx, 'placeOfBirth', e.target.value)}
-                                placeholder="Place of Birth"
-                                className={`${inputCls} text-xs py-1.5`}
-                              />
-                              <input
-                                value={member.mothersName || ''}
-                                onChange={(e) => handleFamilyMemberChange(idx, 'mothersName', e.target.value)}
-                                placeholder="Mother's Name"
-                                className={`${inputCls} text-xs py-1.5`}
-                              />
-                              <input
-                                value={member.nomineeName || ''}
-                                onChange={(e) => handleFamilyMemberChange(idx, 'nomineeName', e.target.value)}
-                                placeholder="Nominee Name"
-                                className={`${inputCls} text-xs py-1.5`}
-                              />
-                              <CoolSelect
-                                value={member.nomineeRelation || ''}
-                                onChange={(e) => handleFamilyMemberChange(idx, 'nomineeRelation', e.target.value)}
-                                className={selectCls + ' text-xs py-1.5'}
-                                placeholder="Nominee Relation"
-                              >
-                                <option value="">Nominee relation…</option>
-                                {RELATIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                              </CoolSelect>
-                            </div>
-                          </td>
-                        </tr>
-                        </React.Fragment>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <button 
-                type="button" 
-                onClick={handleAddFamilyMember} 
+                              <option value="">Select relation…</option>
+                              {RELATIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                            </CoolSelect>
+                          </Field>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={handleAddFamilyMember}
                 className="w-full py-2 border border-dashed border-slate-350 dark:border-slate-800 hover:border-blue-500 rounded-xl text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50/10 dark:hover:bg-blue-950/10 transition-all cursor-pointer"
               >
                 + Add Family Member

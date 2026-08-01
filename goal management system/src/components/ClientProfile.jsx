@@ -1877,15 +1877,15 @@ function ApplicantViewModal({ applicant: a, onClose }) {
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer shrink-0"><X size={18} /></button>
         </div>
         <div className="p-5 max-h-[70vh] overflow-y-auto">
-          <div className="space-y-0.5">
+          <div className="space-y-0.5 px-3.5 -mx-3.5 rounded-xl">
             <ApplicantDetailRow label="PAN" value={a.pan} />
             <ApplicantDetailRow label="Relation" value={a.relation} />
             <ApplicantDetailRow label="Date of Birth" value={a.dob ? fmtDate(a.dob) : ''} />
             <ApplicantDetailRow label="Mobile" value={a.mobile} />
             <ApplicantDetailRow label="Email" value={a.email} />
           </div>
-          <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-4 mb-1.5">Additional Details</p>
-          <div className="space-y-0.5">
+          <h4 className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider pl-2 border-l-2 border-indigo-500 mt-5 mb-2">Additional Details</h4>
+          <div className="space-y-0.5 px-3.5 -mx-3.5 rounded-xl bg-indigo-50/40 dark:bg-indigo-950/10">
             <ApplicantDetailRow label="Income (Annual)" value={a.income} />
             <ApplicantDetailRow label="Occupation" value={a.occupation} />
             <ApplicantDetailRow label="Place of Birth" value={a.placeOfBirth} />
