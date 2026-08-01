@@ -16,11 +16,42 @@ const router = Router();
 router.use(requireAuth);
 
 const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+const timeRe = /^\d{2}:\d{2}$/;
+const LEAVE_TYPES = ['Full Day', 'Half Day', 'Early Leave', 'Late Entry'];
+const HALF_DAY_SLOTS = ['First Half', 'Second Half'];
+
 const applySchema = z.object({
   fromDate: z.string().regex(dateRe, 'Invalid date'),
   toDate: z.string().regex(dateRe, 'Invalid date'),
+  leaveType: z.enum(LEAVE_TYPES).default('Full Day'),
+  halfDaySlot: z.enum(HALF_DAY_SLOTS).optional().nullable(),
+  timeValue: z.string().regex(timeRe, 'Invalid time').optional().nullable(),
   reason: z.string().trim().min(1, 'Reason is required'),
 });
+
+// Half Day/Early Leave/Late Entry each need their own extra detail, and are
+// single-day concepts regardless of what fromDate/toDate the client sent — a
+// "half day" spanning a date range makes no sense. Returns { error } (send it
+// as-is, 400) or { data } (the normalized body to save) — mirrors the
+// existing inline `if (...) return res.status(400)...` style in this file
+// rather than introducing a throw-based error type.
+function normalizeLeaveType(body) {
+  const { leaveType, halfDaySlot, timeValue } = body;
+  if (leaveType === 'Half Day' && !halfDaySlot) {
+    return { error: 'Pick First Half or Second Half.' };
+  }
+  if ((leaveType === 'Early Leave' || leaveType === 'Late Entry') && !timeValue) {
+    return { error: leaveType === 'Early Leave' ? "Pick the time you'll leave." : 'Pick your expected arrival time.' };
+  }
+  return {
+    data: {
+      ...body,
+      toDate: leaveType === 'Full Day' ? body.toDate : body.fromDate,
+      halfDaySlot: leaveType === 'Half Day' ? halfDaySlot : null,
+      timeValue: (leaveType === 'Early Leave' || leaveType === 'Late Entry') ? timeValue : null,
+    },
+  };
+}
 const respondSchema = z.object({
   decision: z.enum(['Approved', 'Rejected']),
   message: z.string().trim().optional(),
@@ -31,6 +62,9 @@ const serialize = (r) => ({
   createdBy: r.createdBy,
   fromDate: r.fromDate,
   toDate: r.toDate,
+  leaveType: r.leaveType || 'Full Day',
+  halfDaySlot: r.halfDaySlot,
+  timeValue: r.timeValue,
   reason: r.reason,
   status: r.status,
   responseMessage: r.responseMessage,
@@ -52,11 +86,14 @@ router.get('/', asyncHandler(async (req, res) => {
 
 // POST /api/leave — apply for leave. Anyone may create their own.
 router.post('/', asyncHandler(async (req, res) => {
-  const { fromDate, toDate, reason } = parseBody(applySchema, req.body);
-  if (toDate < fromDate) return res.status(400).json({ error: '"To" date cannot be before the "From" date.' });
+  const parsed = parseBody(applySchema, req.body);
+  if (parsed.toDate < parsed.fromDate) return res.status(400).json({ error: '"To" date cannot be before the "From" date.' });
+  const { error, data } = normalizeLeaveType(parsed);
+  if (error) return res.status(400).json({ error });
+  const { fromDate, toDate, leaveType, halfDaySlot, timeValue, reason } = data;
 
   const row = await prisma.leave.create({
-    data: { createdBy: req.user.id, fromDate, toDate, reason, status: 'Pending' },
+    data: { createdBy: req.user.id, fromDate, toDate, leaveType, halfDaySlot, timeValue, reason, status: 'Pending' },
   });
   await logActivity(prisma, { module: 'leave', recordId: row.id, action: 'CREATE', newValue: serialize(row), performedBy: req.user.id });
   res.status(201).json({ leave: serialize(row) });
@@ -77,11 +114,14 @@ router.patch('/:id', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'An approved leave request can no longer be edited.' });
   }
 
-  const { fromDate, toDate, reason } = parseBody(applySchema, req.body);
-  if (toDate < fromDate) return res.status(400).json({ error: '"To" date cannot be before the "From" date.' });
+  const parsed = parseBody(applySchema, req.body);
+  if (parsed.toDate < parsed.fromDate) return res.status(400).json({ error: '"To" date cannot be before the "From" date.' });
+  const { error, data: normalized } = normalizeLeaveType(parsed);
+  if (error) return res.status(400).json({ error });
+  const { fromDate, toDate, leaveType, halfDaySlot, timeValue, reason } = normalized;
 
   const wasRejected = existing.status === 'Rejected';
-  const data = { fromDate, toDate, reason };
+  const data = { fromDate, toDate, leaveType, halfDaySlot, timeValue, reason };
   if (wasRejected) {
     data.status = 'Pending';
     data.responseMessage = null;

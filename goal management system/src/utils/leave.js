@@ -30,16 +30,16 @@ function upsertCache(row) {
 
 // Apply for leave. Throws ApiError on validation/network failure — callers
 // show the message inline in the form.
-export async function applyLeave({ fromDate, toDate, reason }) {
-  const { leave } = await api.post('/leave', { fromDate, toDate, reason });
+export async function applyLeave({ fromDate, toDate, leaveType, halfDaySlot, timeValue, reason }) {
+  const { leave } = await api.post('/leave', { fromDate, toDate, leaveType, halfDaySlot, timeValue, reason });
   upsertCache(leave);
   return leave;
 }
 
 // Edit your own request — also how "re-apply with a modified reason" works:
 // editing a Rejected request resets it to Pending server-side.
-export async function editLeave(id, { fromDate, toDate, reason }) {
-  const { leave } = await api.patch(`/leave/${id}`, { fromDate, toDate, reason });
+export async function editLeave(id, { fromDate, toDate, leaveType, halfDaySlot, timeValue, reason }) {
+  const { leave } = await api.patch(`/leave/${id}`, { fromDate, toDate, leaveType, halfDaySlot, timeValue, reason });
   upsertCache(leave);
   return leave;
 }
@@ -52,6 +52,36 @@ export async function respondToLeave(id, decision, message) {
 }
 
 export const LEAVE_STATUSES = ['Pending', 'Approved', 'Rejected'];
+
+// --- Leave type ---------------------------------------------------------
+export const LEAVE_TYPES = ['Full Day', 'Half Day', 'Early Leave', 'Late Entry'];
+
+// Fixed clock-time windows for each half — not user-editable, just labels.
+export const HALF_DAY_SLOTS = {
+  'First Half': '10:00 – 13:30',
+  'Second Half': '13:30 – 18:00',
+};
+
+export const fmt12h = (hhmm) => {
+  const [h, m] = String(hhmm || '').split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return hhmm || '';
+  const period = h >= 12 ? 'pm' : 'am';
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+};
+
+// One-line description of a request's type + its type-specific detail, e.g.
+// "Half Day — First Half (10:00 – 13:30)" or "Early Leave — Leaving at 3:30 pm".
+export const fmtLeaveType = (leave) => {
+  const type = leave?.leaveType || 'Full Day';
+  if (type === 'Half Day') {
+    const slot = leave?.halfDaySlot;
+    return slot ? `Half Day — ${slot} (${HALF_DAY_SLOTS[slot] || ''})` : 'Half Day';
+  }
+  if (type === 'Early Leave') return leave?.timeValue ? `Early Leave — Leaving at ${fmt12h(leave.timeValue)}` : 'Early Leave';
+  if (type === 'Late Entry') return leave?.timeValue ? `Late Entry — Arriving at ${fmt12h(leave.timeValue)}` : 'Late Entry';
+  return 'Full Day';
+};
 
 // Visual theme per status (badge colours) — same palette convention as Queries.
 export const LEAVE_STATUS_THEME = {

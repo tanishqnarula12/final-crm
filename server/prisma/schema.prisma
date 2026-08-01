@@ -297,6 +297,12 @@ model Leave {
   createdBy       String // User.id — the requester (immutable)
   fromDate        String // YYYY-MM-DD
   toDate          String // YYYY-MM-DD
+  // Full Day | Half Day | Early Leave | Late Entry. Half Day/Early Leave/Late
+  // Entry are single-day concepts — the route forces toDate = fromDate for
+  // them, so a multi-day range only ever exists for a Full Day request.
+  leaveType       String    @default("Full Day")
+  halfDaySlot     String? // "First Half" | "Second Half" — only when leaveType = Half Day
+  timeValue       String? // "HH:MM" — leaving time (Early Leave) or arrival time (Late Entry)
   reason          String
   status          String    @default("Pending") // Pending | Approved | Rejected
   responseMessage String? // optional note from the approver (accept or reject)

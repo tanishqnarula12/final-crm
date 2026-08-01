@@ -75,6 +75,10 @@ export const previewKind = (type = '', name = '') => {
   return null;
 };
 
+// This query's audit trail (field-level changes — category/text edits, stage
+// moves, reassignment), distinct from `remarks` (the conversation thread).
+export const fetchQueryActivity = async (queryId) => (await api.get(`/queries/${queryId}/activity`)).logs;
+
 export const fetchQueryAttachments = (queryId) => api.get(`/queries/${queryId}/attachments`);
 export const fetchQueryAttachment = (queryId, attachmentId) =>
   api.get(`/queries/${queryId}/attachments/${attachmentId}`);

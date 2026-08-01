@@ -14,6 +14,7 @@ import { parseBody } from '../lib/validate.js';
 import { syncBulk } from '../lib/syncModule.js';
 import { can } from '../lib/permissions.js';
 import { notifyFromEvents } from '../lib/notify.js';
+import { listActivity } from '../lib/activityLog.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -73,6 +74,20 @@ router.put('/', asyncHandler(async (req, res) => {
   });
   res.json({ ok: true, queries: list, stats });
   notifyFromEvents(prisma, events).catch((err) => console.error('[notify] queries:', err));
+}));
+
+// GET /api/queries/:id/activity — this query's audit trail: every field-level
+// change (category/text edits, stage moves, reassignment), each stamped with
+// who did it and when — same pattern as the per-client log
+// (routes/clients.js), just scoped to whoever may VIEW this query (the raiser,
+// the recipient, or Admin) rather than open to anyone. Remarks/comments have
+// their own thread already (the `remarks` field) and are deliberately NOT
+// duplicated in here — this is the "what changed", not the conversation.
+router.get('/:id/activity', asyncHandler(async (req, res) => {
+  const q = await loadVisibleQuery(req, res, req.params.id);
+  if (!q) return;
+  const logs = await listActivity(prisma, { moduleName: 'queries', recordId: q.id });
+  res.json({ logs });
 }));
 
 // ---------------------------------------------------------------------------

@@ -4,13 +4,14 @@
 // Approvals" section and can approve or reject.
 import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, Plus, X, CheckCircle2, XCircle, RefreshCw, Pencil } from 'lucide-react';
-import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, Field } from './UI';
+import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
 import { teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
 import { canCreateLeave, canEditLeave, canRespondToLeave } from '../utils/permissions';
 import {
   loadLeave, applyLeave, editLeave, respondToLeave,
   LEAVE_STATUS_THEME, fmtLeaveRange, fmtLeaveStamp,
+  LEAVE_TYPES, HALF_DAY_SLOTS, fmtLeaveType,
 } from '../utils/leave';
 
 export default function LeaveView() {
@@ -139,6 +140,7 @@ function LeaveRow({ leave, showRequester, onEdit, onRespond }) {
               {leave.status}
             </span>
           </div>
+          <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1.5">{fmtLeaveType(leave)}</p>
           {showRequester && (
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Requested by <strong className="text-slate-700 dark:text-slate-300">{teamName(leave.createdBy) || '—'}</strong></p>
           )}
@@ -171,21 +173,40 @@ function LeaveRow({ leave, showRequester, onEdit, onRespond }) {
 function LeaveFormModal({ initial, onClose, onSaved }) {
   const isEdit = !!initial;
   const isReapply = isEdit && initial.status === 'Rejected';
+  const [leaveType, setLeaveType] = useState(initial?.leaveType || 'Full Day');
   const [fromDate, setFromDate] = useState(initial?.fromDate || '');
   const [toDate, setToDate] = useState(initial?.toDate || '');
+  const [halfDaySlot, setHalfDaySlot] = useState(initial?.halfDaySlot || '');
+  const [timeValue, setTimeValue] = useState(initial?.timeValue || '');
   const [reason, setReason] = useState(initial?.reason || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const canSave = fromDate && toDate && reason.trim() && !saving;
+  // Half Day/Early Leave/Late Entry are single-day — switching to one of them
+  // collapses "To" back onto "From" so the date fields shown always match
+  // what's actually being saved (the server does this too, defense in depth).
+  const changeType = (t) => {
+    setLeaveType(t);
+    if (t !== 'Full Day') setToDate(fromDate);
+  };
+  const changeFromDate = (d) => {
+    setFromDate(d);
+    if (leaveType !== 'Full Day') setToDate(d);
+  };
+
+  const needsHalfSlot = leaveType === 'Half Day';
+  const needsTime = leaveType === 'Early Leave' || leaveType === 'Late Entry';
+  const canSave = fromDate && toDate && reason.trim() && !saving
+    && (!needsHalfSlot || halfDaySlot) && (!needsTime || timeValue);
 
   const handleSubmit = async () => {
     if (!canSave) return;
     setSaving(true);
     setError('');
+    const payload = { fromDate, toDate, leaveType, halfDaySlot: needsHalfSlot ? halfDaySlot : null, timeValue: needsTime ? timeValue : null, reason: reason.trim() };
     try {
-      if (isEdit) await editLeave(initial.id, { fromDate, toDate, reason: reason.trim() });
-      else await applyLeave({ fromDate, toDate, reason: reason.trim() });
+      if (isEdit) await editLeave(initial.id, payload);
+      else await applyLeave(payload);
       onSaved();
     } catch (err) {
       setError(err?.message || 'Could not save the leave request.');
@@ -212,14 +233,42 @@ function LeaveFormModal({ initial, onClose, onSaved }) {
               This request was rejected{initial.responseMessage ? `: "${initial.responseMessage}"` : '.'} Update the details below to resubmit it — it will go back to Admin / Internal Manager as a new Pending request.
             </p>
           )}
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="From *">
-              <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className={inputCls} />
+          <Field label="Leave Type *">
+            <CoolSelect value={leaveType} onChange={(e) => changeType(e.target.value)} className={selectCls}>
+              {LEAVE_TYPES.map((t) => <option key={t} value={t}>{t === 'Full Day' ? 'Full Day Leave' : t === 'Half Day' ? 'Half Day Leave' : t}</option>)}
+            </CoolSelect>
+          </Field>
+
+          {leaveType === 'Full Day' ? (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="From *">
+                <input type="date" value={fromDate} onChange={(e) => changeFromDate(e.target.value)} className={inputCls} />
+              </Field>
+              <Field label="To *">
+                <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className={inputCls} min={fromDate || undefined} />
+              </Field>
+            </div>
+          ) : (
+            <Field label="Date *">
+              <input type="date" value={fromDate} onChange={(e) => changeFromDate(e.target.value)} className={inputCls} />
             </Field>
-            <Field label="To *">
-              <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className={inputCls} min={fromDate || undefined} />
+          )}
+
+          {needsHalfSlot && (
+            <Field label="Which Half *">
+              <CoolSelect value={halfDaySlot} onChange={(e) => setHalfDaySlot(e.target.value)} className={selectCls}>
+                <option value="">Select…</option>
+                {Object.entries(HALF_DAY_SLOTS).map(([slot, range]) => <option key={slot} value={slot}>{slot} ({range})</option>)}
+              </CoolSelect>
             </Field>
-          </div>
+          )}
+
+          {needsTime && (
+            <Field label={leaveType === 'Early Leave' ? "What time will you leave? *" : 'What time will you arrive? *'}>
+              <input type="time" value={timeValue} onChange={(e) => setTimeValue(e.target.value)} className={inputCls} />
+            </Field>
+          )}
+
           <Field label="Reason *" error={error}>
             <textarea
               value={reason}
@@ -272,6 +321,7 @@ function LeaveRespondModal({ leave, onClose, onResponded }) {
         <div className="p-5 space-y-4">
           <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
             <p><strong className="text-slate-700 dark:text-slate-300">{teamName(leave.createdBy) || 'This user'}</strong> requested leave for <strong className="text-slate-700 dark:text-slate-300">{fmtLeaveRange(leave.fromDate, leave.toDate)}</strong>.</p>
+            <p className="font-semibold text-blue-600 dark:text-blue-400">{fmtLeaveType(leave)}</p>
           </div>
           <p className="text-sm text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 whitespace-pre-wrap break-words leading-relaxed">{leave.reason}</p>
 

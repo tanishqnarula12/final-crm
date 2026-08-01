@@ -1,16 +1,38 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, X, Search, Trash2, HelpCircle, MessageSquare, ArrowRight, Paperclip, Download, FileText, Image as ImageIcon, Film, Eye } from 'lucide-react';
+import { Plus, X, Search, Trash2, HelpCircle, MessageSquare, ArrowRight, Paperclip, Download, FileText, Image as ImageIcon, Film, Eye, ScrollText } from 'lucide-react';
 import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
 import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
 import { canCreateQuery, canEditQuery, canChangeQueryStage, isAdmin } from '../utils/permissions';
 import {
   loadQueries, saveQueries, QUERY_STAGES, QUERY_CATEGORIES, STAGE_THEME, fmtQueryStamp,
-  fetchQueryAttachments, fetchQueryAttachment, uploadQueryAttachment, deleteQueryAttachment,
+  fetchQueryAttachments, fetchQueryAttachment, uploadQueryAttachment, deleteQueryAttachment, fetchQueryActivity,
   MAX_ATTACHMENT_BYTES, ATTACHMENT_ACCEPT, humanFileSize, previewKind,
 } from '../utils/queries';
 import { uid } from '../utils/calc';
+
+// --- Activity log (audit trail) display helpers ------------------------
+// action -> human label. Mirrors what syncModule.js actually logs for
+// queries (see server/src/lib/syncModule.js): CREATE, UPDATE (category/text
+// edits — stage and assignedTo get their own more specific entries below),
+// STAGE_CHANGE, ASSIGN.
+const ACTIVITY_ACTION_LABEL = {
+  CREATE: 'Raised the query',
+  UPDATE: 'Edited the query',
+  STAGE_CHANGE: 'Changed the stage',
+  ASSIGN: 'Reassigned the query',
+  DELETE: 'Deleted the query',
+};
+const ACTIVITY_FIELD_LABEL = { category: 'Category', query: 'Query Text', stage: 'Stage', assignedTo: 'Raised To' };
+// assignedTo values are user ids (resolve to a name); everything else is
+// already a plain display string. Long free text is truncated so one entry
+// never blows out the log's height.
+const fmtActivityVal = (field, v) => {
+  if (v == null || v === '') return '—';
+  const s = field === 'assignedTo' ? (teamName(v) || v) : String(v);
+  return s.length > 80 ? `${s.slice(0, 80)}…` : s;
+};
 
 export default function QueriesView({ isViewer, activeQueryId, setActiveQueryId, onOpenQuery, queriesChangeCounter }) {
   const mayCreateQuery = !isViewer && canCreateQuery(getCurrentUser());
@@ -221,6 +243,22 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
     fetchQueryAttachments(initial.id)
       .then(({ attachments: list }) => { if (!cancelled) setAttachments(list || []); })
       .catch(() => { if (!cancelled) setAttError('Could not load attachments.'); });
+    return () => { cancelled = true; };
+  }, [isEdit, initial?.id]);
+
+  // --- Activity log — the audit trail (category/text edits, stage moves,
+  // reassignment), distinct from Remarks (the conversation thread above).
+  const [activity, setActivity] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isEdit || !initial?.id) return;
+    let cancelled = false;
+    setActivityLoading(true);
+    fetchQueryActivity(initial.id)
+      .then((logs) => { if (!cancelled) setActivity(logs || []); })
+      .catch(() => { /* the log is a nicety — a failed fetch shouldn't block the rest of the modal */ })
+      .finally(() => { if (!cancelled) setActivityLoading(false); });
     return () => { cancelled = true; };
   }, [isEdit, initial?.id]);
 
@@ -478,6 +516,48 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
                 </ol>
               ) : (
                 <p className="text-xs text-slate-400 dark:text-slate-500 italic">No remarks yet.</p>
+              )}
+            </div>
+          )}
+
+          {/* Activity log — the audit trail: every field-level change (who
+              edited the category/text, moved the stage, or reassigned it),
+              distinct from Remarks above (the conversation). */}
+          {isEdit && (
+            <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                <ScrollText size={14} /> Activity Log
+              </h4>
+              {activityLoading ? (
+                <p className="text-xs text-slate-400 dark:text-slate-500 italic animate-pulse">Loading activity…</p>
+              ) : activity.length > 0 ? (
+                <ol className="space-y-3 max-h-48 overflow-y-auto pl-3 pr-1">
+                  {activity.map((l) => {
+                    const changed = Object.keys(l.newValue || {});
+                    return (
+                      <li key={l.id} className="relative pl-5 border-l-2 border-slate-200 dark:border-slate-800">
+                        <span className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-600 ring-2 ring-white dark:ring-slate-900" />
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">
+                          {fmtQueryStamp(l.timestamp)}
+                          <span className="text-slate-600 dark:text-slate-300 font-semibold ml-1.5">• {l.performedByName}</span>
+                        </p>
+                        <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{ACTIVITY_ACTION_LABEL[l.action] || l.action}</p>
+                        {changed.length > 0 && (
+                          <ul className="mt-0.5 space-y-0.5">
+                            {changed.map((k) => (
+                              <li key={k} className="text-[11px] text-slate-500 dark:text-slate-400">
+                                <span className="font-semibold text-slate-600 dark:text-slate-300">{ACTIVITY_FIELD_LABEL[k] || k}:</span>{' '}
+                                {fmtActivityVal(k, l.oldValue?.[k])} <span className="text-slate-350 dark:text-slate-600">→</span> {fmtActivityVal(k, l.newValue?.[k])}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : (
+                <p className="text-xs text-slate-400 dark:text-slate-500 italic">No activity recorded yet.</p>
               )}
             </div>
           )}
