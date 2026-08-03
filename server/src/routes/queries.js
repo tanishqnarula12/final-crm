@@ -13,7 +13,6 @@ import { asyncHandler } from '../middleware/error.js';
 import { parseBody } from '../lib/validate.js';
 import { syncBulk } from '../lib/syncModule.js';
 import { can } from '../lib/permissions.js';
-import { requireRole } from '../middleware/auth.js';
 import { notifyFromEvents } from '../lib/notify.js';
 import { listActivity } from '../lib/activityLog.js';
 
@@ -54,37 +53,6 @@ router.get('/', asyncHandler(async (req, res) => {
   const rows = await prisma.query.findMany({ where: { deletedAt: null }, orderBy: { createdAt: 'desc' } });
   const visible = rows.filter((r) => can(req.user, 'queries', 'view', r));
   res.json({ queries: visible.map((r) => r.payload) });
-}));
-
-// TEMPORARY incident-recovery endpoints — remove after use.
-// A bad one-off test script PUT a queries array that omitted every existing
-// row while running as Admin, and syncBulk soft-deletes any row omitted when
-// the actor may delete — wiping every real query's deletedAt. Nothing was
-// hard-deleted (see the file header), so this inspects then restores exactly
-// the affected rows, leaving genuine zztest-prefixed rows deleted.
-router.get('/__recover/inspect', requireRole('ADMIN'), asyncHandler(async (req, res) => {
-  const rows = await prisma.query.findMany({ where: { deletedAt: { not: null } }, orderBy: { deletedAt: 'desc' } });
-  res.json({
-    count: rows.length,
-    rows: rows.map((r) => ({
-      id: r.id, deletedAt: r.deletedAt, category: r.category, stage: r.stage,
-      assignedTo: r.assignedTo, departmentOwner: r.departmentOwner,
-      query: String(r.payload?.query || '').slice(0, 80),
-    })),
-  });
-}));
-// ?from=&to= (ISO timestamps, inclusive) scope exactly which incident's rows
-// to restore — required, so a careless call can't blanket-restore every
-// historical soft-delete (including genuinely-intentional old test cleanup).
-router.post('/__recover/restore', requireRole('ADMIN'), asyncHandler(async (req, res) => {
-  const { from, to } = req.query;
-  if (!from || !to) return res.status(400).json({ error: 'from and to (ISO timestamps) are required.' });
-  const rows = await prisma.query.findMany({
-    where: { deletedAt: { not: null, gte: new Date(from), lte: new Date(to) } },
-  });
-  const toRestore = rows.filter((r) => !r.id.toLowerCase().startsWith('zztest'));
-  await prisma.$transaction(toRestore.map((r) => prisma.query.update({ where: { id: r.id }, data: { deletedAt: null } })));
-  res.json({ restored: toRestore.length, restoredIds: toRestore.map((r) => r.id), skippedTestIds: rows.length - toRestore.length });
 }));
 
 router.put('/', asyncHandler(async (req, res) => {
