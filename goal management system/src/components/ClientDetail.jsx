@@ -1,16 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  Download, Plus, Target, Trash2, Pencil, FileText, RefreshCw, CheckCircle2, Save, TrendingUp, IndianRupee,
-  Users, Briefcase, Shield, Heart, User
+  Download, Plus, Target, Trash2, Pencil, FileText, CheckCircle2, Save, TrendingUp, IndianRupee
 } from 'lucide-react';
-import { 
-  Avatar, Card, btnPrimary, btnSecondary, btnGhost, inputCls 
+import {
+  Avatar, Card, btnPrimary, btnSecondary, btnGhost, inputCls
 } from './UI';
 import {
-  calcGoal, fmtINR, fmtFull, fmtSip, goalIcon, goalEmoji, achievementColor, generateAssumptionsText, refreshAssumptionsText, monthLabel, goalCreatedLabel, needsKidName, fmtDate
+  calcGoal, fmtINR, fmtFull, fmtSip, goalEmoji, achievementColor, generateAssumptionsText, monthLabel, goalCreatedLabel, needsKidName
 } from '../utils/calc';
 import { exportClientPdf } from '../utils/pdf';
-import { teamName } from '../services/team';
 
 // Theme mapper for different categories of wealth goals (Minimal & Premium edition)
 const getGoalTheme = (name) => {
@@ -60,7 +58,6 @@ export default function ClientDetail({ client, totals, onAddGoal, onSelectGoal, 
   const containerRef = useRef(null);
   const [exporting, setExporting] = useState(false);
   const [includeProjection, setIncludeProjection] = useState(false);
-  const [subTab, setSubTab] = useState('goals'); // 'goals' or 'profile'
 
   const handleExport = async () => {
     if (exporting) return;
@@ -125,151 +122,119 @@ export default function ClientDetail({ client, totals, onAddGoal, onSelectGoal, 
         </div>
       </Card>
 
-      {/* Sub-Navigation Tabs */}
-      <div className="flex items-center gap-2 p-1 bg-slate-100/80 dark:bg-slate-950/40 rounded-xl max-w-md mt-2 shadow-inner border border-slate-200/20 dark:border-slate-800/40">
-        <button
-          type="button"
-          onClick={() => setSubTab('goals')}
-          className={`flex-1 py-2 px-3 text-xs font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
-            subTab === 'goals'
-              ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-white shadow-sm font-extrabold'
-              : 'text-slate-400 dark:text-slate-500 hover:text-slate-750'
-          }`}
-        >
-          Goals & Portfolio
-        </button>
-        <button
-          type="button"
-          onClick={() => setSubTab('profile')}
-          className={`flex-1 py-2 px-3 text-xs font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
-            subTab === 'profile'
-              ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-white shadow-sm font-extrabold'
-              : 'text-slate-400 dark:text-slate-500 hover:text-slate-750'
-          }`}
-        >
-          CRM & Profile Details
-        </button>
-      </div>
-
-      {subTab === 'goals' ? (
-        <div className="space-y-6 animate-fade-in">
-          {client.goals && client.goals.length > 0 && (
-            <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 rounded-[28px] space-y-6">
-              {/* SIP Summary Section */}
-              <div className="space-y-3">
-                <h4 className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-2.5 border-l-2 border-blue-500 dark:border-blue-400 leading-none">SIP Allocation Matrix</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <SummaryTile label="Current SIP Allocation" value={fmtSip(totals.totalCurrentSip) + '/mo'} icon={TrendingUp} accent="blue" />
-                  <SummaryTile label="Additional SIP Required" value={fmtSip(totals.totalAdditional) + '/mo'} icon={Plus} accent="indigo" />
-                  <SummaryTile label="Total Monthly SIP Needed" value={fmtSip(totals.totalCurrentSip + totals.totalAdditional) + '/mo'} icon={CheckCircle2} accent="emerald" />
-                </div>
+      <div className="space-y-6 animate-fade-in">
+        {client.goals && client.goals.length > 0 && (
+          <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 rounded-[28px] space-y-6">
+            {/* SIP Summary Section */}
+            <div className="space-y-3">
+              <h4 className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-2.5 border-l-2 border-blue-500 dark:border-blue-400 leading-none">SIP Allocation Matrix</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <SummaryTile label="Current SIP Allocation" value={fmtSip(totals.totalCurrentSip) + '/mo'} icon={TrendingUp} accent="blue" />
+                <SummaryTile label="Additional SIP Required" value={fmtSip(totals.totalAdditional) + '/mo'} icon={Plus} accent="indigo" />
+                <SummaryTile label="Total Monthly SIP Needed" value={fmtSip(totals.totalCurrentSip + totals.totalAdditional) + '/mo'} icon={CheckCircle2} accent="emerald" />
               </div>
+            </div>
 
-              {/* Lump-sum Summary Section */}
-              <div className="space-y-3">
-                <h4 className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-2.5 border-l-2 border-emerald-500 dark:border-emerald-400 leading-none">Lump-sum Equivalent</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <SummaryTile label="Lump-sum Equivalent Today" value={fmtFull(totals.totalLump)} icon={IndianRupee} accent="emerald" />
-                </div>
+            {/* Lump-sum Summary Section */}
+            <div className="space-y-3">
+              <h4 className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-2.5 border-l-2 border-emerald-500 dark:border-emerald-400 leading-none">Lump-sum Equivalent</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <SummaryTile label="Lump-sum Equivalent Today" value={fmtFull(totals.totalLump)} icon={IndianRupee} accent="emerald" />
               </div>
-            </Card>
-          )}
+            </div>
+          </Card>
+        )}
 
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Goals Summary ({client.goals ? client.goals.length : 0})</h3>
-          </div>
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Goals Summary ({client.goals ? client.goals.length : 0})</h3>
+        </div>
 
-          {!client.goals || client.goals.length === 0 ? (
-            <Card className="p-12 text-center border-dashed border-2 border-slate-200 dark:border-slate-800 rounded-3xl">
-              <Target className="mx-auto text-slate-400 dark:text-slate-600 mb-4" size={36} />
-              <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-4">No goals configured yet for this client portfolio</p>
-              <button onClick={onAddGoal} className={btnSecondary}>
-                <Plus size={14} /> Create the first goal
-              </button>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {[...client.goals].sort((a, b) =>
-                (a.targetYear * 12 + (a.targetMonth || 1)) - (b.targetYear * 12 + (b.targetMonth || 1))
-              ).map(g => {
-                const c = calcGoal(g);
-                const theme = getGoalTheme(g.name);
-                return (
-                  <div 
-                    key={g.id} 
-                    onClick={() => onSelectGoal(g.id)}
-                    className={`p-6 ${theme.cardBg} rounded-[28px] border ${theme.border} shadow-md shadow-slate-100/80 dark:shadow-none transition-all duration-300 hover:scale-[1.015] hover:-translate-y-1.5 active:scale-[0.99] group cursor-pointer hover:shadow-xl hover:shadow-slate-200/40 dark:hover:shadow-none space-y-4`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        <div className="w-12 h-12 flex items-center justify-center shrink-0 text-3xl select-none">
-                          {goalEmoji(g.name)}
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className={`font-bold ${theme.primaryText} truncate text-base ${theme.titleHover} transition-colors tracking-tight`}>
-                            {g.name}
-                          </h4>
-                          {needsKidName(g.name) && g.kidName && (
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mt-0.5 truncate">
-                              Kid: {g.kidName}
-                            </p>
-                          )}
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-bold uppercase tracking-wider text-[10px]">
-                            Target {monthLabel(g.targetMonth || 1, g.targetYear)}
-                            {c.years > 0 && ` · ${c.years >= 1 ? `${c.years.toFixed(1)} yrs` : `${c.months} mo`}`}
-                          </p>
-                          <p className="text-[10px] font-semibold tracking-wider text-slate-400 dark:text-slate-500 mt-0.5">
-                            Created {goalCreatedLabel(g)}
-                          </p>
-                        </div>
+        {!client.goals || client.goals.length === 0 ? (
+          <Card className="p-12 text-center border-dashed border-2 border-slate-200 dark:border-slate-800 rounded-3xl">
+            <Target className="mx-auto text-slate-400 dark:text-slate-600 mb-4" size={36} />
+            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-4">No goals configured yet for this client portfolio</p>
+            <button onClick={onAddGoal} className={btnSecondary}>
+              <Plus size={14} /> Create the first goal
+            </button>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {[...client.goals].sort((a, b) =>
+              (a.targetYear * 12 + (a.targetMonth || 1)) - (b.targetYear * 12 + (b.targetMonth || 1))
+            ).map(g => {
+              const c = calcGoal(g);
+              const theme = getGoalTheme(g.name);
+              return (
+                <div 
+                  key={g.id} 
+                  onClick={() => onSelectGoal(g.id)}
+                  className={`p-6 ${theme.cardBg} rounded-[28px] border ${theme.border} shadow-md shadow-slate-100/80 dark:shadow-none transition-all duration-300 hover:scale-[1.015] hover:-translate-y-1.5 active:scale-[0.99] group cursor-pointer hover:shadow-xl hover:shadow-slate-200/40 dark:hover:shadow-none space-y-4`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="w-12 h-12 flex items-center justify-center shrink-0 text-3xl select-none">
+                        {goalEmoji(g.name)}
                       </div>
-                      {!isViewer && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onDeleteGoal(g.id); }}
-                          className="text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 p-2 rounded-xl hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100 cursor-pointer active:scale-95"
-                          title="Delete goal"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-
-                    <div>
-                      <div className="flex items-baseline justify-between mb-1.5">
-                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Achievement Progress</span>
-                        <span className="text-xs font-black text-slate-900 dark:text-white tabular-nums">{c.achievementPct.toFixed(1)}%</span>
-                      </div>
-                      <div className="h-3.5 bg-slate-200/50 dark:bg-slate-950 rounded-full overflow-hidden border border-slate-200/20 dark:border-slate-900 shadow-inner">
-                        <div className={`h-full rounded-full transition-all duration-500 ${achievementColor(c.achievementPct)}`} style={{ width: `${Math.min(100, c.achievementPct)}%` }} />
+                      <div className="min-w-0">
+                        <h4 className={`font-bold ${theme.primaryText} truncate text-base ${theme.titleHover} transition-colors tracking-tight`}>
+                          {g.name}
+                        </h4>
+                        {needsKidName(g.name) && g.kidName && (
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mt-0.5 truncate">
+                            Kid: {g.kidName}
+                          </p>
+                        )}
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-bold uppercase tracking-wider text-[10px]">
+                          Target {monthLabel(g.targetMonth || 1, g.targetYear)}
+                          {c.years > 0 && ` · ${c.years >= 1 ? `${c.years.toFixed(1)} yrs` : `${c.months} mo`}`}
+                        </p>
+                        <p className="text-[10px] font-semibold tracking-wider text-slate-400 dark:text-slate-500 mt-0.5">
+                          Created {goalCreatedLabel(g)}
+                        </p>
                       </div>
                     </div>
+                    {!isViewer && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onDeleteGoal(g.id); }}
+                        className="text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 p-2 rounded-xl hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100 cursor-pointer active:scale-95"
+                        title="Delete goal"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
 
-                    <div className="grid grid-cols-2 gap-2.5 border-t border-slate-200/20 dark:border-slate-800/50 pt-4">
-                      <KV label="Goal cost (today)" value={fmtINR(g.amount)} />
-                      <KV label="Future value" value={fmtINR(c.futureValue)} />
-                      <KV label="Current corpus" value={fmtINR(g.currentInv)} />
-                      <KV label="Current SIP" value={fmtSip(g.currentSip) + '/mo'} />
-                      <KV label="Total SIP needed" value={fmtSip(c.sipRequired) + '/mo'} highlight />
-                      <KV label="Additional SIP" value={fmtSip(c.additionalSip) + '/mo'} highlight negative={c.additionalSip < 0} />
-                      <div className="col-span-2">
-                        <KV label="Lump-sum equivalent required today" value={fmtINR(c.lumpSumRequired)} isLump />
-                      </div>
+                  <div>
+                    <div className="flex items-baseline justify-between mb-1.5">
+                      <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Achievement Progress</span>
+                      <span className="text-xs font-black text-slate-900 dark:text-white tabular-nums">{c.achievementPct.toFixed(1)}%</span>
+                    </div>
+                    <div className="h-3.5 bg-slate-200/50 dark:bg-slate-950 rounded-full overflow-hidden border border-slate-200/20 dark:border-slate-900 shadow-inner">
+                      <div className={`h-full rounded-full transition-all duration-500 ${achievementColor(c.achievementPct)}`} style={{ width: `${Math.min(100, c.achievementPct)}%` }} />
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
 
-          <div className="mt-6">
-            <AssumptionsSection client={client} onSave={onSaveAssumptions} isViewer={isViewer} />
+                  <div className="grid grid-cols-2 gap-2.5 border-t border-slate-200/20 dark:border-slate-800/50 pt-4">
+                    <KV label="Goal cost (today)" value={fmtINR(g.amount)} />
+                    <KV label="Future value" value={fmtINR(c.futureValue)} />
+                    <KV label="Current corpus" value={fmtINR(c.todayCorpus)} />
+                    <KV label="Current SIP" value={fmtSip(c.todayEffectiveSip) + '/mo'} />
+                    <KV label="Total SIP needed" value={fmtSip(c.sipRequired) + '/mo'} highlight />
+                    <KV label="Additional SIP" value={fmtSip(c.additionalSip) + '/mo'} highlight negative={c.additionalSip < 0} />
+                    <div className="col-span-2">
+                      <KV label="Lump-sum equivalent required today" value={fmtINR(c.lumpSumRequired)} isLump />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
+        )}
+
+        <div className="mt-6">
+          <AssumptionsSection client={client} onSave={onSaveAssumptions} isViewer={isViewer} />
         </div>
-      ) : (
-        <div className="mt-4">
-          <ClientDetailsCard client={client} />
-        </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -493,205 +458,3 @@ function KV({ label, value, pill, highlight, isLump, negative }) {
     </div>
   );
 }
-
-function ClientDetailsCard({ client }) {
-  const details = client.clientDetails || {};
-  const {
-    mobile = '',
-    email = '',
-    clientType = '',
-    dob = '',
-    address1 = '',
-    address2 = '',
-    address3 = '',
-    city = '',
-    state = '',
-    pinCode = '',
-    groupLeaderName = '',
-    owner = '',
-    relationshipManager = '',
-    portfolioManager = '',
-    serviceManager = '',
-    insuranceManager = '',
-    operationManager = '',
-    internalManager = '',
-    familyDetails = [],
-    mutualFunds = 'No',
-    insuranceTerm = 'No',
-    insuranceMedical = 'No',
-    insuranceAccidental = 'No'
-  } = details;
-
-  const hasFamily = familyDetails && familyDetails.length > 0;
-
-  const formattedAddress = [
-    address1,
-    address2,
-    address3,
-    [city, state, pinCode].filter(Boolean).join(', ')
-  ].filter(Boolean).join('\n');
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
-      {/* Box 1: Personal & Contact details */}
-      <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-md rounded-[20px] space-y-5">
-        <div className="flex items-center gap-2.5 pb-3.5 border-b border-slate-100 dark:border-slate-800/60">
-          <div className="w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 border border-slate-200/50 dark:border-slate-805 flex items-center justify-center">
-            <User size={15} />
-          </div>
-          <div>
-            <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Contact Profile</h4>
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Personal contact info</p>
-          </div>
-        </div>
-
-        <div className="space-y-4 text-xs">
-          <ProfileField icon={Phone} label="Mobile" value={mobile} />
-          <ProfileField icon={Mail} label="Email" value={email} />
-          <ProfileField icon={User} label="Client Type" value={clientType} />
-          {dob && <ProfileField icon={User} label="Date of Birth" value={fmtDate(dob)} />}
-          <ProfileField icon={MapPin} label="Address" value={formattedAddress} isMultiline />
-        </div>
-      </Card>
-
-      {/* Box 2: Internal Assignment Details */}
-      <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-md rounded-[20px] space-y-5">
-        <div className="flex items-center gap-2.5 pb-3.5 border-b border-slate-100 dark:border-slate-800/60">
-          <div className="w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 border border-slate-200/50 dark:border-slate-805 flex items-center justify-center">
-            <Users size={15} />
-          </div>
-          <div>
-            <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Coverage Team</h4>
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Internal managing staff</p>
-          </div>
-        </div>
-
-        <div className="space-y-3.5">
-          <RoleField label="Group Leader" value={groupLeaderName} />
-          <RoleField label="Account Owner" value={teamName(owner)} />
-          <RoleField label="Relationship Manager" value={teamName(relationshipManager)} />
-          <RoleField label="Portfolio Manager" value={teamName(portfolioManager)} />
-          <RoleField label="Service Manager" value={teamName(serviceManager)} />
-          <RoleField label="Insurance Manager" value={teamName(insuranceManager)} />
-          <RoleField label="Operation Manager" value={teamName(operationManager)} />
-          <RoleField label="Internal Manager" value={teamName(internalManager)} />
-        </div>
-      </Card>
-
-      {/* Box 3: Family & Holdings Details */}
-      <div className="space-y-6">
-        {/* Family Details Card */}
-        <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-md rounded-[20px] space-y-4">
-          <div className="flex items-center gap-2.5 pb-3.5 border-b border-slate-100 dark:border-slate-800/60">
-            <div className="w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 border border-slate-200/50 dark:border-slate-805 flex items-center justify-center">
-              <Heart size={15} />
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Family Members</h4>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Co-applicants & relations</p>
-            </div>
-          </div>
-
-          <div className="divide-y divide-slate-100 dark:divide-slate-800/60 max-h-40 overflow-y-auto pr-1">
-            {!hasFamily ? (
-              <div className="py-4 text-center text-xs text-slate-400 dark:text-slate-500 italic">No family members configured</div>
-            ) : (
-              familyDetails.map((f, i) => (
-                <div key={i} className="py-2.5 flex items-center justify-between text-xs gap-2">
-                  <div className="flex flex-col min-w-0">
-                    <span className="font-bold text-slate-800 dark:text-slate-200">{f.name}</span>
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500 font-sans mt-0.5 space-x-2">
-                      {f.dob && <span>DOB: {fmtDate(f.dob)}</span>}
-                      {f.mobile && <span>📞 {f.mobile}</span>}
-                      {f.email && <span className="lowercase">✉ {f.email}</span>}
-                    </span>
-                  </div>
-                  <span className="text-[9px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded border border-slate-200/20 shrink-0">{f.relation}</span>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
-
-        {/* Business holdings status Card */}
-        <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-md rounded-[20px] space-y-4">
-          <div className="flex items-center gap-2.5 pb-3.5 border-b border-slate-100 dark:border-slate-800/60">
-            <div className="w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 border border-slate-200/50 dark:border-slate-805 flex items-center justify-center">
-              <Briefcase size={15} />
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Active Holdings</h4>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Fintness business relations</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <HoldingPill label="Mutual Funds" active={mutualFunds === 'Yes'} />
-            <HoldingPill label="Term Insurance" active={insuranceTerm === 'Yes'} />
-            <HoldingPill label="Medical Insurance" active={insuranceMedical === 'Yes'} />
-            <HoldingPill label="Accidental Insurance" active={insuranceAccidental === 'Yes'} />
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function ProfileField({ icon: Icon, label, value, isMultiline }) {
-  return (
-    <div className="flex items-start gap-3">
-      <div className="w-7 h-7 rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-400 dark:text-slate-500 border border-slate-200/20 dark:border-slate-800/40 flex items-center justify-center shrink-0">
-        <Icon size={12} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <span className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{label}</span>
-        {isMultiline ? (
-          <span className="block font-semibold text-slate-700 dark:text-slate-200 whitespace-pre-line leading-relaxed mt-0.5">
-            {value || <span className="text-slate-400 dark:text-slate-650 italic font-normal">Not configured</span>}
-          </span>
-        ) : (
-          <span className="block font-semibold text-slate-700 dark:text-slate-200 mt-0.5 truncate">
-            {value || <span className="text-slate-400 dark:text-slate-655 italic font-normal">Not configured</span>}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function RoleField({ label, value }) {
-  return (
-    <div className="flex items-center justify-between text-xs border-b border-slate-100/50 dark:border-slate-800/20 pb-2">
-      <span className="text-slate-400 dark:text-slate-500 font-medium">{label}</span>
-      <span className="font-bold text-slate-800 dark:text-slate-200">
-        {value || <span className="text-slate-400 dark:text-slate-600 italic font-normal">Unassigned</span>}
-      </span>
-    </div>
-  );
-}
-
-function HoldingPill({ label, active }) {
-  return (
-    <div className={`p-2.5 rounded-xl border text-center transition-all duration-300 ${
-      active 
-        ? 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-850 text-slate-800 dark:text-slate-200 shadow-sm' 
-        : 'bg-slate-50/40 dark:bg-slate-950/10 border-slate-100 dark:border-slate-850/40 text-slate-400 dark:text-slate-550'
-    }`}>
-      <span className="block text-[10px] font-bold truncate">{label}</span>
-      <span className="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-wider mt-1.5">
-        {active ? (
-          <>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block shrink-0" />
-            <span className="text-emerald-600 dark:text-emerald-450">Active</span>
-          </>
-        ) : (
-          <>
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block shrink-0" />
-            <span className="text-rose-600 dark:text-rose-450">Inactive</span>
-          </>
-        )}
-      </span>
-    </div>
-  );
-}
-

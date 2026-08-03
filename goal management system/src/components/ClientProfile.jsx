@@ -2306,7 +2306,7 @@ function PortfolioDoc({ goals, assetAllocation, client }) {
                     </td>
                     <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400">{g.targetYear}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{fmtINR(c.futureValue)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{fmtSip(g.currentSip)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{fmtSip(c.todayEffectiveSip)}</td>
                     <td className="px-3 py-2.5 text-center font-bold text-emerald-600 dark:text-emerald-400">
                       {c.achievementPct.toFixed(1)}%
                     </td>

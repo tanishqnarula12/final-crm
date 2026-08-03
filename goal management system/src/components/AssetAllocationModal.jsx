@@ -128,6 +128,7 @@ export default function AssetAllocationModal({ clientName, initial, onClose, onS
                               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-600 text-sm pointer-events-none">₹</span>
                               <input
                                 type="number" min="0" step="any"
+                                onWheel={(e) => e.target.blur()}
                                 value={values[section.id][it.label] ?? ''}
                                 onChange={(e) => setVal(section.id, it.label, e.target.value)}
                                 placeholder="0"
@@ -152,6 +153,7 @@ export default function AssetAllocationModal({ clientName, initial, onClose, onS
                               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-600 text-sm pointer-events-none">₹</span>
                               <input
                                 type="number" min="0" step="any"
+                                onWheel={(e) => e.target.blur()}
                                 value={row.amount}
                                 onChange={(e) => updCustom(section.id, row.id, 'amount', e.target.value)}
                                 placeholder="0"
@@ -189,6 +191,7 @@ export default function AssetAllocationModal({ clientName, initial, onClose, onS
               type="number"
               min="0"
               step="0.01"
+              onWheel={(e) => e.target.blur()}
               value={peRatio}
               onChange={(e) => setPeRatio(e.target.value)}
               placeholder="e.g. 22.5"

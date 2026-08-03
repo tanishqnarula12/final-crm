@@ -417,7 +417,7 @@ function CreateLog({ contributions, onSave, isViewer }) {
         <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
           {type === 'sip' ? 'SIP Change (₹/mo)' : 'Valuation Amount (₹)'}
         </label>
-        <input type="number" step="any" value={amount} placeholder={type === 'sip' ? 'e.g. 5000 or -2000' : 'e.g. 100000 or -50000'} onChange={(e) => setAmount(e.target.value)} className={inputCls} />
+        <input type="number" step="any" onWheel={(e) => e.target.blur()} value={amount} placeholder={type === 'sip' ? 'e.g. 5000 or -2000' : 'e.g. 100000 or -50000'} onChange={(e) => setAmount(e.target.value)} className={inputCls} />
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <button onClick={save} className={btnPrimary}><Check size={14} /> Save</button>

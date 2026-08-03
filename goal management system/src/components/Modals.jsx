@@ -957,7 +957,7 @@ export function GoalFormModal({ initial, assetAllocation, clientGoals, onClose, 
           )}
         </Field>
         <Field label="Target cost today (₹)">
-          <input type="number" value={nv(form.amount)} onChange={(e) => upd('amount', parseNum(e, 0))} className={inputCls} placeholder="₹ e.g. 50,00,000" />
+          <input type="number" onWheel={(e) => e.target.blur()} value={nv(form.amount)} onChange={(e) => upd('amount', parseNum(e, 0))} className={inputCls} placeholder="₹ e.g. 50,00,000" />
         </Field>
 
         <Field label="Goal Created Date" hint="Backdate this if the goal already existed before using this app">
@@ -973,7 +973,7 @@ export function GoalFormModal({ initial, assetAllocation, clientGoals, onClose, 
           </div>
         </Field>
         <Field label="Target Year">
-          <input type="number" value={nv(form.targetYear)} onChange={(e) => upd('targetYear', parseNum(e, 0))} className={inputCls} />
+          <input type="number" onWheel={(e) => e.target.blur()} value={nv(form.targetYear)} onChange={(e) => upd('targetYear', parseNum(e, 0))} className={inputCls} />
         </Field>
 
         <Field label="Future cost (inflation-adjusted)">
@@ -986,20 +986,20 @@ export function GoalFormModal({ initial, assetAllocation, clientGoals, onClose, 
         </Field>
 
         <Field label="Assumed Inflation Rate (%)">
-          <input type="number" step="0.1" value={nv(form.inflation)} onChange={(e) => upd('inflation', parseNum(e))} className={inputCls} />
+          <input type="number" onWheel={(e) => e.target.blur()} step="0.1" value={nv(form.inflation)} onChange={(e) => upd('inflation', parseNum(e))} className={inputCls} />
         </Field>
         <Field label="Expected Portfolio Return (%)">
-          <input type="number" step="0.1" value={nv(form.expectedReturn)} onChange={(e) => upd('expectedReturn', parseNum(e))} className={inputCls} />
+          <input type="number" onWheel={(e) => e.target.blur()} step="0.1" value={nv(form.expectedReturn)} onChange={(e) => upd('expectedReturn', parseNum(e))} className={inputCls} />
         </Field>
         <Field label="SIP Annual Step-Up (%)">
-          <input type="number" step="0.1" value={nv(form.sipIncRate)} onChange={(e) => upd('sipIncRate', parseNum(e))} className={inputCls} />
+          <input type="number" onWheel={(e) => e.target.blur()} step="0.1" value={nv(form.sipIncRate)} onChange={(e) => upd('sipIncRate', parseNum(e))} className={inputCls} />
         </Field>
         <Field label="Existing Accumulated Corpus (₹)" hint={mappedTotal > 0 ? `Typed + ${fmtINR(mappedTotal)} mapped = ${fmtINR((Number(form.currentInv) || 0) + mappedTotal)} effective` : null}>
-          <input type="number" value={nv(form.currentInv)} onChange={(e) => upd('currentInv', parseNum(e, 0))} className={inputCls} placeholder="₹ e.g. 5,00,000" />
+          <input type="number" onWheel={(e) => e.target.blur()} value={nv(form.currentInv)} onChange={(e) => upd('currentInv', parseNum(e, 0))} className={inputCls} placeholder="₹ e.g. 5,00,000" />
         </Field>
         <div className="md:col-span-2">
           <Field label="Current Monthly SIP Allocation (₹)">
-            <input type="number" value={nv(form.currentSip)} onChange={(e) => upd('currentSip', parseNum(e, 0))} className={inputCls} placeholder="₹ e.g. 25,000" />
+            <input type="number" onWheel={(e) => e.target.blur()} value={nv(form.currentSip)} onChange={(e) => upd('currentSip', parseNum(e, 0))} className={inputCls} placeholder="₹ e.g. 25,000" />
           </Field>
         </div>
 
@@ -1047,7 +1047,7 @@ export function GoalFormModal({ initial, assetAllocation, clientGoals, onClose, 
                           <div className="relative w-32 sm:w-36 shrink-0">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-600 text-sm pointer-events-none">₹</span>
                             <input
-                              type="number" min="0" max={available} step="any"
+                              type="number" onWheel={(e) => e.target.blur()} min="0" max={available} step="any"
                               value={mapAmt[a.label] ?? ''}
                               onChange={(e) => setMap(a.label, e.target.value)}
                               placeholder="0"

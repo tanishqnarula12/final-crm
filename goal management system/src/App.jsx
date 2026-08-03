@@ -892,7 +892,7 @@ export default function App() {
       const c = calcGoal(g);
       totalAdditional += c.additionalSip;
       totalLump += c.lumpSumRequired;
-      totalCurrentSip += (Number(g.currentSip) || 0);
+      totalCurrentSip += c.todayEffectiveSip;
     });
     // Total SIP = what's already going in + what still needs to be added.
     // `additionalSip` is never negative: an over-funded goal contributes 0
