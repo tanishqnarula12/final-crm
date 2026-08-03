@@ -25,6 +25,8 @@ export const goalCreateSchema = z.object({
   kidName: z.string().optional().nullable(),
   history: z.array(z.any()).optional().default([]),
   actuals: z.array(z.any()).optional().default([]),
+  contributions: z.array(z.any()).optional().default([]),
+  mappedAssets: z.array(z.any()).optional().default([]),
   createdAt: z.coerce.date().optional(),
 });
 export const goalUpdateSchema = goalCreateSchema.omit({ id: true }).partial();

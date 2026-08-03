@@ -1,4 +1,4 @@
-import { buildProjection, MONTH_NAMES } from './calc';
+import { buildProjection } from './calc';
 import logoUrl from '../assets/logo.png';
 
 function escHtml(str) {
@@ -25,10 +25,8 @@ function buildGoalProjectionHTML(g) {
   const rows = projection.map((r, ri) => `
     <tr style="background:${ri % 2 === 0 ? '#ffffff' : '#f8fafc'}">
       <td style="padding:4px 8px;text-align:center;font-weight:bold;font-size:8pt;border-bottom:1px solid #f1f5f9">${
-        r.isPartial
-          ? `${r.year} (${MONTH_NAMES[r.firstMonth - 1]}${r.firstMonth === r.lastMonth ? '' : '–' + MONTH_NAMES[r.lastMonth - 1]})`
-          : String(r.year)
-      }</td>
+        r.label
+      }${r.isPartial ? ' <span style="font-weight:normal;color:#64748b">(part)</span>' : ''}</td>
       <td style="padding:4px 8px;text-align:right;font-size:8pt;border-bottom:1px solid #f1f5f9">${pdfINR(r.openingBal)}</td>
       <td style="padding:4px 8px;text-align:right;font-size:8pt;border-bottom:1px solid #f1f5f9">${pdfSip(r.monthlySip)}</td>
       <td style="padding:4px 8px;text-align:right;font-size:8pt;border-bottom:1px solid #f1f5f9">${pdfINR(r.yearContribution)}</td>
@@ -41,7 +39,7 @@ function buildGoalProjectionHTML(g) {
     <table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif">
       <thead>
         <tr style="background:#1e3a8a;color:white">
-          <th style="padding:5px 8px;text-align:center;font-size:7.5pt;font-weight:bold">Year</th>
+          <th style="padding:5px 8px;text-align:center;font-size:7.5pt;font-weight:bold">Period</th>
           <th style="padding:5px 8px;text-align:right;font-size:7.5pt;font-weight:bold">Opening</th>
           <th style="padding:5px 8px;text-align:right;font-size:7.5pt;font-weight:bold">Monthly SIP</th>
           <th style="padding:5px 8px;text-align:right;font-size:7.5pt;font-weight:bold">Contribution</th>

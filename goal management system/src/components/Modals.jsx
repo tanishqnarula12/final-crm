@@ -1,15 +1,21 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X, CheckCircle2, Upload, AlertCircle, FileSpreadsheet, ChevronDown, ChevronUp, UserCog, Download } from 'lucide-react';
+import { X, CheckCircle2, Upload, AlertCircle, FileSpreadsheet, ChevronDown, ChevronUp, UserCog, Download, Link2, Wallet } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Field, inputCls, selectCls, btnPrimary, btnSecondary, btnGhost, CoolSelect } from './UI';
 import {
   calcGoal, monthsBetween, fmtFull, fmtINR, fmtSip, nv, parseNum, GOAL_PRESETS, CURRENT_MONTH, CURRENT_YEAR, MONTH_NAMES, needsKidName,
-  DOB_MIN, dobMax, isValidDob, parseFlexibleDate,
+  DOB_MIN, dobMax, isValidDob, parseFlexibleDate, goalContributions,
 } from '../utils/calc';
+import { filledItems } from '../utils/assets';
 import { RELATIONS } from '../utils/team';
 import { loadTeam, resolveTeamMemberId } from '../services/team';
 import { CountrySelect, StateSelect, CitySelect } from './LocationPicker';
 import { isAdminRole } from '../utils/auth';
+
+const parseAssetAmt = (s) => {
+  const n = Number(String(s ?? '').replace(/,/g, ''));
+  return isFinite(n) && n > 0 ? n : 0;
+};
 
 // Profession options for personal details
 const PROFESSIONS = [
@@ -775,7 +781,7 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
   );
 }
 
-export function GoalFormModal({ initial, onClose, onSave }) {
+export function GoalFormModal({ initial, assetAllocation, clientGoals, onClose, onSave }) {
   const isEdit = !!initial;
   const initialIsPreset = initial ? GOAL_PRESETS.includes(initial.name) && initial.name !== 'Others' : true;
   const [nameChoice, setNameChoice] = useState(initial ? (initialIsPreset ? initial.name : 'Others') : '');
@@ -831,7 +837,59 @@ export function GoalFormModal({ initial, onClose, onSave }) {
   };
   const effectiveName = nameChoice === 'Others' ? customName.trim() : nameChoice;
   const showKidName = needsKidName(effectiveName);
-  const previewCalc = calcGoal({ ...form, name: effectiveName });
+
+  // --- Map Asset ---------------------------------------------------------
+  // The client's existing asset holdings (financial + physical, excludes
+  // liabilities) available to seed this goal's starting corpus. Mapped
+  // amounts are stored separately from currentInv (goal.mappedAssets) — not
+  // folded in — so we can show, per asset, how much is already committed to
+  // this client's OTHER goals and how much is still available.
+  const assetHoldings = useMemo(() => {
+    if (!assetAllocation) return [];
+    return ['financial', 'physical'].flatMap(sid =>
+      filledItems(assetAllocation, sid).map(it => ({ ...it, sectionId: sid }))
+    );
+  }, [assetAllocation]);
+  const hasAssets = assetHoldings.length > 0;
+
+  // How much of each asset is already mapped to this client's OTHER goals
+  // (excludes the goal currently being edited, so re-editing doesn't
+  // double-subtract its own existing mapping).
+  const usageByLabel = useMemo(() => {
+    const map = {};
+    (clientGoals || []).forEach(g => {
+      if (initial && g.id === initial.id) return;
+      (Array.isArray(g.mappedAssets) ? g.mappedAssets : []).forEach(a => {
+        const amt = Number(a.amount) || 0;
+        if (amt <= 0) return;
+        if (!map[a.label]) map[a.label] = [];
+        map[a.label].push({ goalName: g.name, amount: amt });
+      });
+    });
+    return map;
+  }, [clientGoals, initial]);
+
+  const [mapOpen, setMapOpen] = useState(() => Array.isArray(initial?.mappedAssets) && initial.mappedAssets.length > 0);
+  const [mapAmt, setMapAmt] = useState(() => {
+    const m = {};
+    (initial?.mappedAssets || []).forEach(a => { m[a.label] = String(a.amount); });
+    return m;
+  }); // { [assetLabel]: amountString }
+  const setMap = (label, v) => setMapAmt(prev => ({ ...prev, [label]: v }));
+  const mappedTotal = assetHoldings.reduce((s, a) => s + (mapOpen ? parseAssetAmt(mapAmt[a.label]) : 0), 0);
+
+  const mappedAssetsPayload = mapOpen
+    ? assetHoldings
+        .map(a => ({ id: `${a.sectionId}::${a.label}`, sectionId: a.sectionId, label: a.label, amount: parseAssetAmt(mapAmt[a.label]) }))
+        .filter(x => x.amount > 0)
+    : [];
+
+  // `form` only tracks the fields this modal actually edits — it never carries
+  // Create Log entries (those are only ever edited on the GoalDetail page's
+  // Create Log section). Without this, the live preview here would silently
+  // ignore every logged SIP change / portfolio valuation and show numbers
+  // that don't match the goal's real, saved calculation.
+  const previewCalc = calcGoal({ ...form, name: effectiveName, mappedAssets: mappedAssetsPayload, contributions: goalContributions(initial || {}) });
   const targetBeforeStart = monthsBetween(form.createdMonth, form.createdYear, form.targetMonth, form.targetYear) <= 0;
 
   const handleSave = () => {
@@ -848,6 +906,7 @@ export function GoalFormModal({ initial, onClose, onSave }) {
       sipIncRate: Number(form.sipIncRate) || 0,
       currentInv: Number(form.currentInv) || 0,
       currentSip: Number(form.currentSip) || 0,
+      mappedAssets: mappedAssetsPayload,
       createdAt,
     };
     onSave(normalized);
@@ -935,7 +994,7 @@ export function GoalFormModal({ initial, onClose, onSave }) {
         <Field label="SIP Annual Step-Up (%)">
           <input type="number" step="0.1" value={nv(form.sipIncRate)} onChange={(e) => upd('sipIncRate', parseNum(e))} className={inputCls} />
         </Field>
-        <Field label="Existing Accumulated Corpus (₹)">
+        <Field label="Existing Accumulated Corpus (₹)" hint={mappedTotal > 0 ? `Typed + ${fmtINR(mappedTotal)} mapped = ${fmtINR((Number(form.currentInv) || 0) + mappedTotal)} effective` : null}>
           <input type="number" value={nv(form.currentInv)} onChange={(e) => upd('currentInv', parseNum(e, 0))} className={inputCls} placeholder="₹ e.g. 5,00,000" />
         </Field>
         <div className="md:col-span-2">
@@ -943,6 +1002,91 @@ export function GoalFormModal({ initial, onClose, onSave }) {
             <input type="number" value={nv(form.currentSip)} onChange={(e) => upd('currentSip', parseNum(e, 0))} className={inputCls} placeholder="₹ e.g. 25,000" />
           </Field>
         </div>
+
+        {/* Map Asset — seed the goal corpus from the client's existing asset allocation */}
+        {hasAssets && (
+          <div className="md:col-span-2">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={mapOpen}
+                onChange={(e) => setMapOpen(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer"
+              />
+              <span className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-800 dark:text-slate-200">
+                <Link2 size={14} className="text-blue-600 dark:text-blue-400" /> Map Asset
+              </span>
+              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                Add part of this client's existing assets to the goal corpus
+              </span>
+            </label>
+
+            {mapOpen && (
+              <div className="mt-3 rounded-xl border border-blue-100 dark:border-slate-800 bg-blue-50/30 dark:bg-slate-950/40 p-4 space-y-3 animate-fade-in">
+                <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1">
+                  <span>Asset · available / total</span>
+                  <span>Amount to map (₹)</span>
+                </div>
+                {assetHoldings.map(a => {
+                  const usedElsewhere = (usageByLabel[a.label] || []).reduce((s, u) => s + u.amount, 0);
+                  const available = Math.max(0, a.amount - usedElsewhere);
+                  const typed = parseAssetAmt(mapAmt[a.label]);
+                  const overAllocated = typed > available;
+                  return (
+                    <div key={a.sectionId + a.label} className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 py-1">
+                        <div className="flex items-center gap-2 min-w-[140px] flex-1 basis-40">
+                          <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: a.color }} />
+                          <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 break-words">{a.label}</span>
+                          <span className="text-xs font-bold tabular-nums shrink-0 whitespace-nowrap">
+                            <span className={usedElsewhere > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}>{fmtINR(available)}</span>
+                            <span className="text-slate-400 dark:text-slate-500"> / {fmtINR(a.amount)}</span>
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 ml-auto shrink-0">
+                          <div className="relative w-32 sm:w-36 shrink-0">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-600 text-sm pointer-events-none">₹</span>
+                            <input
+                              type="number" min="0" max={available} step="any"
+                              value={mapAmt[a.label] ?? ''}
+                              onChange={(e) => setMap(a.label, e.target.value)}
+                              placeholder="0"
+                              className={inputCls + ` pl-7 !py-2 tabular-nums ${overAllocated ? '!border-rose-400 dark:!border-rose-700' : ''}`}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setMap(a.label, String(available))}
+                            className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 hover:underline shrink-0 w-10 text-left cursor-pointer"
+                            title="Map full available value"
+                          >
+                            All
+                          </button>
+                        </div>
+                      </div>
+                      {usedElsewhere > 0 && (
+                        <p className="text-[10px] font-medium text-amber-600 dark:text-amber-400 pl-4.5">
+                          Already used by: {(usageByLabel[a.label] || []).map(u => `${u.goalName} (${fmtINR(u.amount)})`).join(', ')}
+                        </p>
+                      )}
+                      {overAllocated && (
+                        <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400 pl-4.5">
+                          Exceeds available balance by {fmtINR(typed - available)}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+                <div className="flex items-center justify-between pt-2.5 mt-1 border-t border-blue-100 dark:border-slate-800">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    <Wallet size={13} /> Mapped to corpus
+                  </span>
+                  <span className="text-sm font-black text-blue-700 dark:text-blue-400 tabular-nums">{fmtINR(mappedTotal)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mt-6 p-5 bg-gradient-to-br from-blue-50/50 to-indigo-50/50 dark:from-slate-950 dark:to-slate-900 border border-blue-100 dark:border-slate-800 rounded-xl shadow-sm">

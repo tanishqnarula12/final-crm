@@ -1,84 +1,74 @@
 import React, { useState } from 'react';
 import {
   ChevronLeft, Pencil, Percent, TrendingUp, Calendar, IndianRupee, Info, CheckCircle2, History, ArrowRight, User,
-  Plus, Trash2, Check, X, TrendingDown, ClipboardList
+  Plus, Trash2, Check, X, ClipboardList, Wallet
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { Card, btnSecondary, btnPrimary, btnGhost, inputCls } from './UI';
+import { Card, btnSecondary, btnPrimary, inputCls, selectCls } from './UI';
 import {
-  calcGoal, buildProjection, monthLabel, fmtINR, fmtSip, goalIcon, goalEmoji, achievementColor, MONTH_NAMES, goalCreatedLabel, needsKidName, fmtDate, uid
+  calcGoal, buildProjection, activeValuationId, goalContributions, monthLabel, fmtINR, fmtSip, fmtFull, goalEmoji, goalCreatedLabel, needsKidName, fmtDate, uid,
+  MONTH_NAMES, CURRENT_MONTH, CURRENT_YEAR
 } from '../utils/calc';
 
-export default function GoalDetail({ goal, clientName, onBack, onEdit, onSaveActuals, isViewer }) {
+// Human-readable explanation of every Create Log entry that landed inside a
+// projection row, e.g. "SIP +₹10,000/mo from 15 Jun 2027\nLumpsum +₹1,00,000 on 3 Aug 2027"
+// — shown on the row's blue info icon so the row-over-row jump can be traced
+// straight back to the log entry that caused it.
+function contribRowHint(entries, only) {
+  return entries
+    .filter(e => !only || e.type === only)
+    .map(e => {
+      const sign = e.amount >= 0 ? '+' : '−';
+      const amt = `${sign}${fmtFull(Math.abs(e.amount))}`;
+      return e.type === 'sip'
+        ? `SIP ${amt}/mo from ${fmtDate(e.date) || e.date}`
+        : `Portfolio valuation of ${amt} added on ${fmtDate(e.date) || e.date}`;
+    })
+    .join('\n');
+}
+
+// Does this projection row contain a logged entry at all?
+const hasContrib = (r) => !!(r.contributionsInRow && r.contributionsInRow.length > 0);
+// A SIP change drives the Monthly SIP + Contribution underline …
+const hasSipChange = (r) => !!(r.contributionsInRow && r.contributionsInRow.some(e => e.type === 'sip'));
+// … while a portfolio valuation drives the Closing Bal underline (that's where it lands).
+const hasValuation = (r) => !!(r.contributionsInRow && r.contributionsInRow.some(e => e.type === 'valuation'));
+
+export default function GoalDetail({ goal, clientName, onBack, onEdit, onSaveContributions, isViewer }) {
   const c = calcGoal(goal);
   const projection = buildProjection(goal);
   const remainingLabel = c.years >= 1 ? `${c.years.toFixed(1)} years to go` : c.months > 0 ? `${c.months} months to go` : 'Due now';
 
-  // Logged actual portfolio values ("Create Log")
-  const actuals = Array.isArray(goal.actuals) ? goal.actuals : [];
+  // Create Log — a ledger of real events (portfolio valuations / SIP changes)
+  // that feed directly into the simulation above.
+  // Reads `goal.contributions`, falling back to this CRM's legacy
+  // `goal.actuals` rows so goals logged before the typed ledger still show
+  // (and still calculate) — see goalContributions() in utils/calc.
+  const contributions = goalContributions(goal);
 
-  // Quick lookup of each projection year's opening/closing balance, to compare actuals against
-  const projByYear = new Map();
-  projection.forEach(r => projByYear.set(r.year, r));
-
-  // Projected corpus interpolated to the exact date of a logged entry (opening → closing across the year)
-  const projAt = (dateStr) => {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return null;
-    const r = projByYear.get(d.getFullYear());
-    if (!r) return null;
-    const frac = Math.min(1, Math.max(0, (d.getMonth() + 1) / 12));
-    return r.openingBal + (r.closingBal - r.openingBal) * frac;
-  };
-
-  // Keep only the latest logged value per year for plotting (one point per x-axis tick)
-  const actualByYear = new Map();
-  actuals.forEach(a => {
-    const d = new Date(a.date);
-    if (isNaN(d.getTime())) return;
-    const y = d.getFullYear();
-    const prev = actualByYear.get(y);
-    if (!prev || new Date(a.date) > new Date(prev.date)) actualByYear.set(y, a);
-  });
-
-  // Overall standing = where the most recent logged value sits vs its projection (drives line + shadow colour)
-  const latestActual = actuals.length
-    ? [...actuals].sort((a, b) => new Date(b.date) - new Date(a.date))[0]
-    : null;
-  let aheadOverall = true;
-  if (latestActual) {
-    const proj = projAt(latestActual.date);
-    if (proj != null) aheadOverall = (Number(latestActual.amount) || 0) >= proj;
-  }
-  const actualColor = aheadOverall ? '#10b981' : '#ef4444';
-  const actualFill = aheadOverall ? 'url(#colorActualUp)' : 'url(#colorActualDown)';
-
-  const hasActuals = actualByYear.size > 0;
-  const startYear = projection.length ? projection[0].year : null;
-  const startCorpus = Number(goal.currentInv) || 0;
-
-  // Format data for Recharts
-  const chartData = projection.map(r => {
-    const row = {
-      name: String(r.year),
-      'Closing Balance': Math.round(r.closingBal),
-      'Total Invested': Math.round(r.totalInvested)
-    };
-    const a = actualByYear.get(r.year);
-    if (a) {
-      const proj = projAt(a.date);
-      row['Actual'] = Math.round(Number(a.amount) || 0);
-      row['ActualProj'] = proj != null ? Math.round(proj) : null;
-      row['ActualIsEntry'] = true;
-    } else if (hasActuals && r.year === startYear) {
-      // Synthetic origin so the dotted actual line starts from the current corpus, just like the projected line
-      row['Actual'] = Math.round(startCorpus);
-      row['ActualProj'] = Math.round(r.openingBal);
-    }
-    return row;
-  });
+  // Format data for Recharts — three lines: what the goal will cost (Target
+  // Value, inflating over time), where the corpus actually is given every
+  // logged entry (Current Value), and how much principal has gone in
+  // (Invested Value). The series opens at the goal's CREATION month so the
+  // chart shows the year the goal started from, not just the first period end.
+  const createdM = goal.createdMonth || CURRENT_MONTH;
+  const createdY = goal.createdYear || CURRENT_YEAR;
+  const chartData = projection.length === 0 ? [] : [
+    {
+      name: `${MONTH_NAMES[createdM - 1]} '${String(createdY).slice(2)}`,
+      'Target Value': Math.round(Number(goal.amount) || 0),
+      'Current Value': Math.round(c.startCorpus),
+      'Invested Value': Math.round(c.startCorpus),
+    },
+    ...projection.map(r => ({
+      name: r.chartName,
+      'Target Value': Math.round(r.targetValue),
+      'Current Value': Math.round(r.closingBal),
+      'Invested Value': Math.round(r.totalInvested),
+    })),
+  ];
 
   // Custom Tooltip Formatter
   const formatTooltipValue = (value) => {
@@ -146,14 +136,44 @@ export default function GoalDetail({ goal, clientName, onBack, onEdit, onSaveAct
             Projected corpus <span className="font-bold text-slate-700 dark:text-slate-200 tabular-nums">{fmtINR(c.projectedCorpus)}</span> vs target future value <span className="font-bold text-slate-700 dark:text-slate-200 tabular-nums">{fmtINR(c.futureValue)}</span>
             {c.shortfall > 0 && <> · shortfall <span className="font-bold text-rose-600 dark:text-rose-400 tabular-nums">{fmtINR(c.shortfall)}</span></>}
           </p>
+          {(c.hasContributions || c.hasMappedAssets) && (
+            <p className="text-[11px] text-blue-600 dark:text-blue-400 mt-2 font-semibold flex items-center gap-1.5">
+              <Info size={12} />
+              {c.hasContributions && c.hasMappedAssets
+                ? 'Includes logged contributions and mapped assets in the calculation below.'
+                : c.hasContributions
+                  ? 'Includes logged contributions (see Create Log) in the calculation below.'
+                  : `Includes ${fmtINR(c.startCorpus - (Number(goal.currentInv) || 0))} of mapped assets in the starting corpus.`}
+            </p>
+          )}
+          {c.hasContributions && (
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-medium">
+              Current effective SIP (incl. log) <span className="font-bold text-slate-700 dark:text-slate-200 tabular-nums">{fmtSip(c.todayEffectiveSip)}/mo</span>
+              {' + additional '}<span className="font-bold text-slate-700 dark:text-slate-200 tabular-nums">{fmtSip(c.additionalSip)}/mo</span>
+              {' = '}<span className="font-bold text-slate-900 dark:text-white tabular-nums">{fmtSip(c.sipRequired)}/mo</span> needed from today forward
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-200 dark:border-slate-800 text-xs">
           <MiniStat icon={Percent} label="Inflation" value={`${goal.inflation}%`} />
           <MiniStat icon={TrendingUp} label="Expected return" value={`${goal.expectedReturn}%`} />
           <MiniStat icon={Calendar} label="SIP annual step-up" value={`${goal.sipIncRate}%`} />
-          <MiniStat icon={IndianRupee} label="Current corpus" value={fmtINR(goal.currentInv)} />
+          <MiniStat icon={IndianRupee} label="Starting corpus" value={fmtINR(c.startCorpus)} />
         </div>
+
+        {c.hasMappedAssets && (
+          <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Wallet size={12} /> Mapped Assets</p>
+            <div className="flex flex-wrap gap-2">
+              {goal.mappedAssets.map(a => (
+                <span key={a.id || a.label} className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 ring-1 ring-blue-200/50 dark:ring-blue-900/40 rounded-full">
+                  {a.label} · {fmtINR(a.amount)}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Visual Charts section */}
@@ -173,22 +193,14 @@ export default function GoalDetail({ goal, clientName, onBack, onEdit, onSaveAct
                       <stop offset="5%" stopColor="var(--chart-invested)" stopOpacity={0.15}/>
                       <stop offset="95%" stopColor="var(--chart-invested)" stopOpacity={0}/>
                     </linearGradient>
-                    <linearGradient id="colorActualUp" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.35}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorActualDown" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.35}/>
-                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
-                    </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
                   <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis 
-                    stroke="#94a3b8" 
-                    fontSize={11} 
-                    tickLine={false} 
-                    axisLine={false} 
+                  <YAxis
+                    stroke="#94a3b8"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
                     tickFormatter={(val) => {
                       if (val >= 10000000) return `${(val / 10000000).toFixed(1)}Cr`;
                       if (val >= 100000) return `${(val / 100000).toFixed(0)}L`;
@@ -196,55 +208,37 @@ export default function GoalDetail({ goal, clientName, onBack, onEdit, onSaveAct
                       return val;
                     }}
                   />
-                  <Tooltip 
-                    formatter={formatTooltipValue} 
-                    contentStyle={{ 
-                      backgroundColor: 'var(--tooltip-bg)', 
-                      borderColor: 'var(--tooltip-border)', 
-                      borderRadius: '12px', 
+                  <Tooltip
+                    formatter={formatTooltipValue}
+                    contentStyle={{
+                      backgroundColor: 'var(--tooltip-bg)',
+                      borderColor: 'var(--tooltip-border)',
+                      borderRadius: '12px',
                       fontSize: '12px',
                       color: 'var(--tooltip-color)',
                       boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'
                     }}
                     labelClassName="font-bold text-slate-800 dark:text-slate-200"
                   />
-                  <Area type="monotone" dataKey="Closing Balance" stroke="var(--chart-balance)" strokeWidth={2.5} fillOpacity={1} fill="url(#colorClosing)" />
-                  <Area type="monotone" dataKey="Total Invested" stroke="var(--chart-invested)" strokeWidth={1.5} fillOpacity={1} fill="url(#colorInvested)" />
-                  {hasActuals && (
-                    <Area
-                      type="monotone"
-                      dataKey="Actual"
-                      stroke={actualColor}
-                      strokeWidth={2.5}
-                      strokeDasharray="6 5"
-                      fillOpacity={1}
-                      fill={actualFill}
-                      connectNulls
-                      isAnimationActive={false}
-                      dot={<ActualDot />}
-                      activeDot={{ r: 5, strokeWidth: 0 }}
-                    />
-                  )}
+                  <Area type="monotone" dataKey="Current Value" stroke="var(--chart-balance)" strokeWidth={2.5} fillOpacity={1} fill="url(#colorClosing)" />
+                  <Area type="monotone" dataKey="Invested Value" stroke="var(--chart-invested)" strokeWidth={1.5} fillOpacity={1} fill="url(#colorInvested)" />
+                  <Area type="monotone" dataKey="Target Value" stroke="#f59e0b" strokeWidth={2} strokeDasharray="6 5" fill="none" isAnimationActive={false} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
             <div className="flex flex-wrap justify-center gap-6 mt-4 text-[10px] font-bold uppercase tracking-wider">
               <div className="flex items-center gap-2">
                 <div className="w-3.5 h-3.5 rounded bg-blue-500 dark:bg-indigo-500" />
-                <span className="text-slate-600 dark:text-slate-400">Closing Balance (Projected Corpus)</span>
+                <span className="text-slate-600 dark:text-slate-400">Current Value (Projected Corpus)</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3.5 h-3.5 rounded bg-slate-400 dark:bg-slate-600" />
-                <span className="text-slate-600 dark:text-slate-400">Total Invested Principal</span>
+                <span className="text-slate-600 dark:text-slate-400">Invested Value (Principal)</span>
               </div>
-              {hasActuals && (
-                <div className="flex items-center gap-2">
-                  <div className="w-5 border-t-2 border-dashed" style={{ borderColor: actualColor }} />
-                  <span className="text-slate-600 dark:text-slate-400">
-                    Actual Logged Value (<span className="text-emerald-600 dark:text-emerald-400">ahead</span> / <span className="text-rose-600 dark:text-rose-400">behind</span> plan)
-                  </span>
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <div className="w-5 border-t-2 border-dashed" style={{ borderColor: '#f59e0b' }} />
+                <span className="text-slate-600 dark:text-slate-400">Target Value (Inflation-Adjusted Goal Cost)</span>
+              </div>
             </div>
           </Card>
         </div>
@@ -257,7 +251,7 @@ export default function GoalDetail({ goal, clientName, onBack, onEdit, onSaveAct
             <table className="w-full text-sm">
               <thead className="bg-slate-50/80 dark:bg-slate-950/80 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
                 <tr>
-                  <th className="text-left px-6 py-4 font-bold">Year</th>
+                  <th className="text-left px-6 py-4 font-bold">Period</th>
                   <th className="text-right px-6 py-4 font-bold">Opening Bal</th>
                   <th className="text-right px-6 py-4 font-bold">Monthly SIP</th>
                   <th className="text-right px-6 py-4 font-bold">Contribution</th>
@@ -267,13 +261,13 @@ export default function GoalDetail({ goal, clientName, onBack, onEdit, onSaveAct
               </thead>
               <tbody className="divide-y divide-slate-200/50 dark:divide-slate-800/50">
                 {projection.map((r, i) => (
-                  <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors">
-                    <td className="px-6 py-3.5 font-bold text-slate-900 dark:text-slate-100 tabular-nums">
+                  <tr key={i} className={`hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors ${hasContrib(r) ? 'bg-blue-50/40 dark:bg-blue-950/10' : ''}`}>
+                    <td className="px-6 py-3.5 font-bold text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
                       <span className="inline-flex items-center gap-1.5">
-                        {r.year}
+                        {r.label}
                         {r.isPartial && (
                           <span
-                            title={`Calculated months: ${MONTH_NAMES[r.firstMonth - 1]}${r.firstMonth === r.lastMonth ? '' : '–' + MONTH_NAMES[r.lastMonth - 1]} ${r.year} (${r.monthsCovered} ${r.monthsCovered === 1 ? 'month' : 'months'})`}
+                            title={`Partial period — ${r.monthsCovered} ${r.monthsCovered === 1 ? 'month' : 'months'} of contributions (${r.label})`}
                             className="text-slate-400 hover:text-slate-650 cursor-help"
                           >
                             <Info size={13} />
@@ -282,10 +276,44 @@ export default function GoalDetail({ goal, clientName, onBack, onEdit, onSaveAct
                       </span>
                     </td>
                     <td className="px-6 py-3.5 text-right text-slate-650 dark:text-slate-350 tabular-nums">{fmtINR(r.openingBal)}</td>
-                    <td className="px-6 py-3.5 text-right text-slate-650 dark:text-slate-350 tabular-nums">{fmtSip(r.monthlySip)}</td>
-                    <td className="px-6 py-3.5 text-right text-slate-650 dark:text-slate-350 tabular-nums">{fmtINR(r.yearContribution)}</td>
+                    <td className={`px-6 py-3.5 text-right tabular-nums ${hasSipChange(r) ? 'underline decoration-blue-500 decoration-2 underline-offset-4 text-blue-700 dark:text-blue-400' : 'text-slate-650 dark:text-slate-350'}`}>
+                      {fmtSip(r.monthlySip)}
+                    </td>
+                    <td className="px-6 py-3.5 tabular-nums">
+                      <span className="flex items-center justify-end gap-1.5">
+                        <span className={hasSipChange(r) ? 'underline decoration-blue-500 decoration-2 underline-offset-4 text-blue-700 dark:text-blue-400' : 'text-slate-650 dark:text-slate-350'}>
+                          {fmtINR(r.yearContribution)}
+                        </span>
+                        <span className="w-[13px] shrink-0 inline-flex items-center justify-center">
+                          {hasSipChange(r) && (
+                            <span
+                              title={contribRowHint(r.contributionsInRow, 'sip')}
+                              className="text-blue-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 cursor-help"
+                            >
+                              <Info size={13} />
+                            </span>
+                          )}
+                        </span>
+                      </span>
+                    </td>
                     <td className="px-6 py-3.5 text-right text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums">{fmtINR(r.growth)}</td>
-                    <td className="px-6 py-3.5 text-right font-bold text-slate-900 dark:text-white tabular-nums">{fmtINR(r.closingBal)}</td>
+                    <td className="px-6 py-3.5 tabular-nums">
+                      <span className="flex items-center justify-end gap-1.5">
+                        <span className={hasValuation(r) ? 'underline decoration-blue-500 decoration-2 underline-offset-4 text-blue-700 dark:text-blue-400 font-bold' : 'font-bold text-slate-900 dark:text-white'}>
+                          {fmtINR(r.closingBal)}
+                        </span>
+                        <span className="w-[13px] shrink-0 inline-flex items-center justify-center">
+                          {hasValuation(r) && (
+                            <span
+                              title={contribRowHint(r.contributionsInRow, 'valuation')}
+                              className="text-blue-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 cursor-help"
+                            >
+                              <Info size={13} />
+                            </span>
+                          )}
+                        </span>
+                      </span>
+                    </td>
                   </tr>
                 ))}
                 {projection.length === 0 && (
@@ -297,82 +325,99 @@ export default function GoalDetail({ goal, clientName, onBack, onEdit, onSaveAct
         </Card>
       </div>
 
-      <CreateLog actuals={actuals} projAt={projAt} onSave={onSaveActuals} isViewer={isViewer} />
+      <CreateLog contributions={contributions} onSave={onSaveContributions} isViewer={isViewer} />
 
       <ChangeLog history={goal.history} />
     </div>
   );
 }
 
-// Per-point dot on the chart's actual line: green when at/above the projected corpus, red when below
-function ActualDot(props) {
-  const { cx, cy, payload } = props;
-  if (cx == null || cy == null || !payload || !payload.ActualIsEntry) return null;
-  const proj = payload.ActualProj;
-  const ahead = proj == null || payload.Actual >= proj;
-  const color = ahead ? '#10b981' : '#ef4444';
-  return <circle cx={cx} cy={cy} r={4.5} fill={color} stroke="#fff" strokeWidth={1.75} />;
-}
+const CONTRIB_TYPES = [
+  { id: 'valuation', label: 'Portfolio Valuation', hint: 'A portfolio value recorded on a date. The amount is added to the closing balance of the period it falls in, and compounds from there. Enter a minus sign to record a reduction. Only the most recent valuation counts — logging a new one supersedes any earlier ones (they stay visible below but no longer affect the calculation).' },
+  { id: 'sip', label: 'SIP', hint: 'A permanent change to the ongoing monthly SIP from this date forward. Positive = increase, minus = decrease. Every future annual step-up applies to the new, updated SIP amount.' },
+];
 
-// "Create Log" — record actual portfolio values (amount + date) that overlay onto the growth chart.
-function CreateLog({ actuals, projAt, onSave, isViewer }) {
+// "Create Log" — a ledger of real events (portfolio valuations / SIP changes)
+// that feed directly into the simulation, not just chart annotations.
+function CreateLog({ contributions, onSave, isViewer }) {
   const [editingId, setEditingId] = useState(null); // entry id, or 'new', or null
+  const [type, setType] = useState('valuation');
   const [date, setDate] = useState('');
   const [amount, setAmount] = useState('');
   const [error, setError] = useState('');
+  const [showInfo, setShowInfo] = useState(false);
 
-  const list = [...(actuals || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const list = [...(contributions || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
+  // Only the latest portfolio valuation counts toward the calculation — earlier
+  // ones are shown here for the record but marked superseded.
+  const activeValId = activeValuationId(contributions);
 
   const startAdd = () => {
     setEditingId('new');
+    setType('valuation');
     setDate(new Date().toISOString().slice(0, 10));
     setAmount('');
     setError('');
   };
   const startEdit = (e) => {
     setEditingId(e.id);
+    setType(e.type === 'sip' ? 'sip' : 'valuation');
     setDate((e.date || '').slice(0, 10));
     setAmount(String(e.amount ?? ''));
     setError('');
   };
   const cancel = () => { setEditingId(null); setDate(''); setAmount(''); setError(''); };
 
-  const fmtEntry = (d, a) => `${fmtDate(d) || d}: ${fmtINR(Number(a) || 0)}`;
+  const fmtEntry = (t, d, a) => {
+    const amt = Number(a) || 0;
+    const sign = amt >= 0 ? '+' : '−';
+    return `${t === 'sip' ? 'SIP' : 'Portfolio valuation'} ${sign}${fmtFull(Math.abs(amt))} on ${fmtDate(d) || d}`;
+  };
 
   const save = () => {
     const amt = Number(amount);
     if (!date) { setError('Pick a date for this entry.'); return; }
-    if (!isFinite(amt) || amt < 0) { setError('Enter a valid amount.'); return; }
+    if (!isFinite(amt) || amt === 0) { setError('Enter a non-zero amount (use a minus sign to decrease).'); return; }
     let next, changes;
     if (editingId === 'new') {
-      next = [...(actuals || []), { id: uid(), date, amount: amt }];
-      changes = [{ label: 'Create Log entry added', from: '—', to: fmtEntry(date, amt) }];
+      next = [...(contributions || []), { id: uid(), type, date, amount: amt }];
+      changes = [{ label: 'Contribution logged', from: '—', to: fmtEntry(type, date, amt) }];
     } else {
-      const prev = (actuals || []).find(x => x.id === editingId);
-      next = (actuals || []).map(x => x.id === editingId ? { ...x, date, amount: amt } : x);
-      changes = [{ label: 'Create Log entry edited', from: prev ? fmtEntry(prev.date, prev.amount) : '—', to: fmtEntry(date, amt) }];
+      const prev = (contributions || []).find(x => x.id === editingId);
+      next = (contributions || []).map(x => x.id === editingId ? { ...x, type, date, amount: amt } : x);
+      changes = [{ label: 'Contribution edited', from: prev ? fmtEntry(prev.type, prev.date, prev.amount) : '—', to: fmtEntry(type, date, amt) }];
     }
     onSave(next, changes);
     cancel();
   };
 
   const remove = (id) => {
-    if (!window.confirm('Delete this log entry?')) return;
-    const prev = (actuals || []).find(x => x.id === id);
-    const changes = prev ? [{ label: 'Create Log entry removed', from: fmtEntry(prev.date, prev.amount), to: '—' }] : [];
-    onSave((actuals || []).filter(x => x.id !== id), changes);
+    if (!window.confirm('Delete this log entry? The calculation will update once removed.')) return;
+    const prev = (contributions || []).find(x => x.id === id);
+    const changes = prev ? [{ label: 'Contribution removed', from: fmtEntry(prev.type, prev.date, prev.amount), to: '—' }] : [];
+    onSave((contributions || []).filter(x => x.id !== id), changes);
     if (editingId === id) cancel();
   };
 
   const EntryForm = (
     <div className="flex flex-col sm:flex-row sm:items-end gap-3 p-4 rounded-xl bg-slate-50/80 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800">
+      <div className="w-full sm:w-44 space-y-1.5">
+        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Type</label>
+        <div className="relative">
+          <select value={type} onChange={(e) => setType(e.target.value)} className={selectCls}>
+            {CONTRIB_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+          </select>
+        </div>
+      </div>
       <div className="flex-1 space-y-1.5">
         <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Date</label>
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
       </div>
       <div className="flex-1 space-y-1.5">
-        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actual Amount (₹)</label>
-        <input type="number" min="0" step="any" value={amount} placeholder="e.g. 1250000" onChange={(e) => setAmount(e.target.value)} className={inputCls} />
+        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+          {type === 'sip' ? 'SIP Change (₹/mo)' : 'Valuation Amount (₹)'}
+        </label>
+        <input type="number" step="any" value={amount} placeholder={type === 'sip' ? 'e.g. 5000 or -2000' : 'e.g. 100000 or -50000'} onChange={(e) => setAmount(e.target.value)} className={inputCls} />
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <button onClick={save} className={btnPrimary}><Check size={14} /> Save</button>
@@ -386,24 +431,40 @@ function CreateLog({ actuals, projAt, onSave, isViewer }) {
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-base font-bold text-slate-800 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
           <ClipboardList size={16} /> Create Log
+          <button
+            onClick={() => setShowInfo(v => !v)}
+            title="What is Lumpsum vs SIP?"
+            className={`p-1 rounded-full transition-colors cursor-pointer ${showInfo ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400' : 'text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30'}`}
+          >
+            <Info size={13} />
+          </button>
         </h3>
         {!isViewer && editingId === null && (
           <button onClick={startAdd} className={btnSecondary}><Plus size={14} /> Add Entry</button>
         )}
       </div>
       <Card className="p-6 border border-slate-200 dark:border-slate-800 shadow-md space-y-4">
-        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-          Log the actual value of this goal's portfolio on any date. Each entry is plotted on the Growth Projection Chart as a dotted line —
-          <span className="text-emerald-600 dark:text-emerald-400 font-semibold"> green</span> when it beats the projected corpus,
-          <span className="text-rose-600 dark:text-rose-400 font-semibold"> red</span> when it falls short.
-        </p>
+        {showInfo ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-in">
+            {CONTRIB_TYPES.map(t => (
+              <div key={t.id} className="rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 p-3.5">
+                <p className="text-xs font-black text-blue-700 dark:text-blue-400 uppercase tracking-wider mb-1">{t.label}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{t.hint}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+            Log real portfolio valuations and SIP changes — every entry is applied to the calculation from its date forward, not just plotted on the chart.
+          </p>
+        )}
 
         {!isViewer && editingId === 'new' && EntryForm}
         {error && <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">{error}</p>}
 
         {list.length === 0 ? (
           <p className="text-sm text-slate-400 dark:text-slate-500 font-medium text-center py-4">
-            No entries yet. {isViewer ? '' : 'Add an entry to track actual progress against the plan.'}
+            No entries yet. {isViewer ? '' : 'Add an entry to record a real contribution change.'}
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -411,9 +472,8 @@ function CreateLog({ actuals, projAt, onSave, isViewer }) {
               <thead className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
                 <tr>
                   <th className="text-left px-3 py-3 font-bold">Date</th>
-                  <th className="text-right px-3 py-3 font-bold">Actual Amount</th>
-                  <th className="text-right px-3 py-3 font-bold">Projected</th>
-                  <th className="text-center px-3 py-3 font-bold">Status</th>
+                  <th className="text-left px-3 py-3 font-bold">Type</th>
+                  <th className="text-right px-3 py-3 font-bold">Amount</th>
                   {!isViewer && <th className="text-right px-3 py-3 font-bold">Actions</th>}
                 </tr>
               </thead>
@@ -422,29 +482,32 @@ function CreateLog({ actuals, projAt, onSave, isViewer }) {
                   if (editingId === e.id) {
                     return (
                       <tr key={e.id}>
-                        <td colSpan={isViewer ? 4 : 5} className="py-3">{EntryForm}</td>
+                        <td colSpan={isViewer ? 3 : 4} className="py-3">{EntryForm}</td>
                       </tr>
                     );
                   }
-                  const proj = projAt(e.date);
                   const amt = Number(e.amount) || 0;
-                  const ahead = proj == null || amt >= proj;
+                  const positive = amt >= 0;
+                  const superseded = e.type !== 'sip' && e.id !== activeValId;
                   return (
-                    <tr key={e.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors">
+                    <tr key={e.id} className={`hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors ${superseded ? 'opacity-50' : ''}`}>
                       <td className="px-3 py-3.5 font-semibold text-slate-900 dark:text-slate-100">{fmtDate(e.date) || e.date}</td>
-                      <td className="px-3 py-3.5 text-right font-bold text-slate-900 dark:text-white tabular-nums">{fmtINR(amt)}</td>
-                      <td className="px-3 py-3.5 text-right text-slate-500 dark:text-slate-400 tabular-nums">{proj == null ? '—' : fmtINR(proj)}</td>
-                      <td className="px-3 py-3.5 text-center">
-                        {proj == null ? (
-                          <span className="text-slate-400 dark:text-slate-600">—</span>
-                        ) : (
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-bold rounded-full ${ahead
-                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-200/50 dark:ring-emerald-900/40'
-                            : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 ring-1 ring-rose-200/50 dark:ring-rose-900/40'}`}>
-                            {ahead ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                            {ahead ? 'Ahead' : 'Behind'}
+                      <td className="px-3 py-3.5">
+                        <span className="inline-flex items-center gap-1.5 flex-wrap">
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-bold rounded-full ${e.type === 'sip'
+                            ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 ring-1 ring-indigo-200/50 dark:ring-indigo-900/40'
+                            : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 ring-1 ring-amber-200/50 dark:ring-amber-900/40'}`}>
+                            {e.type === 'sip' ? 'SIP' : 'Portfolio Valuation'}
                           </span>
-                        )}
+                          {superseded && (
+                            <span title="A newer portfolio valuation exists — this one no longer affects the calculation" className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 ring-1 ring-slate-200/50 dark:ring-slate-700/50 cursor-help">
+                              Superseded
+                            </span>
+                          )}
+                        </span>
+                      </td>
+                      <td className={`px-3 py-3.5 text-right font-bold tabular-nums ${superseded ? 'text-slate-400 dark:text-slate-500' : positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                        {positive ? '+' : '−'}{fmtFull(Math.abs(amt))}{e.type === 'sip' ? '/mo' : ''}
                       </td>
                       {!isViewer && (
                         <td className="px-3 py-3.5">

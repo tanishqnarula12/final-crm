@@ -128,7 +128,21 @@ model Goal {
   currentSip    Float    @default(0)
   kidName       String?
   history       Json     @default("[]")
+  // Legacy Create Log rows ({id,date,amount}, always portfolio valuations).
+  // Superseded by `contributions` below, but kept so goals logged before the
+  // typed ledger keep reading correctly — see goalContributions() on the
+  // client. Cleared once such a goal's log is next saved.
   actuals       Json     @default("[]")
+  // Create Log ledger: typed money events that feed the projection —
+  // { id, type: 'valuation' | 'sip', date, amount }. A valuation is a
+  // point-in-time portfolio snapshot (only the latest one counts); a sip entry
+  // permanently shifts the running monthly SIP from that date forward.
+  contributions Json     @default("[]")
+  // Which of the client's Asset Allocation holdings are earmarked toward this
+  // goal's starting corpus, and how much of each —
+  // { id, sectionId, label, amount }. Kept separate from currentInv so the
+  // goal form can show per-asset "already used by other goals" / "available".
+  mappedAssets  Json     @default("[]")
   createdBy       String?
   assignedTo      String?
   departmentOwner String?

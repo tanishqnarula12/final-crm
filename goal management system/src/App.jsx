@@ -894,7 +894,9 @@ export default function App() {
       totalLump += c.lumpSumRequired;
       totalCurrentSip += (Number(g.currentSip) || 0);
     });
-    // Total SIP is simply Current SIP + Additional SIP (signed)
+    // Total SIP = what's already going in + what still needs to be added.
+    // `additionalSip` is never negative: an over-funded goal contributes 0
+    // here rather than discounting the top-up other goals genuinely need.
     const totalSip = totalCurrentSip + totalAdditional;
     return { totalSip, totalAdditional, totalLump, totalCurrentSip };
   }, [selectedClient]);
@@ -1862,12 +1864,15 @@ export default function App() {
               clientName={selectedClient.name}
               onBack={() => setSelectedGoalId(null)}
               onEdit={() => { setEditingGoalId(selectedGoalId); setShowGoalForm(true); }}
-              onSaveActuals={(actuals, changes) => {
+              onSaveContributions={(contributions, changes) => {
                 const prevHistory = Array.isArray(selectedGoal?.history) ? selectedGoal.history : [];
                 const history = (changes && changes.length)
                   ? [...prevHistory, { at: new Date().toISOString(), by: getCurrentUser()?.name || 'System', changes }]
                   : prevHistory;
-                handleUpdateGoal(selectedClientId, selectedGoalId, { actuals, history });
+                // Saving the log forward in the typed shape also retires the
+                // legacy `actuals` rows this goal may have been read from, so
+                // the two never coexist and get double-counted.
+                handleUpdateGoal(selectedClientId, selectedGoalId, { contributions, actuals: [], history });
               }}
               isViewer={isViewer}
             />
@@ -2054,6 +2059,8 @@ export default function App() {
       {showGoalForm && selectedClient && (
         <GoalFormModal
           initial={editingGoalId ? selectedClient.goals.find(g => g.id === editingGoalId) : null}
+          assetAllocation={selectedClient.assetAllocation}
+          clientGoals={selectedClient.goals || []}
           onClose={() => { setShowGoalForm(false); setEditingGoalId(null); }}
           onSave={(g) => {
             if (editingGoalId) {
