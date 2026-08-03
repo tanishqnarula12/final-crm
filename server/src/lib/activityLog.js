@@ -16,18 +16,37 @@ function stableStringify(v) {
   return JSON.stringify(v);
 }
 
+// "Nothing here" in any shape — undefined (key absent), null, '', [], or {}.
+// A field that predates some later-added schema key (e.g. a task saved
+// before `nftFields`/`subPersons` existed) has that key MISSING entirely;
+// resubmitting the same record today (the frontend always includes every
+// field, defaulted to its empty shape) makes it merely PRESENT-BUT-EMPTY.
+// Both mean the same thing — no real content — so they must compare equal,
+// or every such field falsely looks "changed" the first time the record is
+// ever resaved.
+function isEmpty(v) {
+  if (v === undefined || v === null || v === '') return true;
+  if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === 'object') return Object.keys(v).length === 0;
+  return false;
+}
+
 // Compute changed fields between two plain objects. Returns { field: {from,to} }
 // for keys whose (order-insensitive JSON-compared) values differ. Used to build
 // compact old/new snapshots and to skip no-op logging — including the
-// tasks/cobr/queries overlay's "did details actually change" check, so a
-// nested object field (e.g. a task's `nftFields`) round-tripping through
-// Postgres JSONB doesn't get flagged as changed when only its key order shifted.
+// tasks/cobr/queries overlay's "did details actually change" check, so:
+//   - a nested object field (e.g. a task's `nftFields`) round-tripping through
+//     Postgres JSONB doesn't get flagged as changed when only its key order
+//     shifted (stableStringify), and
+//   - a field going from "key absent" to "present but empty" (or vice versa)
+//     doesn't get flagged as changed either (isEmpty) — see above.
 export function diffFields(oldObj = {}, newObj = {}, keys = null) {
   const out = {};
   const ks = keys || [...new Set([...Object.keys(oldObj || {}), ...Object.keys(newObj || {})])];
   for (const k of ks) {
     const a = oldObj?.[k];
     const b = newObj?.[k];
+    if (isEmpty(a) && isEmpty(b)) continue;
     if (stableStringify(a) !== stableStringify(b)) out[k] = { from: a ?? null, to: b ?? null };
   }
   return out;
