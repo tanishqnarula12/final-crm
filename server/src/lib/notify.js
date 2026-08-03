@@ -24,6 +24,7 @@ export const NOTIF = {
   QUERY_RESOLVED: 'QUERY_RESOLVED',
   QUERY_COMMENTED: 'QUERY_COMMENTED',
   TASK_COMMENTED: 'TASK_COMMENTED',
+  TASK_COMPLETED: 'TASK_COMPLETED',
   LEAVE_APPLIED: 'LEAVE_APPLIED',
   LEAVE_RESPONDED: 'LEAVE_RESPONDED',
 };
@@ -179,6 +180,17 @@ export async function notifyFromEvents(prisma, events) {
         items.push({
           userId: rec.assignedTo, type: NOTIF.TASK_ASSIGNED,
           title: ev.module === 'cobr' ? 'New COBR task assigned to you' : 'New task assigned to you',
+          body: taskLabel(rec),
+          link: { view: ev.module === 'cobr' ? 'cobr' : 'tasks', id: rec.id },
+        });
+      }
+    } else if (ev.type === 'STAGE_CHANGE' && (ev.module === 'tasks' || ev.module === 'cobr') && ev.to === 'Completed') {
+      // Tell whoever assigned it (departmentOwner) that the assignee marked
+      // it done, unless the assigner completed it themself.
+      if (rec.departmentOwner && rec.departmentOwner !== ev.actorId) {
+        items.push({
+          userId: rec.departmentOwner, type: NOTIF.TASK_COMPLETED,
+          title: ev.module === 'cobr' ? 'COBR task completed' : 'Task completed',
           body: taskLabel(rec),
           link: { view: ev.module === 'cobr' ? 'cobr' : 'tasks', id: rec.id },
         });
