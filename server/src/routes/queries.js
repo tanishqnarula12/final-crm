@@ -73,8 +73,15 @@ router.get('/__recover/inspect', requireRole('ADMIN'), asyncHandler(async (req, 
     })),
   });
 }));
+// ?from=&to= (ISO timestamps, inclusive) scope exactly which incident's rows
+// to restore — required, so a careless call can't blanket-restore every
+// historical soft-delete (including genuinely-intentional old test cleanup).
 router.post('/__recover/restore', requireRole('ADMIN'), asyncHandler(async (req, res) => {
-  const rows = await prisma.query.findMany({ where: { deletedAt: { not: null } } });
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'from and to (ISO timestamps) are required.' });
+  const rows = await prisma.query.findMany({
+    where: { deletedAt: { not: null, gte: new Date(from), lte: new Date(to) } },
+  });
   const toRestore = rows.filter((r) => !r.id.toLowerCase().startsWith('zztest'));
   await prisma.$transaction(toRestore.map((r) => prisma.query.update({ where: { id: r.id }, data: { deletedAt: null } })));
   res.json({ restored: toRestore.length, restoredIds: toRestore.map((r) => r.id), skippedTestIds: rows.length - toRestore.length });
