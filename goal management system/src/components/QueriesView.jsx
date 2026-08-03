@@ -491,7 +491,7 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
                 <MessageSquare size={14} /> Remarks
               </h4>
               {remarks.length > 0 ? (
-                <ol className="space-y-3 max-h-48 overflow-y-auto pl-3 pr-1">
+                <ol className="space-y-3 max-h-80 overflow-y-auto pl-3 pr-1">
                   {remarks.map((r, i) => {
                     const stageMatch = r.text.match(/^Stage changed from (.*) to (.*?)(?:\s*\|\s*(.*))?$/);
                     if (stageMatch) {

@@ -6,7 +6,7 @@ import {
   Avatar, Card, btnPrimary, btnSecondary, btnGhost, inputCls
 } from './UI';
 import {
-  calcGoal, fmtINR, fmtFull, fmtSip, goalEmoji, achievementColor, generateAssumptionsText, monthLabel, goalCreatedLabel, needsKidName
+  calcGoal, currentRecordedCorpus, fmtINR, fmtFull, fmtSip, goalEmoji, achievementColor, generateAssumptionsText, monthLabel, goalCreatedLabel, needsKidName
 } from '../utils/calc';
 import { exportClientPdf } from '../utils/pdf';
 
@@ -217,7 +217,7 @@ export default function ClientDetail({ client, totals, onAddGoal, onSelectGoal, 
                   <div className="grid grid-cols-2 gap-2.5 border-t border-slate-200/20 dark:border-slate-800/50 pt-4">
                     <KV label="Goal cost (today)" value={fmtINR(g.amount)} />
                     <KV label="Future value" value={fmtINR(c.futureValue)} />
-                    <KV label="Current corpus" value={fmtINR(c.todayCorpus)} />
+                    <KV label="Current corpus" value={fmtINR(currentRecordedCorpus(g))} />
                     <KV label="Current SIP" value={fmtSip(c.todayEffectiveSip) + '/mo'} />
                     <KV label="Total SIP needed" value={fmtSip(c.sipRequired) + '/mo'} highlight />
                     <KV label="Additional SIP" value={fmtSip(c.additionalSip) + '/mo'} highlight negative={c.additionalSip < 0} />

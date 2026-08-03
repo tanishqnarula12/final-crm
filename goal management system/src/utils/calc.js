@@ -231,6 +231,28 @@ export function activeValuationId(contributions) {
   return latest ? latest.id : null;
 }
 
+// The corpus figure to DISPLAY as "current" — the last real number on record,
+// with no further assumption layered on top. If a valuation has been logged,
+// that is exactly what was last actually measured, so it's shown as-is (not
+// grown forward to today at the expected-return rate — that's a market
+// assumption, not a fact, and showing it as "current" would make an estimate
+// look like a confirmed balance). Falls back to the typed/mapped starting
+// corpus when nothing has been logged yet.
+//
+// This is deliberately DIFFERENT from `todayCorpus` (see calcGoal): the
+// Additional SIP / Lump-sum Required actions genuinely need to reason about
+// where the corpus has likely grown to by now, so those keep using the
+// return-compounded figure — only this display value stays a plain fact.
+export function currentRecordedCorpus(goal) {
+  const contributions = goalContributions(goal);
+  const activeId = activeValuationId(contributions);
+  if (activeId) {
+    const v = contributions.find(c => c.id === activeId);
+    if (v) return Number(v.amount) || 0;
+  }
+  return goalStartingCorpus(goal);
+}
+
 // Parse a goal's "Create Log" entries into simulation-ready shape: a
 // date-sorted list of SIP deltas (signed; negative = a decrease to the running
 // monthly SIP from that month forward), plus the original entries (each tagged

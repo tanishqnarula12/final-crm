@@ -19,6 +19,7 @@ import { teamName } from '../services/team';
 
 const TYPE_META = {
   TASK_ASSIGNED:    { icon: ClipboardList, ring: 'ring-blue-500/30',   dot: 'bg-blue-500' },
+  TASK_COMMENTED:   { icon: MessageSquare, ring: 'ring-blue-500/30',   dot: 'bg-blue-500' },
   TASK_DUE:         { icon: AlarmClock,    ring: 'ring-rose-500/30',   dot: 'bg-rose-500' },
   MEETING_SOON:     { icon: Video,         ring: 'ring-violet-500/30', dot: 'bg-violet-500' },
   PROSPECT_ASSIGNED:{ icon: Briefcase,     ring: 'ring-amber-500/30',  dot: 'bg-amber-500' },

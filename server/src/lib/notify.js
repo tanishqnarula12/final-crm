@@ -23,6 +23,7 @@ export const NOTIF = {
   QUERY_RAISED: 'QUERY_RAISED',
   QUERY_RESOLVED: 'QUERY_RESOLVED',
   QUERY_COMMENTED: 'QUERY_COMMENTED',
+  TASK_COMMENTED: 'TASK_COMMENTED',
   LEAVE_APPLIED: 'LEAVE_APPLIED',
   LEAVE_RESPONDED: 'LEAVE_RESPONDED',
 };
@@ -230,6 +231,22 @@ export async function notifyFromEvents(prisma, events) {
           userId: ev.to, type: NOTIF.QUERY_RAISED,
           title: 'A query has been raised to you', body: queryLabel(rec),
           link: { view: 'queries', id: rec.id },
+        });
+      }
+    } else if (ev.type === 'LOG_APPEND' && ev.module === 'tasks') {
+      // Someone added a comment/log entry on a task — tell every OTHER
+      // participant (the assigner, the assignee, and any sub-people), same
+      // "tell the other party" pattern as a query remark.
+      const who = await actorName();
+      const body = String(ev.entry?.text || '').trim().slice(0, 140) || taskLabel(rec);
+      const subPersons = Array.isArray(rec.subPersons) ? rec.subPersons : (rec.subPerson ? [rec.subPerson] : []);
+      const participants = new Set([rec.departmentOwner, rec.assignedTo, ...subPersons].filter(Boolean));
+      for (const target of participants) {
+        if (target === ev.actorId) continue;
+        items.push({
+          userId: target, type: NOTIF.TASK_COMMENTED,
+          title: `${who} commented on a task`, body,
+          link: { view: 'tasks', id: rec.id },
         });
       }
     } else if (ev.type === 'LOG_APPEND' && ev.module === 'queries') {

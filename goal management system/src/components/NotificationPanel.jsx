@@ -11,6 +11,7 @@ import {
 // Per-type icon + accent colour.
 const TYPE_META = {
   TASK_ASSIGNED:    { icon: ClipboardList, cls: 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400' },
+  TASK_COMMENTED:   { icon: MessageSquare, cls: 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400' },
   TASK_DUE:         { icon: AlarmClock,    cls: 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400' },
   MEETING_SOON:     { icon: Video,         cls: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400' },
   PROSPECT_ASSIGNED:{ icon: Briefcase,     cls: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400' },
