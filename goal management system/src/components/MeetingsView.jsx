@@ -217,20 +217,20 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
           <table className="w-full text-sm">
             <thead className="bg-slate-50/80 dark:bg-slate-950/80 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
               <tr>
-                <th className="text-left px-6 py-4 font-bold">Meeting</th>
-                <th className="text-left px-6 py-4 font-bold">Name</th>
-                <th className="text-center px-6 py-4 font-bold">Type</th>
-                <th className="text-left px-6 py-4 font-bold">When</th>
-                <th className="text-center px-6 py-4 font-bold">Mode</th>
-                <th className="text-left px-6 py-4 font-bold">With</th>
-                <th className="text-center px-6 py-4 font-bold">Status</th>
-                <th className="px-6 py-4"></th>
+                <th className="text-left px-5 py-3 font-bold">Meeting</th>
+                <th className="text-left px-5 py-3 font-bold">Name</th>
+                <th className="text-center px-5 py-3 font-bold">Type</th>
+                <th className="text-left px-5 py-3 font-bold">When</th>
+                <th className="text-center px-5 py-3 font-bold">Mode</th>
+                <th className="text-left px-5 py-3 font-bold">With</th>
+                <th className="text-center px-5 py-3 font-bold">Status</th>
+                <th className="px-5 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/50 dark:divide-slate-800/50">
               {meetings.map(m => (
                 <tr key={m.id} onClick={() => onOpen(m)} className="hover:bg-blue-50/20 dark:hover:bg-slate-800/40 cursor-pointer transition-colors group">
-                  <td className="px-6 py-4">
+                  <td className="px-5 py-3">
                     <div className="font-bold text-slate-900 dark:text-slate-100">{m.title || 'Untitled meeting'}</div>
                     {m.agenda && <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 truncate max-w-[220px]">{m.agenda}</div>}
                     {Array.isArray(m.attendees) && m.attendees.length > 0 && (
@@ -246,7 +246,7 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
                       </div>
                     )}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-5 py-3">
                     <div className="flex items-center gap-2.5">
                       <Avatar name={m.clientName || 'Meeting'} size="sm" />
                       <div>
@@ -255,32 +255,31 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-center">
+                  <td className="px-5 py-3 text-center">
                     {m.leadId
                       ? <span className="inline-flex items-center px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg ring-1 bg-violet-50 text-violet-700 ring-violet-200/60 dark:bg-violet-950/30 dark:text-violet-400 dark:ring-violet-900/40">Lead</span>
                       : <span className="inline-flex items-center px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg ring-1 bg-blue-50 text-blue-700 ring-blue-200/60 dark:bg-blue-950/30 dark:text-blue-400 dark:ring-blue-900/40">Client</span>
                     }
                   </td>
-                  <td className="px-6 py-4 text-slate-600 dark:text-slate-400 tabular-nums whitespace-nowrap">{fmtMeetingWhen(m)}</td>
-                  <td className="px-6 py-4 text-center">
+                  <td className="px-5 py-3 text-slate-600 dark:text-slate-400 tabular-nums whitespace-nowrap">{fmtMeetingWhen(m)}</td>
+                  <td className="px-5 py-3 text-center">
                     <span className={`inline-flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg ring-1 ${MODE_THEME[m.mode] || MODE_THEME.Online}`}>
                       {m.mode === 'Offline' ? <Building size={12} /> : <Globe size={12} />} {m.mode || 'Online'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{m.assignedTo || '—'}</td>
-                  <td className="px-6 py-4 text-center">
-                    <div className="flex items-center justify-center gap-1.5">
+                  <td className="px-5 py-3 text-slate-600 dark:text-slate-400">{m.assignedTo || '—'}</td>
+                  <td className="px-5 py-3 text-center">
+                    {isOverdue(m) ? (
+                      <span title="This meeting's date/time has passed with no action taken" className="inline-flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg ring-1 bg-amber-50 text-amber-700 ring-amber-200/60 dark:bg-amber-950/30 dark:text-amber-400 dark:ring-amber-900/40">
+                        <Clock size={11} /> Overdue
+                      </span>
+                    ) : (
                       <span className={`inline-flex items-center px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg ring-1 ${MEETING_STATUS_THEME[m.status] || MEETING_STATUS_THEME.Scheduled}`}>
                         {m.status || 'Scheduled'}
                       </span>
-                      {isOverdue(m) && (
-                        <span title="This meeting's date/time has passed with no action taken" className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg ring-1 bg-amber-50 text-amber-700 ring-amber-200/60 dark:bg-amber-950/30 dark:text-amber-400 dark:ring-amber-900/40 animate-pulse">
-                          <Clock size={11} /> Overdue
-                        </span>
-                      )}
-                    </div>
+                    )}
                   </td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-5 py-3 text-right">
                     <div className="flex items-center justify-end gap-1.5">
                       {isOverdue(m) && !isViewer && (
                         <button
