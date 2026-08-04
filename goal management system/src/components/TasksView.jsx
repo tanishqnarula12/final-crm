@@ -1752,11 +1752,17 @@ export function TaskFormModal({ initial, clients, isViewer, onClose, onSave }) {
               {comments.length > 0 ? (
                 <ol className="space-y-3 max-h-48 overflow-y-auto pl-3 pr-1">
                   {comments.map((c, i) => {
-                    const stageChangeMatch = c.text.match(/^Stage changed from (.*) to (.*?)(?:\s*\|\s*(.*))?$/);
+                    // Split off the remark on the FIRST " | " before parsing "from X to Y" —
+                    // a remark that itself contains the word "to" (e.g. "sent to client")
+                    // would otherwise confuse a single greedy regex into cutting the stage
+                    // names at the wrong "to" and swallowing half the remark into toStage.
+                    const pipeIdx = c.text.indexOf(' | ');
+                    const head = pipeIdx === -1 ? c.text : c.text.slice(0, pipeIdx);
+                    const stageChangeMatch = head.match(/^Stage changed from (.+) to (.+)$/);
                     if (stageChangeMatch) {
                       const fromStage = stageChangeMatch[1];
                       const toStage = stageChangeMatch[2];
-                      const remark = stageChangeMatch[3];
+                      const remark = pipeIdx === -1 ? undefined : c.text.slice(pipeIdx + 3);
                       return (
                         <li key={i} className="relative pl-5 border-l-2 border-slate-200 dark:border-slate-800">
                           <span className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-slate-900" />

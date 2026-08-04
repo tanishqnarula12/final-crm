@@ -1074,11 +1074,17 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
                   let isStageChange = !!(fromStage && toStage);
 
                   if (h.text) {
-                    const match = h.text.match(/^Stage changed from (.*) to (.*?)(?:\s*\|\s*(.*))?$/);
+                    // Split off the remark on the FIRST " | " before parsing "from X to
+                    // Y" — a remark containing the word "to" (e.g. "sent to client") would
+                    // otherwise confuse a single greedy regex into cutting the stage names
+                    // at the wrong "to" and swallowing half the remark into toStage.
+                    const pipeIdx = h.text.indexOf(' | ');
+                    const head = pipeIdx === -1 ? h.text : h.text.slice(0, pipeIdx);
+                    const match = head.match(/^Stage changed from (.+) to (.+)$/);
                     if (match) {
                       fromStage = match[1];
                       toStage = match[2];
-                      remark = match[3];
+                      remark = pipeIdx === -1 ? undefined : h.text.slice(pipeIdx + 3);
                       isStageChange = true;
                     } else {
                       remark = h.text;

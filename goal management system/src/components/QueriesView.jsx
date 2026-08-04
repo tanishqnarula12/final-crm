@@ -153,7 +153,7 @@ export default function QueriesView({ isViewer, activeQueryId, setActiveQueryId,
                   <th className="text-left px-6 py-4 font-bold">Query</th>
                   <th className="text-left px-6 py-4 font-bold">Raised By</th>
                   <th className="text-left px-6 py-4 font-bold">Raised To</th>
-                  <th className="text-left px-6 py-4 font-bold">Created</th>
+                  <th className="text-left px-6 py-4 font-bold whitespace-nowrap">Created</th>
                   <th className="text-center px-6 py-4 font-bold">Stage</th>
                   <th className="px-6 py-4"></th>
                 </tr>
@@ -169,7 +169,7 @@ export default function QueriesView({ isViewer, activeQueryId, setActiveQueryId,
                     </td>
                     <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{(q.createdBy || q.departmentOwner) ? teamName(q.createdBy || q.departmentOwner) : '—'}</td>
                     <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{q.assignedTo ? teamName(q.assignedTo) : '—'}</td>
-                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400 tabular-nums">{q.createdAt ? fmtQueryStamp(q.createdAt) : '—'}</td>
+                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400 tabular-nums whitespace-nowrap">{q.createdAt ? fmtQueryStamp(q.createdAt) : '—'}</td>
                     <td className="px-6 py-4 text-center">
                       <span className={`inline-flex items-center px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full ring-1 ${STAGE_THEME[q.stage] || STAGE_THEME['Open']}`}>
                         {q.stage}
@@ -536,9 +536,16 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
               {remarks.length > 0 ? (
                 <ol className="space-y-3 max-h-80 overflow-y-auto pl-3 pr-1">
                   {remarks.map((r, i) => {
-                    const stageMatch = r.text.match(/^Stage changed from (.*) to (.*?)(?:\s*\|\s*(.*))?$/);
+                    // Split off the remark on the FIRST " | " before parsing "from X to Y" —
+                    // a remark that itself contains the word "to" (e.g. "sent to client")
+                    // would otherwise confuse a single greedy regex into cutting the stage
+                    // names at the wrong "to" and swallowing half the remark into toStage.
+                    const pipeIdx = r.text.indexOf(' | ');
+                    const head = pipeIdx === -1 ? r.text : r.text.slice(0, pipeIdx);
+                    const stageMatch = head.match(/^Stage changed from (.+) to (.+)$/);
                     if (stageMatch) {
-                      const [, fromStage, toStage, rest] = stageMatch;
+                      const [, fromStage, toStage] = stageMatch;
+                      const rest = pipeIdx === -1 ? undefined : r.text.slice(pipeIdx + 3);
                       return (
                         <li key={i} className="relative pl-5 border-l-2 border-slate-200 dark:border-slate-800">
                           <span className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-slate-900" />
