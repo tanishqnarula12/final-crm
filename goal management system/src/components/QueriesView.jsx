@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, X, Search, Trash2, HelpCircle, MessageSquare, ArrowRight, Paperclip, Download, FileText, Image as ImageIcon, Film, Eye, ScrollText } from 'lucide-react';
+import { Plus, X, Search, Trash2, HelpCircle, MessageSquare, ArrowRight, Paperclip, Download, FileText, Image as ImageIcon, Film, Eye, ScrollText, ClipboardPaste } from 'lucide-react';
 import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
 import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
@@ -307,6 +307,40 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
     }
   };
 
+  // Ctrl+V while focus is on the remark box — a pasted image (e.g. a
+  // screenshot) attaches the same way a picked file would, via handleFiles.
+  // Pasted plain text is left alone so normal typing/pasting a remark still
+  // works untouched.
+  const handleRemarkPaste = (e) => {
+    const files = Array.from(e.clipboardData?.files || []).filter((f) => f.type?.startsWith('image/'));
+    if (files.length) {
+      e.preventDefault();
+      handleFiles(files);
+    }
+  };
+
+  // Explicit "Paste" button — for when focus isn't on the remark box, or the
+  // image was copied without a keyboard paste. Uses the async Clipboard API
+  // (Chrome/Edge; not universally supported, hence the try/catch message).
+  const handlePasteButton = async () => {
+    setAttError('');
+    try {
+      const items = await navigator.clipboard.read();
+      const files = [];
+      for (const item of items) {
+        const imgType = item.types.find((t) => t.startsWith('image/'));
+        if (!imgType) continue;
+        const blob = await item.getType(imgType);
+        const ext = imgType.split('/')[1] || 'png';
+        files.push(new File([blob], `pasted-image-${Date.now()}.${ext}`, { type: imgType }));
+      }
+      if (!files.length) { setAttError('No image found on the clipboard.'); return; }
+      await handleFiles(files);
+    } catch (err) {
+      setAttError('Could not read the clipboard — copy an image first, or use "Attach file" instead.');
+    }
+  };
+
   // --- Previews -------------------------------------------------------------
   // Images, videos and PDFs render inline (hover for a peek, click the eye for
   // a full view) so nobody has to download a file just to look at it. Blobs are
@@ -535,7 +569,7 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
                   <Paperclip size={14} /> Attachments
                 </h4>
                 {!isViewer && mayParticipate && (
-                  <>
+                  <div className="flex items-center gap-1.5">
                     <input
                       ref={fileRef}
                       type="file"
@@ -552,7 +586,16 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
                     >
                       <Paperclip size={12} /> {attBusy ? 'Uploading…' : 'Attach file'}
                     </button>
-                  </>
+                    <button
+                      type="button"
+                      onClick={handlePasteButton}
+                      disabled={attBusy}
+                      title="Paste a copied image from your clipboard"
+                      className={btnSecondary + ' py-1.5 px-3 text-[11px]'}
+                    >
+                      <ClipboardPaste size={12} /> Paste
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -640,9 +683,10 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
                 <textarea
                   value={remark}
                   onChange={(e) => setRemark(e.target.value)}
+                  onPaste={handleRemarkPaste}
                   rows={2}
                   className={inputCls + ' resize-y'}
-                  placeholder={hasStageChanged ? 'Explain why the stage changed…' : 'Add a remark…'}
+                  placeholder={hasStageChanged ? 'Explain why the stage changed…' : 'Add a remark… (you can also paste an image, Ctrl+V)'}
                 />
               </Field>
             </div>

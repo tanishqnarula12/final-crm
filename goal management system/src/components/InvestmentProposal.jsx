@@ -926,7 +926,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
 
     // Informational note on applicable capital-gains tax rates
     const noteHTML = `
-      <div style='margin-top:16px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #f59e0b;border-radius:4px;font-size:12px;color:#334155;line-height:1.5;display:flex;align-items:center;flex-wrap:wrap;gap:8px;'>
+      <div style='margin-top:16px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #f59e0b;border-radius:4px;font-size:12px;color:#334155;line-height:1.5;display:flex;align-items:center;flex-wrap:wrap;gap:8px;break-inside:avoid;page-break-inside:avoid;'>
         <strong style='color:#92400e;text-transform:uppercase;font-size:11px;letter-spacing:1px;display:flex;align-items:center;gap:4px;margin-right:4px;'>
           <span style='font-size:14px;'>💡</span> Applicable Tax Rates:
         </strong>
@@ -966,7 +966,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
           ${rs.includeExemption ? '✓ ₹1.25 Lakh Exemption Included' : '✗ ₹1.25 Lakh Exemption Excluded'}${rs.booked > 0 ? ` &nbsp;|&nbsp; Booked Gain: ₹ ${rs.booked.toLocaleString('en-IN')}` : ''}
         </div>
 
-        <div style='margin-top:14px;display:flex;gap:14px;'>
+        <div style='margin-top:14px;display:flex;gap:14px;break-inside:avoid;page-break-inside:avoid;'>
           <div style='flex:1;padding:14px 20px;background:#0d2b5e;border-radius:8px;color:#fff;'>
             <div style='font-size:10px;letter-spacing:1.5px;text-transform:uppercase;opacity:0.8;margin-bottom:8px;font-weight:700;'>Equity Tax Liability</div>
             <div style='font-size:20px;font-weight:800;margin-bottom:8px;'>₹ ${Math.round(calc.equityTax).toLocaleString('en-IN')}</div>
@@ -977,6 +977,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
           </div>
           <div style='flex:1;padding:14px 20px;background:#1a4a9c;border-radius:8px;color:#fff;'>
             <div style='font-size:10px;letter-spacing:1.5px;text-transform:uppercase;opacity:0.8;margin-bottom:8px;font-weight:700;'>Debt Tax Liability</div>
+            ${calc.hasDebtST ? `<span style='display:inline-block;margin-bottom:8px;padding:3px 10px;background:rgba(255,255,255,0.92);color:#1a4a9c;font-size:10px;font-weight:700;border-radius:999px;letter-spacing:0.3px;'>As Per Tax Slab</span>` : ''}
             <div style='font-size:20px;font-weight:800;margin-bottom:8px;'>${debtDisp}</div>
             <div style='font-size:12px;opacity:0.9;line-height:1.6;'>
               Short Term: ${calc.hasDebtST ? 'As Per Tax Slab, will be added to your income' : '₹ 0'}<br>
@@ -1011,7 +1012,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     });
 
     return `
-      <div style='margin-top:20px;'>
+      <div style='margin-top:20px;break-inside:avoid;page-break-inside:avoid;'>
         <div style='font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#0d2b5e;margin-bottom:8px;'>Accompanying Bank Details</div>
         <table style='width:100%;border-collapse:collapse;'>
           <thead>

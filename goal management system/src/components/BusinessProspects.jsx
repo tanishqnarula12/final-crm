@@ -435,12 +435,20 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
   const prospectModuleKey = initial?.proposalCategory === 'insurance' ? 'insuranceProspects' : 'investmentProspects';
   const canEditDetails = !isEdit || canDo(prospectModuleKey, 'editDetails', initial);
   const canChangeStage = !isEdit || canDo(prospectModuleKey, 'changeStage', initial);
+  const me = getCurrentUser();
   // Once a prospect exists, everything that came from the original proposal
-  // (group leader, applicant, PAN, closing date, amount, scheme table, other-code)
-  // is permanently locked — no role can edit it, unlike canEditDetails above
-  // which only gates *whether this account* may edit. Only prospect-management
-  // fields entered after the fact (stage, remarks, policy issuance) stay editable.
-  const locked = isEdit;
+  // is permanently locked — no ordinary role can edit it, unlike
+  // canEditDetails above which only gates *whether this account* may edit.
+  // Only prospect-management fields entered after the fact (stage, remarks,
+  // policy issuance) stay editable for that. Two different locks, though:
+  //   - detailsLocked: the prospect's own identifying details (closing date,
+  //     team assignments) — Admin may correct these (e.g. a wrong team
+  //     assignment) after the fact; nobody else can.
+  //   - proposalLocked: the original proposal's financial data (amount,
+  //     scheme table, other-code) — that's the source computation and stays
+  //     locked for EVERYONE, Admin included, once the prospect exists.
+  const detailsLocked = isEdit && !isAdmin(me);
+  const proposalLocked = isEdit;
 
   // Shared header fields (apply to every prospect being created)
   const [groupLeader, setGroupLeader] = useState(seed.groupLeader || '');
@@ -850,16 +858,19 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
             </div>
           )}
 
-          {/* Everything below is the actual prospect DETAIL data — locked read-only
-              (via a native disabled <fieldset>, which cascades to every input/
-              select/textarea/button inside) for an account that lacks editDetails
-              rights on this prospect's category. `contents` keeps the fieldset
-              itself out of the layout so it doesn't disturb spacing/grid. */}
-          {locked && (
+          {/* Prospect details (closing date, team assignments) — locked
+              read-only (via a native disabled <fieldset>, which cascades to
+              every input/select inside) for everyone except Admin once the
+              prospect exists. `contents` keeps the fieldset itself out of the
+              layout so it doesn't disturb spacing/grid. */}
+          {isEdit && detailsLocked && (
             <p className="text-[10px] text-amber-600 dark:text-amber-400 -mt-2">These are the original proposal details and can no longer be edited — only the stage, remarks, and policy issuance below can change.</p>
           )}
+          {isEdit && !detailsLocked && (
+            <p className="text-[10px] text-blue-600 dark:text-blue-400 -mt-2">Admin override: these prospect details are normally locked after creation, but you may correct them here.</p>
+          )}
           {/* Shared prospect fields */}
-          <fieldset disabled={locked} className="contents">
+          <fieldset disabled={detailsLocked} className="contents">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <Field label="Group Leader Name *" hint="Locked — set from the client record">
               <div className="w-full px-3.5 py-2.5 text-sm border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400">
@@ -918,7 +929,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
             )}
 
             <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-950/20 p-4 space-y-3">
-              <fieldset disabled={locked} className="contents">
+              <fieldset disabled={proposalLocked} className="contents">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <span className={`inline-flex items-center px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider rounded-full ring-1 ${CATEGORY_THEME[active.proposalCategory] || CATEGORY_THEME.investment}`}>{CATEGORY_LABEL[active.proposalCategory] || active.proposalCategory}</span>
