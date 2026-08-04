@@ -7,13 +7,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/error.js';
 import { parseBody } from '../lib/validate.js';
 import { syncBulk } from '../lib/syncModule.js';
 import { notifyFromEvents } from '../lib/notify.js';
 import { logActivity } from '../lib/activityLog.js';
-import { canEdit, canChangeStage, isMatrixLoaded } from '../lib/permissions.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -24,43 +23,6 @@ const bulkSchema = z.object({ leads: z.array(leadSchema) });
 router.get('/', asyncHandler(async (req, res) => {
   const rows = await prisma.lead.findMany({ where: { deletedAt: null }, orderBy: { createdAt: 'desc' } });
   res.json({ leads: rows.map((r) => r.payload) });
-}));
-
-// TEMPORARY diagnostic — Admin only, read-only. Runs the real syncBulk decision
-// logic (imported, not reimplemented) against a live user+lead pair to explain
-// exactly why an edit would be allowed/rejected. Remove after the Manish "can't
-// mark lead Lost" investigation is closed.
-router.get('/_diag', requireRole('ADMIN'), asyncHandler(async (req, res) => {
-  const { userId, leadId } = req.query;
-  const [user, lead] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId } }),
-    prisma.lead.findUnique({ where: { id: leadId } }),
-  ]);
-  if (!user) return res.status(404).json({ error: 'user not found' });
-  if (!lead) return res.status(404).json({ error: 'lead not found' });
-
-  // Exactly what updateLead(id, { status: 'Lost', lostReason: '...' }) would
-  // send: the stored payload with status swapped, stage untouched.
-  const rec = { ...lead.payload, status: 'Lost', lostReason: 'diag-test' };
-  const from = lead.stage ?? null;
-  const to = rec.stage ?? null;
-  const stageChanged = from !== to;
-
-  const allowed = stageChanged
-    ? canChangeStage(user, 'leads', lead, from, to)
-    : canEdit(user, 'leads', lead);
-
-  res.json({
-    matrixLoaded: isMatrixLoaded(),
-    user: { id: user.id, name: user.name, roles: user.roles, active: user.active },
-    lead: {
-      id: lead.id, name: lead.payload?.name,
-      assignedTo: lead.assignedTo, ownerId: lead.ownerId, createdBy: lead.createdBy,
-      stage: lead.stage, status: lead.status,
-    },
-    stageChanged, from, to,
-    allowed,
-  });
 }));
 
 // A deleted lead's still-pipeline children (Tasks/Meetings created against its

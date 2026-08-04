@@ -1179,6 +1179,30 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed, view]);
 
+  // Auto-refresh the permission matrix itself, same pattern as module data
+  // above. Without this, the matrix is fetched once at login (hydratePermissions
+  // in loadData) and never again — if an admin edits a role's access afterwards,
+  // anyone already logged in keeps enforcing the stale rule (client gating AND
+  // syncBulk both read whatever this tab last fetched) until they manually
+  // reload. That's exactly the kind of bug that looks like it "randomly" comes
+  // back: the matrix gets corrected, but already-open sessions don't know.
+  useEffect(() => {
+    if (!authed) return undefined;
+    let cancelled = false;
+    const tick = () => {
+      if (cancelled || document.visibilityState === 'hidden') return;
+      hydratePermissions().catch(() => { /* keep last matrix */ });
+    };
+    const id = setInterval(tick, 30000);
+    const onVisible = () => { if (document.visibilityState === 'visible') tick(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [authed]);
+
   // Setter for each module's "open this specific record" deep-link state —
   // each view already knows how to consume its own activeXId prop (find the
   // record once loaded, open its modal, then reset the id back to null).
