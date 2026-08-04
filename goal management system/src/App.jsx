@@ -147,6 +147,9 @@ export default function App() {
   const [selectedGoalName, setSelectedGoalName] = useState(null);
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [activeQueryId, setActiveQueryId] = useState(null);
+  const [activeCobrId, setActiveCobrId] = useState(null);
+  const [activeLeadId, setActiveLeadId] = useState(null);
+  const [activeLeaveId, setActiveLeaveId] = useState(null);
 
   // Modal states
   const [showAddClient, setShowAddClient] = useState(false);
@@ -1176,9 +1179,21 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed, view]);
 
-  // Clicking a notification (in the panel or a toast) marks it read and jumps to
-  // the relevant module. The record-level id is carried on the link for future
-  // deep-linking; for now we land on the module view.
+  // Setter for each module's "open this specific record" deep-link state —
+  // each view already knows how to consume its own activeXId prop (find the
+  // record once loaded, open its modal, then reset the id back to null).
+  const ACTIVE_ID_SETTERS = {
+    tasks: setActiveTaskId,
+    cobr: setActiveCobrId,
+    queries: setActiveQueryId,
+    meetings: setActiveMeetingId,
+    prospects: setActiveProspectId,
+    leads: setActiveLeadId,
+    leave: setActiveLeaveId,
+  };
+
+  // Clicking a notification (in the panel or a toast) marks it read, jumps to
+  // the relevant module, and opens the specific record it's about.
   const handleOpenNotification = (n) => {
     setActiveDropdown(null);
     const link = n?.link;
@@ -1191,7 +1206,10 @@ export default function App() {
       return;
     }
     if (n?.id) markNotificationRead(n.id);
-    if (link?.view) handleSetView(link.view);
+    if (!link?.view) return;
+    const setActiveId = ACTIVE_ID_SETTERS[link.view];
+    if (link.id && setActiveId) setActiveId(link.id);
+    handleSetView(link.view);
   };
 
   const handleNavDoubleClick = async (id) => {
@@ -1497,7 +1515,7 @@ export default function App() {
 
         {view === 'leave' && (
           <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
-            <LeaveView />
+            <LeaveView activeLeaveId={activeLeaveId} setActiveLeaveId={setActiveLeaveId} />
           </main>
         )}
 
@@ -1592,6 +1610,8 @@ export default function App() {
               onScheduleLeadMeeting={handleScheduleLeadMeeting}
               onLeadMeetingDone={handleLeadMeetingDone}
               onOpenLeadMeetingForm={handleOpenLeadMeetingForm}
+              activeLeadId={activeLeadId}
+              setActiveLeadId={setActiveLeadId}
             />
           </main>
         )}
@@ -1616,6 +1636,8 @@ export default function App() {
               tasksChangeCounter={tasksChangeCounter}
               onNewCobr={handleNewCobr}
               onOpenCobr={handleOpenCobr}
+              activeCobrId={activeCobrId}
+              setActiveCobrId={setActiveCobrId}
             />
           </main>
         )}

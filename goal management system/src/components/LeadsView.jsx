@@ -29,6 +29,7 @@ const scoreChip = (score) => {
 
 export default function LeadsView({
   isViewer, clients = [], onConvertLead, onScheduleLeadMeeting, onLeadMeetingDone, onOpenLeadMeetingForm, leadsChangeCounter,
+  activeLeadId, setActiveLeadId,
 }) {
   // RBAC: gate create/delete on the matrix, not the retired isViewer flag.
   const me = getCurrentUser();
@@ -71,6 +72,16 @@ export default function LeadsView({
   }, []);
 
   const openLead = useMemo(() => leads.find(l => l.id === openLeadId) || null, [leads, openLeadId]);
+
+  // Deep-link from a notification click — open the specific lead once its row
+  // is available, then reset so it doesn't re-trigger on re-render.
+  useEffect(() => {
+    if (activeLeadId) {
+      const found = leads.find(l => l.id === activeLeadId);
+      if (found) setOpenLeadId(found.id);
+      if (setActiveLeadId) setActiveLeadId(null);
+    }
+  }, [activeLeadId, leads, setActiveLeadId]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

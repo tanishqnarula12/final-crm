@@ -18,7 +18,7 @@ const STAGE_THEME = {
   Completed: 'bg-emerald-50 text-emerald-700 ring-emerald-200/60 dark:bg-emerald-950/30 dark:text-emerald-400 dark:ring-emerald-900/40',
 };
 
-export default function CobrView({ isViewer, tasksChangeCounter, onNewCobr, onOpenCobr }) {
+export default function CobrView({ isViewer, tasksChangeCounter, onNewCobr, onOpenCobr, activeCobrId, setActiveCobrId }) {
   const [tasks, setTasks] = useState(() => loadTasks());
   const [query, setQuery] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
@@ -26,6 +26,16 @@ export default function CobrView({ isViewer, tasksChangeCounter, onNewCobr, onOp
   useEffect(() => { setTasks(loadTasks()); }, [tasksChangeCounter]);
 
   const cobrTasks = useMemo(() => tasks.filter(isCobrTask), [tasks]);
+
+  // Deep-link from a notification click — open the specific COBR request once
+  // its row is available, then reset so it doesn't re-trigger on re-render.
+  useEffect(() => {
+    if (activeCobrId) {
+      const found = cobrTasks.find((t) => t.id === activeCobrId);
+      if (found) onOpenCobr(found, true);
+      if (setActiveCobrId) setActiveCobrId(null);
+    }
+  }, [activeCobrId, cobrTasks, setActiveCobrId, onOpenCobr]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

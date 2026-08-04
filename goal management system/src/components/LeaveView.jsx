@@ -14,7 +14,7 @@ import {
   LEAVE_TYPES, HALF_DAY_SLOTS, fmtLeaveType,
 } from '../utils/leave';
 
-export default function LeaveView() {
+export default function LeaveView({ activeLeaveId, setActiveLeaveId } = {}) {
   const me = getCurrentUser();
   const mayCreate = canCreateLeave();
   const mayRespond = canRespondToLeave();
@@ -28,6 +28,27 @@ export default function LeaveView() {
     window.addEventListener('crm:leave-updated', onUpdate);
     return () => window.removeEventListener('crm:leave-updated', onUpdate);
   }, []);
+
+  // Deep-link from a notification click — open whichever action a click on
+  // that row would normally trigger: the approve/reject modal for someone
+  // else's pending request (if this account can respond), otherwise the edit
+  // form for one of the user's own requests. Resets after so it doesn't
+  // re-trigger on re-render.
+  useEffect(() => {
+    if (!activeLeaveId) return;
+    const found = leaves.find((l) => l.id === activeLeaveId);
+    if (found) {
+      const isMine = found.createdBy === me?.id;
+      if (!isMine && found.status === 'Pending' && mayRespond) {
+        setRespondingTo(found);
+      } else if (isMine && canEditLeave(me, found) && found.status !== 'Approved') {
+        setEditing(found);
+        setShowForm(true);
+      }
+    }
+    if (setActiveLeaveId) setActiveLeaveId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLeaveId, leaves]);
 
   const mine = useMemo(
     () => leaves.filter((l) => l.createdBy === me?.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')),

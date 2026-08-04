@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, X, Search, Trash2, HelpCircle, MessageSquare, ArrowRight, Paperclip, Download, FileText, Image as ImageIcon, Film, Eye, ScrollText, ClipboardPaste } from 'lucide-react';
+import { Plus, X, Search, Trash2, HelpCircle, MessageSquare, ArrowRight, Paperclip, Download, FileText, Image as ImageIcon, Film, Eye, ScrollText, UploadCloud } from 'lucide-react';
 import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
 import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
@@ -241,6 +241,7 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
   const [pendingFiles, setPendingFiles] = useState([]);
   const [attBusy, setAttBusy] = useState(false);
   const [attError, setAttError] = useState('');
+  const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -339,6 +340,14 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
     } catch (err) {
       setAttError('Could not read the clipboard — copy an image first, or use "Attach file" instead.');
     }
+  };
+
+  const handleDragOver = (e) => { e.preventDefault(); setDragOver(true); };
+  const handleDragLeave = (e) => { e.preventDefault(); setDragOver(false); };
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    handleFiles(e.dataTransfer?.files);
   };
 
   // --- Previews -------------------------------------------------------------
@@ -564,40 +573,55 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
               immediately via their own endpoints (not part of Save). */}
           {(
             <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <div className="flex items-center justify-between gap-2">
-                <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                  <Paperclip size={14} /> Attachments
-                </h4>
-                {!isViewer && mayParticipate && (
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      multiple
-                      accept={ATTACHMENT_ACCEPT}
-                      className="hidden"
-                      onChange={(e) => { handleFiles(e.target.files); e.target.value = ''; }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => fileRef.current?.click()}
-                      disabled={attBusy}
-                      className={btnSecondary + ' py-1.5 px-3 text-[11px]'}
-                    >
-                      <Paperclip size={12} /> {attBusy ? 'Uploading…' : 'Attach file'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handlePasteButton}
-                      disabled={attBusy}
-                      title="Paste a copied image from your clipboard"
-                      className={btnSecondary + ' py-1.5 px-3 text-[11px]'}
-                    >
-                      <ClipboardPaste size={12} /> Paste
-                    </button>
-                  </div>
-                )}
-              </div>
+              <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                <Paperclip size={14} /> Attachments
+              </h4>
+
+              {!isViewer && mayParticipate && (
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onPaste={handleRemarkPaste}
+                  onClick={() => !attBusy && fileRef.current?.click()}
+                  tabIndex={0}
+                  role="button"
+                  className={`flex flex-col items-center justify-center gap-1.5 text-center px-4 py-5 rounded-xl border-2 border-dashed cursor-pointer transition-colors ${
+                    dragOver
+                      ? 'border-blue-500 bg-blue-50/60 dark:bg-blue-950/30'
+                      : 'border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-800 bg-slate-50/40 dark:bg-slate-950/20'
+                  }`}
+                >
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    multiple
+                    accept={ATTACHMENT_ACCEPT}
+                    className="hidden"
+                    onChange={(e) => { handleFiles(e.target.files); e.target.value = ''; }}
+                  />
+                  {attBusy ? (
+                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Uploading…</p>
+                  ) : (
+                    <>
+                      <UploadCloud size={20} className={dragOver ? 'text-blue-500' : 'text-slate-400 dark:text-slate-500'} />
+                      <p className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                        Drag &amp; drop a file, or <span className="text-blue-600 dark:text-blue-400 underline underline-offset-2">click to browse</span>
+                      </p>
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                        or paste an image — Ctrl+V, or{' '}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handlePasteButton(); }}
+                          className="text-blue-500 dark:text-blue-400 underline underline-offset-2 cursor-pointer"
+                        >
+                          click to paste from clipboard
+                        </button>
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* Files staged while raising — not uploaded until the query is created. */}
               {!isEdit && pendingFiles.length > 0 && (
