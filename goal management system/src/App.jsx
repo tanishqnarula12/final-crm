@@ -196,6 +196,10 @@ export default function App() {
   // you were (no "Draft MOM" tab detour like the client-side flow above).
   const [momLeadId, setMomLeadId] = useState(null);
   const [momLeadMoms, setMomLeadMoms] = useState([]);
+  // Set once the workspace reports a successful save — swaps the workspace
+  // for a big, unmissable "what's next" screen instead of leaving the
+  // advisor sitting on the same long form with only a small close button.
+  const [momLeadSaved, setMomLeadSaved] = useState(false);
   const [clientProfileId, setClientProfileId] = useState(null);
   const [proposalClientId, setProposalClientId] = useState(null);
   const [reviewClientId, setReviewClientId] = useState(null);
@@ -516,7 +520,8 @@ export default function App() {
 
   // Opens the lead's MOM workspace as an overlay — no view/tab change, so
   // closing it (onBack below) returns to exactly whatever was on screen.
-  const handleCreateLeadMom = (lead) => setMomLeadId(lead.id);
+  const handleCreateLeadMom = (lead) => { setMomLeadSaved(false); setMomLeadId(lead.id); };
+  const closeMomLeadOverlay = () => { setMomLeadId(null); setMomLeadSaved(false); };
 
   // Whenever either a goals-view client, an asset-allocation-view client, a profile-view client,
   // an MOM-view client, or a proposal-view client is open, we're "inside" a single client's profile — swap the main tab
@@ -2223,18 +2228,56 @@ export default function App() {
           underneath (the Leads list/detail), no redirect. MomWorkspace's own
           `onBack` isn't wired to a visible control in the client-profile flow
           (you leave by clicking a different top tab there), so this overlay
-          supplies its own floating close button. */}
+          supplies its own floating close button — plus, once the MOM actually
+          saves, a big unmissable "what's next" screen replaces the (long,
+          easy to get lost in) form entirely, rather than leaving the advisor
+          staring at the same page wondering how to move on. */}
       {momLeadId && momLeadSubject && (
         <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-950 overflow-y-auto animate-fade-in">
-          <button
-            onClick={() => setMomLeadId(null)}
-            className="fixed top-4 right-4 z-[60] flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer"
-          >
-            <X size={14} /> Close &amp; Back to Lead
-          </button>
-          <div className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
-            <MomWorkspace client={momLeadSubject} subjectType="lead" onBack={() => setMomLeadId(null)} />
-          </div>
+          {momLeadSaved ? (
+            <div className="min-h-screen flex items-center justify-center p-6">
+              <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200/60 dark:border-slate-800 p-8 text-center animate-scale-up">
+                <div className="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-5">
+                  <CheckCircle2 size={32} />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">MoM Created</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                  The Minutes of Meeting for {momLeadSubject.name} has been saved. The lead is now ready to convert to a client.
+                </p>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={closeMomLeadOverlay}
+                    className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-bold uppercase tracking-wider bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl shadow-lg shadow-emerald-500/15 transition-all cursor-pointer"
+                  >
+                    <ArrowLeft size={15} /> Back to Lead
+                  </button>
+                  <button
+                    onClick={() => setMomLeadSaved(false)}
+                    className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-all cursor-pointer"
+                  >
+                    Keep editing the MoM
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <button
+                onClick={closeMomLeadOverlay}
+                className="fixed top-4 right-4 z-[60] flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer"
+              >
+                <X size={14} /> Close &amp; Back to Lead
+              </button>
+              <div className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+                <MomWorkspace
+                  client={momLeadSubject}
+                  subjectType="lead"
+                  onBack={closeMomLeadOverlay}
+                  onSaved={() => setMomLeadSaved(true)}
+                />
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

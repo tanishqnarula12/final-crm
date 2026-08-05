@@ -25,7 +25,7 @@ const LOGO_BASE64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUND
 // `client` is then a lead-shaped object built by App.jsx's leadAsMomSubject()
 // with the same field footprint this component already reads (id, name, pan,
 // clientDetails, moms), so the rest of the file needs no other changes.
-export default function MomWorkspace({ client, onBack, subjectType = 'client' }) {
+export default function MomWorkspace({ client, onBack, subjectType = 'client', onSaved }) {
   const [activeTab, setActiveTab] = useState(0); // 0 to 8
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
@@ -936,6 +936,7 @@ ${fullText}`;
         };
         await updateMom(client.id, editingMomId, updates);
         showToastMsg("✅ MOM Draft updated successfully!");
+        if (subjectType === 'lead') onSaved && onSaved();
       } else {
         // Create new
         const id = 'mom_' + Math.random().toString(36).slice(2, 9);
@@ -951,6 +952,7 @@ ${fullText}`;
           // exists, and stamp momId so the lead card can show "MoM Created"
           // instead of the create button.
           updateLead(client.id, { stage: 'Create MoM', momId: id }, getCurrentUser()?.name || 'System');
+          onSaved && onSaved();
         } else {
           await addMom(client.id, newMom);
         }
