@@ -529,7 +529,7 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
     onClose();
   };
   const doMeetingDone = () => { onLeadMeetingDone && onLeadMeetingDone(lead); onRefresh(); };
-  const doCreateMom = () => { onCreateLeadMom && onCreateLeadMom(lead); };
+  const doCreateMom = () => { onClose(); onCreateLeadMom && onCreateLeadMom(lead); };
   const handleConvert = () => { if (lead.stage === 'Create MoM') { onClose(); onConvertLead && onConvertLead(lead); } };
 
   const handleAddNote = () => {
