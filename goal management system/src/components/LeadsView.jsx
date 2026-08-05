@@ -28,7 +28,7 @@ const scoreChip = (score) => {
 };
 
 export default function LeadsView({
-  isViewer, clients = [], onConvertLead, onScheduleLeadMeeting, onLeadMeetingDone, onOpenLeadMeetingForm, onCreateLeadMom, leadsChangeCounter,
+  isViewer, clients = [], onConvertLead, onScheduleLeadMeeting, onLeadMeetingDone, onOpenLeadMeetingForm, onCreateLeadMom, onEditLeadMom, leadsChangeCounter,
   activeLeadId, setActiveLeadId,
 }) {
   // RBAC: gate create/delete on the matrix, not the retired isViewer flag.
@@ -309,6 +309,7 @@ export default function LeadsView({
           onLeadMeetingDone={onLeadMeetingDone}
           onOpenLeadMeetingForm={onOpenLeadMeetingForm}
           onCreateLeadMom={onCreateLeadMom}
+          onEditLeadMom={onEditLeadMom}
           onToast={(m) => { setToast(m); setTimeout(() => setToast(''), 4000); }}
         />
       )}
@@ -457,7 +458,7 @@ function LeadFormModal({ initial, clients = [], onClose, onSave }) {
 // ===========================================================================
 // LEAD DETAIL MODAL — stage stepper, quick actions, timeline, notes, follow-ups
 // ===========================================================================
-function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvertLead, onScheduleLeadMeeting, onLeadMeetingDone, onOpenLeadMeetingForm, onCreateLeadMom, onToast }) {
+function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvertLead, onScheduleLeadMeeting, onLeadMeetingDone, onOpenLeadMeetingForm, onCreateLeadMom, onEditLeadMom, onToast }) {
   const [tab, setTab] = useState('timeline');
   const [noteText, setNoteText] = useState('');
   const [showLost, setShowLost] = useState(false);
@@ -530,6 +531,7 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
   };
   const doMeetingDone = () => { onLeadMeetingDone && onLeadMeetingDone(lead); onRefresh(); };
   const doCreateMom = () => { onClose(); onCreateLeadMom && onCreateLeadMom(lead); };
+  const doEditMom = () => { onClose(); onEditLeadMom && onEditLeadMom(lead); };
   const handleConvert = () => { if (lead.stage === 'Create MoM') { onClose(); onConvertLead && onConvertLead(lead); } };
 
   const handleAddNote = () => {
@@ -737,9 +739,13 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
 
             {lead.stage === 'Create MoM' && canOperate && (
               <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/15 border border-emerald-200/60 dark:border-emerald-900/40">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 rounded-lg">
+                <button
+                  onClick={doEditMom}
+                  title="Open the saved MoM draft"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 rounded-lg hover:bg-emerald-200 dark:hover:bg-emerald-900/70 transition-colors cursor-pointer"
+                >
                   <CheckCircle2 size={13} /> MoM Created
-                </span>
+                </button>
                 <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Ready to convert — this opens the New Client form prefilled with the lead's details.</span>
                 <button onClick={handleConvert} className="ml-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wider bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl shadow-lg shadow-emerald-500/15 transition-all cursor-pointer">
                   <CheckCircle2 size={13} /> Convert to Client

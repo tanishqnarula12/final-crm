@@ -25,7 +25,7 @@ const LOGO_BASE64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUND
 // `client` is then a lead-shaped object built by App.jsx's leadAsMomSubject()
 // with the same field footprint this component already reads (id, name, pan,
 // clientDetails, moms), so the rest of the file needs no other changes.
-export default function MomWorkspace({ client, onBack, subjectType = 'client', onSaved }) {
+export default function MomWorkspace({ client, onBack, subjectType = 'client', initialEditMomId = null }) {
   const [activeTab, setActiveTab] = useState(0); // 0 to 8
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
@@ -936,7 +936,6 @@ ${fullText}`;
         };
         await updateMom(client.id, editingMomId, updates);
         showToastMsg("✅ MOM Draft updated successfully!");
-        if (subjectType === 'lead') onSaved && onSaved();
       } else {
         // Create new
         const id = 'mom_' + Math.random().toString(36).slice(2, 9);
@@ -952,7 +951,6 @@ ${fullText}`;
           // exists, and stamp momId so the lead card can show "MoM Created"
           // instead of the create button.
           updateLead(client.id, { stage: 'Create MoM', momId: id }, getCurrentUser()?.name || 'System');
-          onSaved && onSaved();
         } else {
           await addMom(client.id, newMom);
         }
@@ -1046,6 +1044,19 @@ ${fullText}`;
     setIsPreviewActive(false);
     setActiveTab(0);
   };
+
+  // Reopening straight into an existing draft (e.g. clicking the lead's
+  // "MoM Created" pill) — auto-runs the same edit-load logic a "Saved MOM
+  // Drafts" list click would, once that MOM shows up in client.moms.
+  const openedForEditRef = useRef(null);
+  useEffect(() => {
+    if (!initialEditMomId || openedForEditRef.current === initialEditMomId) return;
+    const found = (client?.moms || []).find((m) => m.id === initialEditMomId);
+    if (found) {
+      openedForEditRef.current = initialEditMomId;
+      handleEditSavedMom(found);
+    }
+  }, [initialEditMomId, client]);
 
   const handleDeleteSavedMom = async (momId) => {
     if (!window.confirm("Are you sure you want to delete this MOM draft? This cannot be undone.")) return;
@@ -1334,6 +1345,13 @@ ${fullText}`;
       }
     }, 100);
     showToastMsg('📄 Draft generated below!');
+  };
+
+  // The final-tab action — one click does both instead of requiring "Save
+  // Draft" then a separate "Generate MOM Draft" step.
+  const handleSaveAndGenerate = async () => {
+    await handleSaveDraft();
+    generateMOM();
   };
 
   const handlePrint = () => {
@@ -2370,11 +2388,12 @@ ${fullText}`;
                   Next <ArrowRight size={14} />
                 </button>
               ) : (
-                <button 
-                  onClick={generateMOM} 
-                  className="px-5 py-2.5 text-xs font-bold bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-xl hover:brightness-105 transition-all flex items-center gap-1.5 shadow-md shadow-orange-500/10 cursor-pointer"
+                <button
+                  onClick={handleSaveAndGenerate}
+                  disabled={saving}
+                  className="px-5 py-2.5 text-xs font-bold bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-xl hover:brightness-105 transition-all flex items-center gap-1.5 shadow-md shadow-orange-500/10 cursor-pointer disabled:opacity-60"
                 >
-                  ⚡ Generate MOM Draft
+                  {saving ? <RefreshCw size={14} className="animate-spin" /> : '⚡'} Save &amp; Generate MOM Draft
                 </button>
               )}
             </div>
