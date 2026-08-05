@@ -44,7 +44,7 @@ export default function QueriesView({ isViewer, activeQueryId, setActiveQueryId,
   const mayCreateQuery = !isViewer && canCreateQuery(getCurrentUser());
   const [queries, setQueries] = useState(() => loadQueries());
   const [search, setSearch] = useState('');
-  const [stageFilter, setStageFilter] = useState('all');
+  const [stageFilter, setStageFilter] = useState('Open');
   const [toast, setToast] = useState('');
 
   useEffect(() => {
@@ -126,8 +126,9 @@ export default function QueriesView({ isViewer, activeQueryId, setActiveQueryId,
 
       {/* Stage filter chips */}
       <div className="flex flex-wrap gap-2">
+        <FilterChip label="Open" count={counts['Open']} active={stageFilter === 'Open'} onClick={() => setStageFilter('Open')} />
         <FilterChip label="All" count={counts.all} active={stageFilter === 'all'} onClick={() => setStageFilter('all')} />
-        {QUERY_STAGES.map(s => (
+        {QUERY_STAGES.filter(s => s !== 'Open').map(s => (
           <FilterChip key={s} label={s} count={counts[s]} active={stageFilter === s} onClick={() => setStageFilter(s)} />
         ))}
       </div>
