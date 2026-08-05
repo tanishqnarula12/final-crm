@@ -13,6 +13,8 @@ import { parseBody } from '../lib/validate.js';
 import { syncBulk } from '../lib/syncModule.js';
 import { notifyFromEvents } from '../lib/notify.js';
 import { logActivity } from '../lib/activityLog.js';
+import { momCreateSchema } from '../lib/schemas.js';
+import { canCreate } from '../lib/permissions.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -23,6 +25,31 @@ const bulkSchema = z.object({ leads: z.array(leadSchema) });
 router.get('/', asyncHandler(async (req, res) => {
   const rows = await prisma.lead.findMany({ where: { deletedAt: null }, orderBy: { createdAt: 'desc' } });
   res.json({ leads: rows.map((r) => r.payload) });
+}));
+
+// The Minutes of Meeting drafted against this lead (the "Create MoM" stage,
+// before conversion — see routes/moms.js and clients.js's twin POST /:clientId/moms
+// for the client-side equivalent used after conversion). Same 'mom' permission
+// module/action either way (ownership is creator-based, not client/lead-based).
+router.get('/:leadId/moms', asyncHandler(async (req, res) => {
+  const moms = await prisma.mom.findMany({
+    where: { leadId: req.params.leadId, deletedAt: null },
+    orderBy: { createdAt: 'asc' },
+  });
+  res.json({ moms });
+}));
+
+router.post('/:leadId/moms', asyncHandler(async (req, res) => {
+  if (!canCreate(req.user, 'mom')) return res.status(403).json({ error: 'You cannot create MOMs.' });
+  const data = parseBody(momCreateSchema, req.body);
+  const mom = await prisma.mom.create({
+    data: { ...data, leadId: req.params.leadId, createdBy: req.user.id },
+  });
+  await logActivity(prisma, {
+    module: 'moms', recordId: mom.id, action: 'CREATE',
+    newValue: { id: mom.id, leadId: mom.leadId }, performedBy: req.user.id,
+  });
+  res.status(201).json({ mom });
 }));
 
 // A deleted lead's still-pipeline children (Tasks/Meetings created against its

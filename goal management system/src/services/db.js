@@ -63,6 +63,18 @@ export async function addMom(clientId, mom) {
   await api.post(`/clients/${clientId}/moms`, mom);
 }
 
+// Lead-side equivalents — MOM drafted against a lead before it's converted
+// to a client (the "Create MoM" lead stage). updateMom/deleteMom below are
+// shared as-is: they only ever need the momId, not which parent it belongs to.
+export async function getLeadMoms(leadId) {
+  const { moms } = await api.get(`/leads/${leadId}/moms`);
+  return moms;
+}
+
+export async function addLeadMom(leadId, mom) {
+  await api.post(`/leads/${leadId}/moms`, mom);
+}
+
 export async function updateMom(clientId, momId, updates) {
   await api.patch(`/moms/${momId}`, updates);
 }

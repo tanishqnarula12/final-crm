@@ -4,7 +4,7 @@ import {
   UserPlus, Search, Plus, X, Phone, MessageCircle, Mail, CalendarPlus,
   Trash2, Pencil, Check, Clock, Crown, LayoutGrid, Table as TableIcon,
   Flame, Star, Snowflake, ArrowRight, CheckCircle2, Send, Zap, Activity,
-  Briefcase, RefreshCw, ChevronRight, User,
+  Briefcase, RefreshCw, ChevronRight, User, FileText,
 } from 'lucide-react';
 import { Card, Avatar, Field, inputCls, selectCls, btnPrimary, btnSecondary, btnGhost, CoolSelect } from './UI';
 import { loadTeam, teamName } from '../services/team';
@@ -28,7 +28,7 @@ const scoreChip = (score) => {
 };
 
 export default function LeadsView({
-  isViewer, clients = [], onConvertLead, onScheduleLeadMeeting, onLeadMeetingDone, onOpenLeadMeetingForm, leadsChangeCounter,
+  isViewer, clients = [], onConvertLead, onScheduleLeadMeeting, onLeadMeetingDone, onOpenLeadMeetingForm, onCreateLeadMom, leadsChangeCounter,
   activeLeadId, setActiveLeadId,
 }) {
   // RBAC: gate create/delete on the matrix, not the retired isViewer flag.
@@ -308,6 +308,7 @@ export default function LeadsView({
           onScheduleLeadMeeting={onScheduleLeadMeeting}
           onLeadMeetingDone={onLeadMeetingDone}
           onOpenLeadMeetingForm={onOpenLeadMeetingForm}
+          onCreateLeadMom={onCreateLeadMom}
           onToast={(m) => { setToast(m); setTimeout(() => setToast(''), 4000); }}
         />
       )}
@@ -456,7 +457,7 @@ function LeadFormModal({ initial, clients = [], onClose, onSave }) {
 // ===========================================================================
 // LEAD DETAIL MODAL — stage stepper, quick actions, timeline, notes, follow-ups
 // ===========================================================================
-function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvertLead, onScheduleLeadMeeting, onLeadMeetingDone, onOpenLeadMeetingForm, onToast }) {
+function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvertLead, onScheduleLeadMeeting, onLeadMeetingDone, onOpenLeadMeetingForm, onCreateLeadMom, onToast }) {
   const [tab, setTab] = useState('timeline');
   const [noteText, setNoteText] = useState('');
   const [showLost, setShowLost] = useState(false);
@@ -528,7 +529,8 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
     onClose();
   };
   const doMeetingDone = () => { onLeadMeetingDone && onLeadMeetingDone(lead); onRefresh(); };
-  const handleConvert = () => { if (lead.stage === 'Meeting Done') { onClose(); onConvertLead && onConvertLead(lead); } };
+  const doCreateMom = () => { onCreateLeadMom && onCreateLeadMom(lead); };
+  const handleConvert = () => { if (lead.stage === 'Create MoM') { onClose(); onConvertLead && onConvertLead(lead); } };
 
   const handleAddNote = () => {
     if (!noteText.trim()) return;
@@ -725,7 +727,19 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
             )}
 
             {lead.stage === 'Meeting Done' && canOperate && (
+              <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-cyan-50/50 dark:bg-cyan-950/15 border border-cyan-200/60 dark:border-cyan-900/40">
+                <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Meeting done — draft the Minutes of Meeting to proceed.</span>
+                <button onClick={doCreateMom} className="ml-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wider bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white rounded-xl shadow-lg shadow-cyan-500/15 transition-all cursor-pointer">
+                  <FileText size={13} /> Create MoM
+                </button>
+              </div>
+            )}
+
+            {lead.stage === 'Create MoM' && canOperate && (
               <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/15 border border-emerald-200/60 dark:border-emerald-900/40">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 rounded-lg">
+                  <CheckCircle2 size={13} /> MoM Created
+                </span>
                 <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Ready to convert — this opens the New Client form prefilled with the lead's details.</span>
                 <button onClick={handleConvert} className="ml-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wider bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl shadow-lg shadow-emerald-500/15 transition-all cursor-pointer">
                   <CheckCircle2 size={13} /> Convert to Client

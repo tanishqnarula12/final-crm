@@ -158,7 +158,12 @@ model Goal {
 
 model Mom {
   id            String   @id
-  clientId      String
+  clientId      String?
+  // A MOM can now be drafted against a Lead BEFORE it's converted to a
+  // Client (the "Create MoM" lead stage) — plain string column, no FK
+  // relation, mirroring Meeting.leadId/Task.leadId (Lead has no relations).
+  // Exactly one of clientId/leadId is set.
+  leadId        String?
   meetingNumber String   @default("")
   meetingDate   String   @default("")
   data          Json     @default("{}")
@@ -169,9 +174,10 @@ model Mom {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt
 
-  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([clientId])
+  @@index([leadId])
   @@map("moms")
 }
 

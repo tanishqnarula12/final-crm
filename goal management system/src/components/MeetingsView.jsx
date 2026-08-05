@@ -18,7 +18,7 @@ import { uid, initials, avatarColor } from '../utils/calc';
 // ===========================================================================
 // MEETINGS MODULE — table + calendar views of all scheduled/done meetings
 // ===========================================================================
-export default function MeetingsView({ clients = [], isViewer, onOpenMeeting, onScheduleMeeting, onCreateMom, onConvertLead, meetingsChangeCounter, activeMeetingId, setActiveMeetingId }) {
+export default function MeetingsView({ clients = [], isViewer, onOpenMeeting, onScheduleMeeting, onCreateMom, meetingsChangeCounter, activeMeetingId, setActiveMeetingId }) {
   const [meetings, setMeetings] = useState(() => loadMeetings());
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -182,7 +182,6 @@ export default function MeetingsView({ clients = [], isViewer, onOpenMeeting, on
               onOpen={openEdit}
               onDelete={handleDelete}
               onCreateMom={onCreateMom}
-              onConvertLead={onConvertLead}
               isViewer={isViewer}
               highlight={g.key === 'today'}
             />
@@ -200,7 +199,7 @@ export default function MeetingsView({ clients = [], isViewer, onOpenMeeting, on
   );
 }
 
-function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCreateMom, onConvertLead, isViewer, highlight }) {
+function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCreateMom, isViewer, highlight }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2.5">
@@ -290,16 +289,7 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
                           <RotateCcw size={13} /> Reschedule
                         </button>
                       )}
-                      {m.status === 'Completed' && m.leadId && onConvertLead && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onConvertLead(m); }}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm hover:shadow-emerald-500/25"
-                          title="Convert this lead to a client"
-                        >
-                          <CheckCircle2 size={14} /> Convert to Client
-                        </button>
-                      )}
-                      {m.status === 'Completed' && onCreateMom && (
+                      {m.status === 'Completed' && !m.leadId && onCreateMom && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onCreateMom(m); }}
                           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm hover:shadow-cyan-500/25"
@@ -617,7 +607,7 @@ function CalendarView({ meetings, onOpenMeeting, statusFilter, query }) {
 //   `initial` without an `id` (but maybe clientId prefilled) → new meeting
 //   `lockClient` → client picker is fixed (used when scheduling from a profile)
 // ===========================================================================
-export function MeetingFormModal({ initial, clients = [], isViewer, lockClient = false, onCreateMom, onConvertLead, onClose, onSave }) {
+export function MeetingFormModal({ initial, clients = [], isViewer, lockClient = false, onCreateMom, onClose, onSave }) {
   const isEdit = Boolean(initial?.id);
   const isLeadMeeting = !!initial?.leadId;
   const [isEditingMode, setIsEditingMode] = useState(!isEdit);
@@ -1016,15 +1006,7 @@ export function MeetingFormModal({ initial, clients = [], isViewer, lockClient =
                 </button>
               </>
             )}
-            {isEdit && status === 'Completed' && isLeadMeeting && onConvertLead && (
-              <button
-                onClick={() => onConvertLead(buildMeeting())}
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl shadow-lg shadow-emerald-500/15 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-              >
-                <CheckCircle2 size={14} /> Convert to Client
-              </button>
-            )}
-            {isEdit && status === 'Completed' && onCreateMom && (
+            {isEdit && status === 'Completed' && !isLeadMeeting && onCreateMom && (
               <button
                 onClick={() => onCreateMom(buildMeeting())}
                 className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white rounded-xl shadow-lg shadow-cyan-500/15 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"

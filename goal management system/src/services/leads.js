@@ -22,10 +22,11 @@ import { api } from './api';
 // Workflow: Created → forwarded to Internal Manager (Waiting for Assignment) →
 // assign RM (+others) → Qualified (Initial Call task) → Initial Call Won →
 // Connected → Schedule Meeting → Meeting Pending → Meeting Done →
+// Create MoM (draft the Minutes of Meeting for this lead) →
 // Convert to Client (opens the New Client form; client saved Inactive).
 export const LEAD_STAGES = [
   'Waiting for Assignment', 'Qualified', 'Connected', 'Meeting Pending',
-  'Meeting Done', 'Converted',
+  'Meeting Done', 'Create MoM', 'Converted',
 ];
 
 export const LEAD_STATUSES = ['Active', 'Lost', 'Dormant', 'Junk'];
@@ -62,7 +63,8 @@ const NEXT_STAGE = {
   'Qualified': ['Connected'],
   'Connected': ['Meeting Pending'],
   'Meeting Pending': ['Meeting Done'],
-  'Meeting Done': ['Converted'],
+  'Meeting Done': ['Create MoM'],
+  'Create MoM': ['Converted'],
   'Converted': [],
 };
 export const nextStages = (stage) => NEXT_STAGE[stage] || [];
@@ -74,6 +76,7 @@ export const STAGE_THEME = {
   'Connected': 'bg-cyan-50 text-cyan-700 ring-cyan-200/60 dark:bg-cyan-950/30 dark:text-cyan-400 dark:ring-cyan-900/40',
   'Meeting Pending': 'bg-violet-50 text-violet-700 ring-violet-200/60 dark:bg-violet-950/30 dark:text-violet-400 dark:ring-violet-900/40',
   'Meeting Done': 'bg-indigo-50 text-indigo-700 ring-indigo-200/60 dark:bg-indigo-950/30 dark:text-indigo-400 dark:ring-indigo-900/40',
+  'Create MoM': 'bg-cyan-50 text-cyan-700 ring-cyan-200/60 dark:bg-cyan-950/30 dark:text-cyan-400 dark:ring-cyan-900/40',
   'Converted': 'bg-emerald-50 text-emerald-700 ring-emerald-200/60 dark:bg-emerald-950/30 dark:text-emerald-400 dark:ring-emerald-900/40',
 };
 
@@ -174,7 +177,7 @@ export const computeScore = (lead) => {
   if (lead.email) s += 8;
   if (lead.mobile) s += 6;
   if (Array.isArray(lead.relatedTo) ? lead.relatedTo.length : lead.relatedTo) s += 8;
-  const stageW = { 'Waiting for Assignment': 0, 'Qualified': 6, 'Connected': 12, 'Meeting Pending': 16, 'Meeting Done': 22, 'Converted': 25 };
+  const stageW = { 'Waiting for Assignment': 0, 'Qualified': 6, 'Connected': 12, 'Meeting Pending': 16, 'Meeting Done': 22, 'Create MoM': 24, 'Converted': 25 };
   s += stageW[lead.stage] || 0;
   return Math.max(0, Math.min(100, Math.round(s)));
 };

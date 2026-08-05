@@ -9,8 +9,8 @@ import {
 } from 'lucide-react';
 
 // DB Service & Calculation Utils
-import { 
-  getClients, addClient, updateClient, deleteClient, addGoal, updateGoal, deleteGoal 
+import {
+  getClients, addClient, updateClient, deleteClient, addGoal, updateGoal, deleteGoal, getLeadMoms
 } from './services/db';
 import {
   calcGoal, CURRENT_YEAR, CURRENT_MONTH, uid, monthsBetween, buildGoalEdits, initials
@@ -190,6 +190,12 @@ export default function App() {
   // Asset allocation tab states
   const [assetClientId, setAssetClientId] = useState(null);
   const [momClientId, setMomClientId] = useState(null);
+  // Lead-side MOM (the "Create MoM" lead stage, before conversion) — rendered
+  // as a full-screen overlay ON TOP of whatever view/tab is already active,
+  // never a view/tab redirect, so closing it drops you back exactly where
+  // you were (no "Draft MOM" tab detour like the client-side flow above).
+  const [momLeadId, setMomLeadId] = useState(null);
+  const [momLeadMoms, setMomLeadMoms] = useState([]);
   const [clientProfileId, setClientProfileId] = useState(null);
   const [proposalClientId, setProposalClientId] = useState(null);
   const [reviewClientId, setReviewClientId] = useState(null);
@@ -480,6 +486,38 @@ export default function App() {
   const proposalClient = clients.find(c => c.id === proposalClientId);
   const reviewClient = clients.find(c => c.id === reviewClientId);
 
+  // Lead-mode MOM subject — shaped exactly like the `client` prop
+  // MomWorkspace already reads (id/name/pan/clientDetails/moms), built from
+  // the lead + the moms fetched for it below, so MomWorkspace itself needs no
+  // structural changes to work against a not-yet-converted lead.
+  const momLead = useMemo(
+    () => (momLeadId ? loadLeads().find(l => l.id === momLeadId) : null),
+    [momLeadId, leadsChangeCounter]
+  );
+  const momLeadSubject = useMemo(() => {
+    if (!momLead) return null;
+    return {
+      id: momLead.id,
+      name: leadNameOf(momLead),
+      pan: momLead.pan || '',
+      clientDetails: { relationshipManager: momLead.ownerId || '' },
+      moms: momLeadMoms,
+    };
+  }, [momLead, momLeadMoms]);
+
+  useEffect(() => {
+    if (!momLeadId) { setMomLeadMoms([]); return; }
+    let cancelled = false;
+    getLeadMoms(momLeadId)
+      .then((moms) => { if (!cancelled) setMomLeadMoms(moms || []); })
+      .catch((err) => console.error('Failed to load lead MOMs:', err));
+    return () => { cancelled = true; };
+  }, [momLeadId]);
+
+  // Opens the lead's MOM workspace as an overlay — no view/tab change, so
+  // closing it (onBack below) returns to exactly whatever was on screen.
+  const handleCreateLeadMom = (lead) => setMomLeadId(lead.id);
+
   // Whenever either a goals-view client, an asset-allocation-view client, a profile-view client,
   // an MOM-view client, or a proposal-view client is open, we're "inside" a single client's profile — swap the main tab
   // bar for a per-client sub-nav.
@@ -704,16 +742,6 @@ export default function App() {
     setShowAddClient(true);
   };
 
-  // Same conversion, triggered from a completed lead meeting in the Meetings
-  // module — so the advisor doesn't have to go back to Leads to convert.
-  const handleConvertLeadFromMeeting = (meeting) => {
-    const lead = loadLeads().find(l => l.id === meeting.leadId);
-    if (!lead) { alert('Could not find the lead linked to this meeting.'); return; }
-    setShowMeetingForm(false);
-    setEditingMeeting(null);
-    setMeetingFormLocked(false);
-    handleConvertLead(lead);
-  };
 
   // Schedule a meeting from a lead (Online/Offline + date/time) — creates a real
   // meeting in the Meetings module (carrying leadId) and moves the lead to
@@ -1634,6 +1662,7 @@ export default function App() {
               onScheduleLeadMeeting={handleScheduleLeadMeeting}
               onLeadMeetingDone={handleLeadMeetingDone}
               onOpenLeadMeetingForm={handleOpenLeadMeetingForm}
+              onCreateLeadMom={handleCreateLeadMom}
               activeLeadId={activeLeadId}
               setActiveLeadId={setActiveLeadId}
             />
@@ -1674,7 +1703,6 @@ export default function App() {
               onOpenMeeting={handleOpenMeeting}
               onScheduleMeeting={handleScheduleMeeting}
               onCreateMom={handleCreateMomFromMeeting}
-              onConvertLead={handleConvertLeadFromMeeting}
               meetingsChangeCounter={meetingsChangeCounter}
               activeMeetingId={activeMeetingId}
               setActiveMeetingId={setActiveMeetingId}
@@ -2185,10 +2213,29 @@ export default function App() {
           isViewer={isViewer}
           lockClient={meetingFormLocked}
           onCreateMom={handleCreateMomFromMeeting}
-          onConvertLead={handleConvertLeadFromMeeting}
           onClose={() => { setShowMeetingForm(false); setEditingMeeting(null); setMeetingFormLocked(false); }}
           onSave={handleSaveMeetingGlobal}
         />
+      )}
+
+      {/* Lead-side MOM workspace — a full-screen overlay, not a view/tab
+          change, so closing it returns to exactly whatever was on screen
+          underneath (the Leads list/detail), no redirect. MomWorkspace's own
+          `onBack` isn't wired to a visible control in the client-profile flow
+          (you leave by clicking a different top tab there), so this overlay
+          supplies its own floating close button. */}
+      {momLeadId && momLeadSubject && (
+        <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-950 overflow-y-auto animate-fade-in">
+          <button
+            onClick={() => setMomLeadId(null)}
+            className="fixed top-4 right-4 z-[60] flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer"
+          >
+            <X size={14} /> Close &amp; Back to Lead
+          </button>
+          <div className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+            <MomWorkspace client={momLeadSubject} subjectType="lead" onBack={() => setMomLeadId(null)} />
+          </div>
+        </div>
       )}
     </div>
   );
