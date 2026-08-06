@@ -196,6 +196,13 @@ export default function App() {
   // you were (no "Draft MOM" tab detour like the client-side flow above).
   const [momLeadId, setMomLeadId] = useState(null);
   const [momLeadMoms, setMomLeadMoms] = useState([]);
+  // True while momLeadMoms is being fetched for the currently-open lead —
+  // MomWorkspace must not mount until this settles, otherwise both the
+  // meeting-number auto-increment and the "open existing draft in edit mode"
+  // logic run against an empty moms list (a real race: the fetch is async,
+  // the overlay used to render immediately) and silently create a DUPLICATE
+  // "Meeting #1" instead of continuing/incrementing the real one.
+  const [momLeadMomsLoading, setMomLeadMomsLoading] = useState(false);
   // Set when reopening an ALREADY-created lead MOM for editing (clicking the
   // "MoM Created" pill) — tells MomWorkspace which saved draft to load
   // straight into edit mode, instead of starting a fresh blank one.
@@ -514,11 +521,13 @@ export default function App() {
   }, [momLead, momLeadMoms]);
 
   useEffect(() => {
-    if (!momLeadId) { setMomLeadMoms([]); return; }
+    if (!momLeadId) { setMomLeadMoms([]); setMomLeadMomsLoading(false); return; }
     let cancelled = false;
+    setMomLeadMomsLoading(true);
     getLeadMoms(momLeadId)
       .then((moms) => { if (!cancelled) setMomLeadMoms(moms || []); })
-      .catch((err) => console.error('Failed to load lead MOMs:', err));
+      .catch((err) => console.error('Failed to load lead MOMs:', err))
+      .finally(() => { if (!cancelled) setMomLeadMomsLoading(false); });
     return () => { cancelled = true; };
   }, [momLeadId]);
 
@@ -2253,12 +2262,18 @@ export default function App() {
             <X size={14} /> Close &amp; Back to Lead
           </button>
           <div className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
-            <MomWorkspace
-              client={momLeadSubject}
-              subjectType="lead"
-              onBack={closeMomLeadOverlay}
-              initialEditMomId={momLeadEditMomId}
-            />
+            {momLeadMomsLoading ? (
+              <div className="flex items-center justify-center py-24 text-slate-400 dark:text-slate-500 text-sm font-semibold">
+                Loading…
+              </div>
+            ) : (
+              <MomWorkspace
+                client={momLeadSubject}
+                subjectType="lead"
+                onBack={closeMomLeadOverlay}
+                initialEditMomId={momLeadEditMomId}
+              />
+            )}
           </div>
         </div>
       )}
