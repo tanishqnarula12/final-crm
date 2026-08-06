@@ -10,7 +10,7 @@ import {
 
 // DB Service & Calculation Utils
 import {
-  getClients, addClient, updateClient, deleteClient, addGoal, updateGoal, deleteGoal, getLeadMoms
+  getClients, addClient, updateClient, deleteClient, addGoal, updateGoal, deleteGoal, getLeadMoms, reparentLeadMoms
 } from './services/db';
 import {
   calcGoal, CURRENT_YEAR, CURRENT_MONTH, uid, monthsBetween, buildGoalEdits, initials
@@ -506,6 +506,10 @@ export default function App() {
       pan: momLead.pan || '',
       clientDetails: { relationshipManager: momLead.ownerId || '' },
       moms: momLeadMoms,
+      // Whether the lead has already been stamped "Create MoM" with a MOM id
+      // — lets MomWorkspace tell an explicit save (which should stamp it,
+      // once) apart from a background autosave tick (which never should).
+      momId: momLead.momId || null,
     };
   }, [momLead, momLeadMoms]);
 
@@ -2102,6 +2106,10 @@ export default function App() {
               try {
                 await addClient({ id: newId, name, pan, age: Number(age) || 0, clientDetails, createdAt: new Date().toISOString() });
                 updateLead(convertingLead.id, { stage: 'Converted', clientId: newId }, advisorProfile.name || getCurrentUser()?.name || 'System');
+                // Carry the lead's MOM (if it drafted one) over to the new
+                // client so it shows up in Draft MOM there — non-fatal if it
+                // fails, the conversion itself already succeeded.
+                reparentLeadMoms(convertingLead.id, newId).catch((err) => console.error('Failed to move lead MOM to new client:', err));
                 await loadData();
                 setLeadsChangeCounter(c => c + 1);
                 setView('clients');

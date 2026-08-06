@@ -386,6 +386,27 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
   const [savedMomsList, setSavedMomsList] = useState([]);
   const [editingMomId, setEditingMomId] = useState(null);
 
+  // Clear the local recovery draft when the advisor actually LEAVES the
+  // workspace (switches to a different top tab / closes the lead overlay)
+  // after having saved something this session. Without this, the draft
+  // written for THIS meeting lingers in localStorage and gets silently
+  // "resumed" the next time Draft MOM is opened for the same client/lead —
+  // wrong (stale) meeting number, investment toggles, everything — even
+  // though that MOM is already finished and this is meant to be the start
+  // of the NEXT meeting. Refs (not state) so the cleanup below always reads
+  // the latest values instead of whatever was current on mount.
+  const editingMomIdRef = useRef(null);
+  const clientIdForCleanupRef = useRef(null);
+  useEffect(() => { editingMomIdRef.current = editingMomId; });
+  useEffect(() => { clientIdForCleanupRef.current = client?.id; });
+  useEffect(() => {
+    return () => {
+      if (editingMomIdRef.current && clientIdForCleanupRef.current) {
+        try { localStorage.removeItem(`crm:mom:auto:${clientIdForCleanupRef.current}`); } catch {}
+      }
+    };
+  }, []);
+
   const fetchClientMoms = () => {
     if (client && client.moms) {
       setSavedMomsList(client.moms);
@@ -527,8 +548,11 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
   // is persisted on its own, debounced 1s after the user stops typing. Local
   // storage stays as an instant, offline-safe cache; the real save (create on
   // the first tick, update on every one after) is what actually reaches the
-  // server, mirroring exactly what the old explicit Save/Update Draft click
-  // used to do (including the lead stage-advance + follow-up task creation).
+  // server, including the follow-up task creation. Deliberately does NOT
+  // advance the lead's stage / unlock Convert to Client — that only happens
+  // on an explicit "Save & Generate MOM Draft" click (handleSaveDraft below),
+  // so a lead isn't marked ready to convert just because the advisor typed
+  // one field and paused for a second.
   useEffect(() => {
     if (!client?.id || !meetingNumber) return;
     if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
@@ -564,11 +588,14 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
           const id = 'mom_' + Math.random().toString(36).slice(2, 9);
           if (subjectType === 'lead') {
             await addLeadMom(client.id, { id, meetingNumber, meetingDate, data: payload });
-            updateLead(client.id, { stage: 'Create MoM', momId: id }, getCurrentUser()?.name || 'System');
           } else {
             await addMom(client.id, { id, meetingNumber, meetingDate, data: payload });
           }
           setEditingMomId(id);
+          // Only on the FIRST create for this draft (not every subsequent
+          // autosave tick) — refreshes client.moms so the meeting-number
+          // auto-increment and previous-meeting carry-forward see this MOM
+          // the next time Draft MOM is opened for this client.
           if (window.refreshAppData) window.refreshAppData().catch(() => {});
         }
         setLastAutoSaved(new Date(now));
@@ -667,8 +694,10 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
       // remains the primary, visible way to trigger this.
       const justCreatedFollowUp = tryCreateFollowUpItems();
       const payload = getMomPayload(justCreatedFollowUp ? { followupItemsCreated: true } : {});
+      let momId = editingMomId;
       if (editingMomId) {
-        // Update
+        // Update — the MOM row may already exist from a background autosave
+        // tick even on this, the advisor's first EXPLICIT save click.
         const updates = {
           meetingNumber,
           meetingDate,
@@ -678,24 +707,28 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
         showToastMsg("✅ MOM Draft updated successfully!");
       } else {
         // Create new
-        const id = 'mom_' + Math.random().toString(36).slice(2, 9);
+        momId = 'mom_' + Math.random().toString(36).slice(2, 9);
         const newMom = {
-          id,
+          id: momId,
           meetingNumber,
           meetingDate,
           data: payload
         };
         if (subjectType === 'lead') {
           await addLeadMom(client.id, newMom);
-          // Advance the lead into the "Create MoM" stage now that its MOM
-          // exists, and stamp momId so the lead card can show "MoM Created"
-          // instead of the create button.
-          updateLead(client.id, { stage: 'Create MoM', momId: id }, getCurrentUser()?.name || 'System');
         } else {
           await addMom(client.id, newMom);
         }
-        setEditingMomId(id);
+        setEditingMomId(momId);
         showToastMsg("✅ MOM Draft saved successfully!");
+      }
+      // Only an EXPLICIT save (this function — autosave never calls it)
+      // advances the lead into "Create MoM" and unlocks Convert to Client,
+      // and only the first time (client.momId reflects the lead's current
+      // stamped state) — whether the MOM row itself already existed from a
+      // background autosave tick or was just created above doesn't matter.
+      if (subjectType === 'lead' && !client.momId) {
+        updateLead(client.id, { stage: 'Create MoM', momId }, getCurrentUser()?.name || 'System');
       }
       // Trigger App.jsx parent to reload data
       if (window.refreshAppData) {

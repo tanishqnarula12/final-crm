@@ -75,6 +75,13 @@ export async function addLeadMom(leadId, mom) {
   await api.post(`/leads/${leadId}/moms`, mom);
 }
 
+// Moves a converted lead's MOM(s) over to the new client, so the draft
+// doesn't get orphaned under a lead that's no longer part of the active
+// pipeline — it shows up in the client's own Draft MOM tab afterward.
+export async function reparentLeadMoms(leadId, clientId) {
+  await api.post(`/leads/${leadId}/moms/reparent`, { clientId });
+}
+
 export async function updateMom(clientId, momId, updates) {
   await api.patch(`/moms/${momId}`, updates);
 }

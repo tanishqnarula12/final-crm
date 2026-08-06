@@ -14,32 +14,10 @@ import { syncBulk } from '../lib/syncModule.js';
 import { notifyFromEvents } from '../lib/notify.js';
 import { logActivity } from '../lib/activityLog.js';
 import { momCreateSchema } from '../lib/schemas.js';
-import { canCreate } from '../lib/permissions.js';
+import { canCreate, canEdit } from '../lib/permissions.js';
 
 const router = Router();
 router.use(requireAuth);
-
-// TEMPORARY diagnostic — Admin only, read-only. Re-verifies the live
-// canCreate('mom', parentLead) result to rule out a stale deploy after a
-// user reported the "You cannot create MOMs" error persisting. Remove after
-// confirming.
-router.get('/_diag_mom2', asyncHandler(async (req, res) => {
-  if (!req.user.roles?.includes('ADMIN')) return res.status(403).json({ error: 'forbidden' });
-  const { userId, leadId, clientId } = req.query;
-  const [user, lead, client] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId } }),
-    leadId ? prisma.lead.findUnique({ where: { id: leadId } }) : null,
-    clientId ? prisma.client.findUnique({ where: { id: clientId } }) : null,
-  ]);
-  if (!user) return res.status(404).json({ error: 'user not found' });
-  res.json({
-    user: { id: user.id, name: user.name, roles: user.roles, active: user.active },
-    lead: lead ? { id: lead.id, assignedTo: lead.assignedTo, ownerId: lead.ownerId, createdBy: lead.createdBy, stage: lead.stage } : null,
-    client: client ? { id: client.id, assignedTo: client.assignedTo, createdBy: client.createdBy } : null,
-    canCreateMomForLead: lead ? canCreate(user, 'mom', lead) : null,
-    canCreateMomForClient: client ? canCreate(user, 'mom', client) : null,
-  });
-}));
 
 const leadSchema = z.object({ id: z.string().min(1) }).passthrough();
 const bulkSchema = z.object({ leads: z.array(leadSchema) });
@@ -76,6 +54,31 @@ router.post('/:leadId/moms', asyncHandler(async (req, res) => {
     newValue: { id: mom.id, leadId: mom.leadId }, performedBy: req.user.id,
   });
   res.status(201).json({ mom });
+}));
+
+// Moves this lead's MOM(s) over to the client it just converted into, so the
+// draft the advisor spent the "Create MoM" stage on doesn't get orphaned —
+// it shows up in the new client's own "Draft MOM" tab going forward, same as
+// any MOM created there directly. Gated on lead-edit (converting the lead
+// already requires it) rather than the MOM's own creator-only ownership, so
+// whoever is allowed to convert the lead can carry its MOM along too.
+const reparentMomsSchema = z.object({ clientId: z.string().min(1) });
+router.post('/:leadId/moms/reparent', asyncHandler(async (req, res) => {
+  const lead = await prisma.lead.findUnique({ where: { id: req.params.leadId } });
+  if (!lead) return res.status(404).json({ error: 'lead not found' });
+  if (!canEdit(req.user, 'leads', lead)) return res.status(403).json({ error: 'You cannot move this lead\'s MOMs.' });
+  const { clientId } = parseBody(reparentMomsSchema, req.body);
+  const moms = await prisma.mom.findMany({ where: { leadId: req.params.leadId, deletedAt: null } });
+  if (!moms.length) return res.json({ ok: true, moved: 0 });
+  await prisma.$transaction(
+    moms.map((m) => prisma.mom.update({ where: { id: m.id }, data: { clientId, leadId: null } }))
+  );
+  await Promise.all(moms.map((m) => logActivity(prisma, {
+    module: 'moms', recordId: m.id, action: 'UPDATE',
+    oldValue: { leadId: req.params.leadId, clientId: null }, newValue: { leadId: null, clientId },
+    performedBy: req.user.id,
+  })));
+  res.json({ ok: true, moved: moms.length });
 }));
 
 // A deleted lead's still-pipeline children (Tasks/Meetings created against its
