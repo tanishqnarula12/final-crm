@@ -544,19 +544,16 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client?.id]);
 
-  // Auto-save all form state — no "Save Draft" button anywhere; every change
-  // is persisted on its own, debounced 1s after the user stops typing. Local
-  // storage stays as an instant, offline-safe cache; the real save (create on
-  // the first tick, update on every one after) is what actually reaches the
-  // server, including the follow-up task creation. Deliberately does NOT
-  // advance the lead's stage / unlock Convert to Client — that only happens
-  // on an explicit "Save & Generate MOM Draft" click (handleSaveDraft below),
-  // so a lead isn't marked ready to convert just because the advisor typed
-  // one field and paused for a second.
+  // Local-only recovery cache — no "Save Draft" button anywhere, and nothing
+  // reaches the SERVER until an explicit "Save & Generate MOM Draft" click
+  // (handleSaveDraft below). This just protects against losing in-progress
+  // typing (accidental navigation, browser crash) — debounced 1s after the
+  // user stops typing, written to localStorage only, never creates or
+  // updates a real MOM record on its own.
   useEffect(() => {
     if (!client?.id || !meetingNumber) return;
     if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
-    autoSaveRef.current = setTimeout(async () => {
+    autoSaveRef.current = setTimeout(() => {
       const now = new Date().toISOString();
       try {
         const localPayload = {
@@ -577,32 +574,8 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
           _lastAutoSaved: now,
         };
         localStorage.setItem(`crm:mom:auto:${client.id}`, JSON.stringify(localPayload));
-      } catch { /* ignore quota errors */ }
-
-      try {
-        const justCreatedFollowUp = tryCreateFollowUpItems();
-        const payload = getMomPayload(justCreatedFollowUp ? { followupItemsCreated: true } : {});
-        if (editingMomId) {
-          await updateMom(client.id, editingMomId, { meetingNumber, meetingDate, data: payload });
-        } else {
-          const id = 'mom_' + Math.random().toString(36).slice(2, 9);
-          if (subjectType === 'lead') {
-            await addLeadMom(client.id, { id, meetingNumber, meetingDate, data: payload });
-          } else {
-            await addMom(client.id, { id, meetingNumber, meetingDate, data: payload });
-          }
-          setEditingMomId(id);
-          // Only on the FIRST create for this draft (not every subsequent
-          // autosave tick) — refreshes client.moms so the meeting-number
-          // auto-increment and previous-meeting carry-forward see this MOM
-          // the next time Draft MOM is opened for this client.
-          if (window.refreshAppData) window.refreshAppData().catch(() => {});
-        }
         setLastAutoSaved(new Date(now));
-      } catch (err) {
-        console.error('Autosave failed:', err);
-        showToastMsg('⚠ Could not save your latest changes — check your connection.');
-      }
+      } catch { /* ignore quota errors */ }
     }, 1000);
     return () => { if (autoSaveRef.current) clearTimeout(autoSaveRef.current); };
   }, [
