@@ -110,8 +110,18 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
       // Set basic fields if any matching items in client goals or details
       // Pre-fill previous meeting details from database if client has previous MOMs
       if (client.moms && client.moms.length > 0) {
-        // Sort by date/created to find the last one
-        const sortedMoms = [...client.moms].sort((a, b) => new Date(b.meetingDate || 0) - new Date(a.meetingDate || 0));
+        // Find the immediately PRECEDING meeting — by meetingNumber (the
+        // actual sequence: meeting 3's "previous" is meeting 2, not whichever
+        // one happens to be oldest/newest), falling back to createdAt as a
+        // tiebreaker. Sorting by meetingDate alone (the old behaviour) breaks
+        // whenever two meetings share the same calendar date — which is the
+        // common case when drafting several MOMs back-to-back, since it's a
+        // user-entered field, not a distinguishing timestamp.
+        const sortedMoms = [...client.moms].sort((a, b) => {
+          const numA = parseInt(a.meetingNumber, 10), numB = parseInt(b.meetingNumber, 10);
+          if (!isNaN(numA) && !isNaN(numB) && numA !== numB) return numB - numA;
+          return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+        });
         const lastMom = sortedMoms[0];
         if (lastMom && lastMom.meetingDate) {
           setLastMeetingDate(lastMom.meetingDate);
