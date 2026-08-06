@@ -49,17 +49,6 @@ async function buildClientUpdateDiff(prisma, existing, updated) {
     };
   }
 
-  // applicantSubDetails is a map of EVERY applicant's extra details keyed by
-  // PAN/name; a single-applicant save resends the whole map, so a raw
-  // from/to dump here would just repeat every unrelated applicant's data.
-  // Condense to which applicant(s) actually changed instead.
-  if (detailsDiff.applicantSubDetails) {
-    const oldMap = detailsDiff.applicantSubDetails.from || {};
-    const newMap = detailsDiff.applicantSubDetails.to || {};
-    const changedKeys = Object.keys(diffFields(oldMap, newMap));
-    detailsDiff.applicantSubDetails = { from: null, to: changedKeys.length ? `Updated for: ${changedKeys.join(', ')}` : null };
-  }
-
   const managerIds = new Set();
   for (const key of Object.keys(detailsDiff)) {
     if (!MANAGER_DETAIL_KEYS.has(key)) continue;
@@ -259,7 +248,11 @@ router.post('/:clientId/goals', asyncHandler(async (req, res) => {
 }));
 
 router.post('/:clientId/moms', asyncHandler(async (req, res) => {
-  if (!canCreate(req.user, 'mom')) return forbidden(res, 'You cannot create MOMs.');
+  // Pass the parent client so an ASSIGNED-scoped role (e.g. RM) can resolve
+  // ownership against it — without a record, ASSIGNED always denies (see
+  // permissions.js), which is exactly the bug this used to have.
+  const parentClient = await prisma.client.findUnique({ where: { id: req.params.clientId } });
+  if (!canCreate(req.user, 'mom', parentClient)) return forbidden(res, 'You cannot create MOMs.');
   const data = parseBody(momCreateSchema, req.body);
   const mom = await prisma.mom.create({
     data: { ...data, clientId: req.params.clientId, createdBy: req.user.id },

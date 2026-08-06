@@ -30,7 +30,7 @@ router.get('/', asyncHandler(async (req, res) => {
 // The Minutes of Meeting drafted against this lead (the "Create MoM" stage,
 // before conversion — see routes/moms.js and clients.js's twin POST /:clientId/moms
 // for the client-side equivalent used after conversion). Same 'mom' permission
-// module/action either way (ownership is creator-based, not client/lead-based).
+// module/action either way.
 router.get('/:leadId/moms', asyncHandler(async (req, res) => {
   const moms = await prisma.mom.findMany({
     where: { leadId: req.params.leadId, deletedAt: null },
@@ -40,7 +40,11 @@ router.get('/:leadId/moms', asyncHandler(async (req, res) => {
 }));
 
 router.post('/:leadId/moms', asyncHandler(async (req, res) => {
-  if (!canCreate(req.user, 'mom')) return res.status(403).json({ error: 'You cannot create MOMs.' });
+  // Pass the parent lead so an ASSIGNED-scoped role (e.g. RM) can resolve
+  // ownership against it — without a record, ASSIGNED always denies (see
+  // permissions.js).
+  const parentLead = await prisma.lead.findUnique({ where: { id: req.params.leadId } });
+  if (!canCreate(req.user, 'mom', parentLead)) return res.status(403).json({ error: 'You cannot create MOMs.' });
   const data = parseBody(momCreateSchema, req.body);
   const mom = await prisma.mom.create({
     data: { ...data, leadId: req.params.leadId, createdBy: req.user.id },

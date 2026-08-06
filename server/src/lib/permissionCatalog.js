@@ -57,13 +57,19 @@ export const ACTION_LABELS = {
 };
 
 // How "owned / assigned" and "is RM of this record" are computed per module.
-//   self    — record.assignedTo / createdBy is a user id (leads, clients)
-//   creator — only the creator (createdBy) owns it (mom)
+//   self    — record.assignedTo / ownerId / createdBy is a user id (leads,
+//             clients, mom). Mom rows themselves never populate
+//             assignedTo/ownerId (only createdBy at creation), so this
+//             reduces to creator-only for edit/delete of an existing MOM —
+//             but at CREATE time the record passed is the PARENT client/lead,
+//             so an ASSIGNED-scoped role (e.g. RM) resolves against the
+//             parent's assignedTo/ownerId, not the not-yet-existing MOM.
+//   creator — only the creator (createdBy) owns it (leave)
 //   task    — assigner = departmentOwner, assignee = assignedTo (handled by overlay)
 //   meeting — creator, or the host/attendee (matched by NAME — see permissions.js)
 //   client  — ownership flows from the parent client's RM / createdBy
 export const OWNERSHIP = {
-  leads: 'self', clients: 'self', tasks: 'task', cobr: 'task', queries: 'task', mom: 'creator', meetings: 'meeting',
+  leads: 'self', clients: 'self', tasks: 'task', cobr: 'task', queries: 'task', mom: 'self', meetings: 'meeting',
   goals: 'client', assetAllocation: 'client', investmentProposal: 'client', insuranceProposal: 'client',
   portfolioReview: 'client', policyReview: 'client', investmentProspects: 'client', insuranceProspects: 'client',
   documents: 'client', leave: 'creator',

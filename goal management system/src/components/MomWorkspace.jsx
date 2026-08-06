@@ -2355,14 +2355,16 @@ ${fullText}`;
               >
                 Reset Form
               </button>
-              <button
-                onClick={handleSaveDraft}
-                className="px-4 py-2.5 text-xs font-bold border border-slate-200 dark:border-slate-800 text-blue-600 dark:text-blue-400 bg-slate-50/50 dark:bg-slate-950/20 rounded-xl hover:bg-blue-50/50 hover:border-blue-300 dark:hover:bg-blue-950/30 transition-all flex items-center gap-1.5 cursor-pointer"
-                disabled={saving}
-              >
-                {saving ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                <span>{editingMomId ? 'Update Draft' : 'Save Draft'}</span>
-              </button>
+              {activeTab < 8 && (
+                <button
+                  onClick={handleSaveDraft}
+                  className="px-4 py-2.5 text-xs font-bold border border-slate-200 dark:border-slate-800 text-blue-600 dark:text-blue-400 bg-slate-50/50 dark:bg-slate-950/20 rounded-xl hover:bg-blue-50/50 hover:border-blue-300 dark:hover:bg-blue-950/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                  disabled={saving}
+                >
+                  {saving ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  <span>{editingMomId ? 'Update Draft' : 'Save Draft'}</span>
+                </button>
+              )}
               {lastAutoSaved && (
                 <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
                   <CheckCircle size={10} />
