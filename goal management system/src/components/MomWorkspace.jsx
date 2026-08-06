@@ -422,7 +422,7 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
         if (d.prevOurRecs && d.prevOurRecs.length) setPrevOurRecs(d.prevOurRecs);
         if (d.prevClientRecs && d.prevClientRecs.length) setPrevClientRecs(d.prevClientRecs);
         if (d.agenda && d.agenda.length) {
-          const standard = ['Portfolio Review', 'Goal Mapping', 'Insurance Planning', 'Tax Saving', 'Estate Planning'];
+          const standard = ['Portfolio Review', 'New Investment', 'Goal Mapping', 'Issue Resolution', 'SIP Review', 'Insurance Review', 'Tax Planning', 'Estate Planning'];
           setSelectedAgendaChips(d.agenda.filter(a => standard.includes(a)));
           const other = d.agenda.filter(a => !standard.includes(a));
           setAgendaOther(other.join(', '));
@@ -444,7 +444,11 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
         if (editingIdFromDraft) {
           if (d.meetingNumber) setMeetingNumber(d.meetingNumber);
           if (d.occupation) {
-            const standard = ['Salaried', 'Self-Employed', 'Professional', 'Business'];
+            const standard = [
+              'Salaried – Private Sector', 'Salaried – Government Sector', 'Business', 'Self-Employed',
+              'Professional', 'Agriculturist / Farmer', 'Retired', 'Homemaker', 'Student',
+              'Defence Personnel', 'NRI',
+            ];
             if (standard.includes(d.occupation)) { setOccupation(d.occupation); setOccupationOther(''); }
             else { setOccupation('Others'); setOccupationOther(d.occupation); }
           }
@@ -467,8 +471,8 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
       const cd = client.clientDetails || {};
       if (cd.profession) {
         const OCCUPATION_MAP = {
-          'Salaried – Private Sector': 'Salaried',
-          'Salaried – Government Sector': 'Salaried',
+          'Salaried – Private Sector': 'Salaried – Private Sector',
+          'Salaried – Government Sector': 'Salaried – Government Sector',
           'Business': 'Business',
           'Self-Employed': 'Self-Employed',
           'Professional': 'Professional',
@@ -715,7 +719,11 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
     if (d.meetingMode) setMeetingMode(d.meetingMode);
     
     if (d.occupation) {
-      const standard = ['Salaried', 'Self-Employed', 'Professional', 'Business'];
+      const standard = [
+        'Salaried – Private Sector', 'Salaried – Government Sector', 'Business', 'Self-Employed',
+        'Professional', 'Agriculturist / Farmer', 'Retired', 'Homemaker', 'Student',
+        'Defence Personnel', 'NRI',
+      ];
       if (standard.includes(d.occupation)) {
         setOccupation(d.occupation);
         setOccupationOther('');
@@ -752,7 +760,7 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
 
     // Agenda
     if (d.agenda && d.agenda.length) {
-      const standard = ['Portfolio Review', 'Goal Mapping', 'Insurance Planning', 'Tax Saving', 'Estate Planning'];
+      const standard = ['Portfolio Review', 'New Investment', 'Goal Mapping', 'Issue Resolution', 'SIP Review', 'Insurance Review', 'Tax Planning', 'Estate Planning'];
       setSelectedAgendaChips(d.agenda.filter(a => standard.includes(a)));
       const unmatched = d.agenda.filter(a => !standard.includes(a));
       setAgendaOther(unmatched.join(', '));
@@ -887,6 +895,7 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
         </div>
         <div style="text-align:right;">
           ${meetingNumberFormatted ? `<div style="font-size:11px;opacity:0.55;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:3px;">${meetingNumberFormatted}</div>` : ''}
+          <div style="font-size:20px;font-weight:700;color:#bfd4ff;">${formatDate(date)}</div>
           <div style="font-size:12px;opacity:0.6;margin-top:2px;">${mode !== '—' ? 'Mode of Meeting: ' + mode : ''}</div>
         </div>
       </div>
@@ -1144,15 +1153,16 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
   };
 
   const goalIcons = {
-    'Retirement':      '🪑',
-    'Child Education': '🎓',
-    'Child Marriage':  '💍',
-    'Home Purchase':   '🏠',
-    'Wealth Creation': '💰',
-    'Emergency Fund':  '🆘',
-    'Tax Saving':      '🧾',
-    'Vacation':        '✈️',
-    'Vehicle':         '🚗',
+    'Retirement':          '🪑',
+    "Kid's Education":     '🎓',
+    "Kid's Marriage":      '💍',
+    'Dream Home':          '🏠',
+    'Dream Car':           '🚗',
+    'Emergency Fund':      '🆘',
+    'Vacation / Travel':   '✈️',
+    'Tax Saving':          '🧾',
+    'Higher Education':    '📚',
+    'Wedding Planning':    '💒',
   };
 
   // Tabs labels
@@ -1263,11 +1273,21 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Client Name</label>
-                  <input 
-                    type="text" 
-                    value={client.name} 
+                  <input
+                    type="text"
+                    value={client.name}
                     disabled
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 text-slate-500 outline-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Financial Consultant</label>
+                  <input
+                    type="text"
+                    value={advisorName}
+                    onChange={e => setAdvisorName(e.target.value)}
+                    placeholder="Advisor name"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950 dark:text-white focus:border-blue-500 outline-none"
                   />
                 </div>
               </div>
@@ -1312,10 +1332,17 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950 dark:text-white focus:border-blue-500 outline-none"
                   >
                     <option value="">Select Occupation</option>
-                    <option value="Salaried">Salaried</option>
+                    <option value="Salaried – Private Sector">Salaried – Private Sector</option>
+                    <option value="Salaried – Government Sector">Salaried – Government Sector</option>
+                    <option value="Business">Business</option>
                     <option value="Self-Employed">Self-Employed</option>
                     <option value="Professional">Professional</option>
-                    <option value="Business">Business</option>
+                    <option value="Agriculturist / Farmer">Agriculturist / Farmer</option>
+                    <option value="Retired">Retired</option>
+                    <option value="Homemaker">Homemaker</option>
+                    <option value="Student">Student</option>
+                    <option value="Defence Personnel">Defence Personnel</option>
+                    <option value="NRI">NRI</option>
                     <option value="Others">Others</option>
                   </CoolSelect>
                 </div>
@@ -1342,12 +1369,12 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Monthly Expenses (₹)</label>
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Annual Expenses (₹)</label>
                   <input 
                     type="number" 
                     value={expenses} 
-                    onChange={e => setExpenses(e.target.value)} 
-                    placeholder="e.g. 50,000"
+                    onChange={e => setExpenses(e.target.value)}
+                    placeholder="e.g. 6,00,000"
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950 dark:text-white focus:border-blue-500 outline-none"
                   />
                 </div>
@@ -1492,7 +1519,7 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
               <div className="space-y-3">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Select Goals Discussed</label>
                 <div className="flex flex-wrap gap-2">
-                  {['Retirement', 'Child Education', 'Child Marriage', 'Home Purchase', 'Wealth Creation', 'Emergency Fund', 'Tax Saving', 'Vacation', 'Vehicle'].map(goal => {
+                  {['Retirement', "Kid's Education", "Kid's Marriage", 'Dream Home', 'Dream Car', 'Emergency Fund', 'Vacation / Travel', 'Tax Saving', 'Higher Education', 'Wedding Planning'].map(goal => {
                     const isSelected = selectedGoalChips.includes(goal);
                     return (
                       <button
@@ -1752,7 +1779,7 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
               <div className="space-y-4">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Select Agenda Topics Discussed</label>
                 <div className="flex flex-wrap gap-2.5">
-                  {['Portfolio Review', 'Goal Mapping', 'Insurance Planning', 'Tax Saving', 'Estate Planning'].map(agenda => {
+                  {['Portfolio Review', 'New Investment', 'Goal Mapping', 'Issue Resolution', 'SIP Review', 'Insurance Review', 'Tax Planning', 'Estate Planning'].map(agenda => {
                     const active = selectedAgendaChips.includes(agenda);
                     return (
                       <button
@@ -1813,9 +1840,10 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
                     <textarea
                       value={bullet.text}
                       onChange={e => handleDiscussionBulletChange(bullet.id, e.target.value)}
+                      onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
                       placeholder="e.g. Client mentioned child's college target may shift to USA instead of India..."
                       rows={2}
-                      className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 dark:text-white outline-none focus:border-blue-500 resize-y"
+                      className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 dark:text-white outline-none focus:border-blue-500 resize-y overflow-hidden"
                     />
                     <button 
                       onClick={() => handleRemoveDiscussionBullet(bullet.id)} 
