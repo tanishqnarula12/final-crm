@@ -25,16 +25,19 @@ router.use(requireAuth);
 // confirming.
 router.get('/_diag_mom2', asyncHandler(async (req, res) => {
   if (!req.user.roles?.includes('ADMIN')) return res.status(403).json({ error: 'forbidden' });
-  const { userId, leadId } = req.query;
-  const [user, lead] = await Promise.all([
+  const { userId, leadId, clientId } = req.query;
+  const [user, lead, client] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId } }),
-    prisma.lead.findUnique({ where: { id: leadId } }),
+    leadId ? prisma.lead.findUnique({ where: { id: leadId } }) : null,
+    clientId ? prisma.client.findUnique({ where: { id: clientId } }) : null,
   ]);
-  if (!user || !lead) return res.status(404).json({ error: 'not found' });
+  if (!user) return res.status(404).json({ error: 'user not found' });
   res.json({
     user: { id: user.id, name: user.name, roles: user.roles, active: user.active },
-    lead: { id: lead.id, assignedTo: lead.assignedTo, ownerId: lead.ownerId, createdBy: lead.createdBy, stage: lead.stage },
-    canCreateMom: canCreate(user, 'mom', lead),
+    lead: lead ? { id: lead.id, assignedTo: lead.assignedTo, ownerId: lead.ownerId, createdBy: lead.createdBy, stage: lead.stage } : null,
+    client: client ? { id: client.id, assignedTo: client.assignedTo, createdBy: client.createdBy } : null,
+    canCreateMomForLead: lead ? canCreate(user, 'mom', lead) : null,
+    canCreateMomForClient: client ? canCreate(user, 'mom', client) : null,
   });
 }));
 
