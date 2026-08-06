@@ -19,6 +19,25 @@ import { canCreate } from '../lib/permissions.js';
 const router = Router();
 router.use(requireAuth);
 
+// TEMPORARY diagnostic — Admin only, read-only. Re-verifies the live
+// canCreate('mom', parentLead) result to rule out a stale deploy after a
+// user reported the "You cannot create MOMs" error persisting. Remove after
+// confirming.
+router.get('/_diag_mom2', asyncHandler(async (req, res) => {
+  if (!req.user.roles?.includes('ADMIN')) return res.status(403).json({ error: 'forbidden' });
+  const { userId, leadId } = req.query;
+  const [user, lead] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId } }),
+    prisma.lead.findUnique({ where: { id: leadId } }),
+  ]);
+  if (!user || !lead) return res.status(404).json({ error: 'not found' });
+  res.json({
+    user: { id: user.id, name: user.name, roles: user.roles, active: user.active },
+    lead: { id: lead.id, assignedTo: lead.assignedTo, ownerId: lead.ownerId, createdBy: lead.createdBy, stage: lead.stage },
+    canCreateMom: canCreate(user, 'mom', lead),
+  });
+}));
+
 const leadSchema = z.object({ id: z.string().min(1) }).passthrough();
 const bulkSchema = z.object({ leads: z.array(leadSchema) });
 
