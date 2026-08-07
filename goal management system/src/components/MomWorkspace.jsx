@@ -2281,6 +2281,19 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
             page-break-inside: avoid;
           }
 
+          /* CSS Grid does not fragment reliably across a print page break
+             in Chrome — even with break-inside:avoid on its container, a
+             grid's own children (e.g. the two-column To Do List) can still
+             split apart from their header onto the next page. Flex
+             paginates correctly, so force it here at print time. */
+          .mom-print-card div[style*="grid-template-columns"] {
+            display: flex !important;
+            flex-wrap: wrap !important;
+          }
+          .mom-print-card div[style*="grid-template-columns"] > div {
+            flex: 1 1 200px !important;
+          }
+
           /* Force all backgrounds, colors, borders to print as-is */
           * {
             -webkit-print-color-adjust: exact !important;

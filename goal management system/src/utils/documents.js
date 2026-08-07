@@ -51,6 +51,13 @@ export const wrapStandaloneHtml = (innerHtml, title = 'Document', extraCss = '')
       break-inside: avoid;
       page-break-inside: avoid;
     }
+    div[style*="grid-template-columns"] {
+      display: flex !important;
+      flex-wrap: wrap !important;
+    }
+    div[style*="grid-template-columns"] > div {
+      flex: 1 1 200px !important;
+    }
   }
 </style></head>
 <body>${innerHtml}</body></html>`;
@@ -83,6 +90,19 @@ const PRINT_SAFETY_CSS = `
     div[style*="border-radius:10px"] {
       break-inside: avoid;
       page-break-inside: avoid;
+    }
+    /* CSS Grid does not fragment reliably across a print page break in
+       Chrome — even with break-inside:avoid on its container, a grid's
+       own children can still split apart from their header onto the next
+       page. Force multi-column layouts to flex instead, which paginates
+       correctly, for every "N equal columns" grid in the generated docs
+       (the two-column To Do List, the client profile field grid, etc). */
+    div[style*="grid-template-columns"] {
+      display: flex !important;
+      flex-wrap: wrap !important;
+    }
+    div[style*="grid-template-columns"] > div {
+      flex: 1 1 200px !important;
     }
   }
 `;
