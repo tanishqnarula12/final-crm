@@ -2116,9 +2116,20 @@ export default function App() {
                 await addClient({ id: newId, name, pan, age: Number(age) || 0, clientDetails, createdAt: new Date().toISOString() });
                 updateLead(convertingLead.id, { stage: 'Converted', clientId: newId }, advisorProfile.name || getCurrentUser()?.name || 'System');
                 // Carry the lead's MOM (if it drafted one) over to the new
-                // client so it shows up in Draft MOM there — non-fatal if it
-                // fails, the conversion itself already succeeded.
-                reparentLeadMoms(convertingLead.id, newId).catch((err) => console.error('Failed to move lead MOM to new client:', err));
+                // client so it shows up in Draft MOM there. AWAITED (not
+                // fire-and-forget) so the loadData() below reflects the
+                // reparented MOM immediately — otherwise loadData() could
+                // race ahead of the reparent finishing, leaving the client's
+                // freshly-loaded .moms empty and causing the next MOM to
+                // wrongly restart at Meeting #1 instead of continuing from
+                // the lead's existing meeting count. Still non-fatal: a
+                // reparent failure doesn't block the conversion, which has
+                // already succeeded.
+                try {
+                  await reparentLeadMoms(convertingLead.id, newId);
+                } catch (err) {
+                  console.error('Failed to move lead MOM to new client:', err);
+                }
                 await loadData();
                 setLeadsChangeCounter(c => c + 1);
                 setView('clients');
