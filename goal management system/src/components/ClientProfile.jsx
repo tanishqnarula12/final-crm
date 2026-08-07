@@ -1934,8 +1934,29 @@ function DocPreviewModal({ doc, onClose }) {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button onClick={() => window.print()} className={btnSecondary + ' py-2 px-3'}>
-              <Printer size={14} /> Print
+            {/* A 'custom' doc's HTML renders inside a fixed-height, scrolling
+                <iframe> (see CustomDocPreview) — printing the PARENT window
+                only captures whatever ~500px happens to be visible in that
+                box, cutting off the rest of anything longer. Every other doc
+                type here is plain DOM content (no iframe), where the normal
+                window.print() + DOC_PRINT_STYLES approach already works fine. */}
+            <button
+              onClick={() => {
+                const isCustomHtml = doc.type === 'custom' && doc.attachment?.fileType === 'text/html' && doc.attachment?.html;
+                if (isCustomHtml) {
+                  const w = window.open('', '_blank');
+                  if (!w) { alert('Please allow pop-ups to print this document.'); return; }
+                  w.document.write(doc.attachment.html);
+                  w.document.close();
+                  w.focus();
+                  setTimeout(() => w.print(), 300);
+                } else {
+                  window.print();
+                }
+              }}
+              className={btnSecondary + ' py-2 px-3'}
+            >
+              <Printer size={14} /> Print / Save as PDF
             </button>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
               <X size={18} />
@@ -1994,13 +2015,31 @@ function CustomDocPreview({ doc }) {
             <p className="text-[10px] text-slate-450 dark:text-slate-500 mt-0.5 font-sans">Uploaded by {file.uploadedBy || 'System'} {file.date ? `· ${new Date(file.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}</p>
           </div>
         </div>
-        <a 
-          href={dataUrl} 
-          download={file.fileName}
-          className={btnPrimary + ' py-2 px-3.5 text-[11px]'}
-        >
-          Download File
-        </a>
+        <div className="flex items-center gap-2">
+          {isHtml && (
+            <button
+              type="button"
+              onClick={() => {
+                const w = window.open('', '_blank');
+                if (!w) { alert('Please allow pop-ups to print this document.'); return; }
+                w.document.write(file.html);
+                w.document.close();
+                w.focus();
+                setTimeout(() => w.print(), 300);
+              }}
+              className={btnPrimary + ' py-2 px-3.5 text-[11px]'}
+            >
+              Print / Save as PDF
+            </button>
+          )}
+          <a
+            href={dataUrl}
+            download={file.fileName}
+            className={btnSecondary + ' py-2 px-3.5 text-[11px]'}
+          >
+            Download File
+          </a>
+        </div>
       </div>
 
       {/* Preview container */}

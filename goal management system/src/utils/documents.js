@@ -34,6 +34,20 @@ export const wrapStandaloneHtml = (innerHtml, title = 'Document', extraCss = '')
   table { border-collapse: collapse; }
   img { max-width: 100%; }
   ${extraCss}
+  /* This is what actually renders when someone prints/saves-as-PDF a saved
+     document later (Documents tab, Client Profile) — the live in-app print
+     styles never apply there, this saved HTML is all a print dialog ever
+     sees. Without this, a plain browser print has no margin/page-break/color
+     control at all, which is what "messy PDF" meant in practice. */
+  @media print {
+    @page { margin: 8mm 10mm; size: A4; }
+    body { padding: 0 !important; }
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+  }
 </style></head>
 <body>${innerHtml}</body></html>`;
 

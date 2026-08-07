@@ -606,8 +606,29 @@ function DocPreviewModal({ doc, onClose }) {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button onClick={() => window.print()} className={btnSecondary + ' py-2 px-3'}>
-              <Printer size={14} /> Print
+            {/* A 'custom' doc's HTML renders inside a fixed-height, scrolling
+                <iframe> (see CustomDocPreview) — printing the PARENT window
+                only captures whatever ~500px happens to be visible in that
+                box, cutting off the rest of anything longer. Every other doc
+                type here is plain DOM content (no iframe), where the normal
+                window.print() + DOC_PRINT_STYLES approach already works fine. */}
+            <button
+              onClick={() => {
+                const isCustomHtml = doc.type === 'custom' && doc.attachment?.fileType === 'text/html' && doc.attachment?.html;
+                if (isCustomHtml) {
+                  const w = window.open('', '_blank');
+                  if (!w) { alert('Please allow pop-ups to print this document.'); return; }
+                  w.document.write(doc.attachment.html);
+                  w.document.close();
+                  w.focus();
+                  setTimeout(() => w.print(), 300);
+                } else {
+                  window.print();
+                }
+              }}
+              className={btnSecondary + ' py-2 px-3'}
+            >
+              <Printer size={14} /> Print / Save as PDF
             </button>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
               <X size={18} />
@@ -668,8 +689,22 @@ function CustomDocPreview({ doc }) {
         </div>
         <div className="flex items-center gap-2">
           {isHtml && (
-            <button onClick={() => window.print()} className={btnSecondary + ' py-2 px-3.5 text-[11px]'}>
-              <Printer size={13} /> Print
+            <button
+              onClick={() => {
+                // NOT window.print() — that prints the whole CRM page (sidebar,
+                // nav, everything) with the actual document squeezed into its
+                // iframe; opening the document alone in its own window is what
+                // makes "print" produce just the document, cleanly.
+                const w = window.open('', '_blank');
+                if (!w) { alert('Please allow pop-ups to print this document.'); return; }
+                w.document.write(file.html);
+                w.document.close();
+                w.focus();
+                setTimeout(() => w.print(), 300);
+              }}
+              className={btnSecondary + ' py-2 px-3.5 text-[11px]'}
+            >
+              <Printer size={13} /> Print / Save as PDF
             </button>
           )}
           <a
