@@ -59,6 +59,7 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
   const isEdit = !!initial;
   const [activeTab, setActiveTab] = useState('personal');
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
   const isAdmin = isAdminRole();
 
   // Load initial values safely — if an autosave draft exists for this form
@@ -189,9 +190,16 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
   };
 
   
-  const handleSave = () => {
+  const handleSave = async () => {
+    // Guards against a double-click (or double-tap) firing onSave twice —
+    // onSave is an async server call (creates/converts the client) with no
+    // other guard, so two rapid clicks used to race: the first request
+    // succeeds, the second then collided with the server's own PAN-
+    // uniqueness check and surfaced as "A client with this PAN already
+    // exists", even though nothing was actually wrong with the form.
+    if (saving) return;
     const errs = {};
-    
+
     // Validate Personal Details
     if (!name.trim()) errs.name = "Required";
     if (!age || isNaN(age) || age <= 0) errs.age = "Required";
@@ -306,7 +314,15 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
       notes: initialDetails.notes || '',
     };
     clearDraft();
-    onSave(name, pan, Number(age) || 0, clientDetails);
+    setSaving(true);
+    try {
+      await onSave(name, pan, Number(age) || 0, clientDetails);
+    } finally {
+      // Harmless if onSave already navigated away/unmounted this modal on
+      // success — only matters for the failure case, so a retry is possible
+      // instead of the button staying stuck disabled.
+      setSaving(false);
+    }
   };
 
   const tabClass = (tab) => `
@@ -335,11 +351,12 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
             </button>
           )}
           {activeTab === 'familyBusiness' && (
-            <button 
-              onClick={handleSave} 
-              className={btnPrimary}
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className={btnPrimary + (saving ? ' opacity-60 cursor-not-allowed' : '')}
             >
-              {isEdit ? "Save Changes" : "Create Client"}
+              {saving ? 'Saving…' : (isEdit ? "Save Changes" : "Create Client")}
             </button>
           )}
         </div>

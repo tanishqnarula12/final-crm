@@ -432,6 +432,7 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
     if (!client?.id) return;
     let editingIdFromDraft = null;
     let followupCreatedFromDraft = false;
+    let draftData = null;
     try {
       const raw = localStorage.getItem(`crm:mom:auto:${client.id}`);
       if (raw) {
@@ -469,23 +470,11 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
         if (d._editingMomId) { setEditingMomId(d._editingMomId); editingIdFromDraft = d._editingMomId; }
         if (d._followupItemsCreated) { setFollowupCreated(true); followupCreatedFromDraft = true; }
         if (d._lastAutoSaved) setLastAutoSaved(new Date(d._lastAutoSaved));
-        // Only restore these from a stale draft when we're resuming an actual
-        // in-progress edit of an existing saved MOM — for a fresh MOM the
-        // Client Profile (mapped below) is always the source of truth.
-        if (editingIdFromDraft) {
-          if (d.meetingNumber) setMeetingNumber(d.meetingNumber);
-          if (d.occupation) {
-            const standard = [
-              'Salaried – Private Sector', 'Salaried – Government Sector', 'Business', 'Self-Employed',
-              'Professional', 'Agriculturist / Farmer', 'Retired', 'Homemaker', 'Student',
-              'Defence Personnel', 'NRI',
-            ];
-            if (standard.includes(d.occupation)) { setOccupation(d.occupation); setOccupationOther(''); }
-            else { setOccupation('Others'); setOccupationOther(d.occupation); }
-          }
-          if (d.maritalStatus) setMaritalStatus(d.maritalStatus);
-          if (d.investments) setInvestments(d.investments);
-        }
+        // Meeting # only makes sense to resume from a draft when it belongs
+        // to an actual in-progress edit of an existing saved MOM — a fresh
+        // MOM always recomputes it below (client.moms.length + 1).
+        if (editingIdFromDraft && d.meetingNumber) setMeetingNumber(d.meetingNumber);
+        draftData = d;
       }
     } catch { /* ignore corrupt autosave */ }
 
@@ -550,6 +539,29 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
         }));
       }
     }
+    // Apply the autosaved draft's own answers LAST, after the client-profile
+    // defaults above — so the advisor's actual in-progress typing/toggles for
+    // THIS meeting always win over a generic profile default, instead of
+    // being silently discarded. This runs for ANY valid draft (not just when
+    // resuming an existing saved MOM) — previously these three were gated
+    // behind editingIdFromDraft, so if MomWorkspace ever remounted mid-draft
+    // (tab switch, overlay close/reopen) before the advisor had explicitly
+    // saved once, occupation/marital status/investment toggles they'd
+    // already filled in were wiped back to the client's stored defaults
+    // (usually blank), which read as "autosave isn't working".
+    if (draftData) {
+      if (draftData.occupation) {
+        const standardOccupations = [
+          'Salaried – Private Sector', 'Salaried – Government Sector', 'Business', 'Self-Employed',
+          'Professional', 'Agriculturist / Farmer', 'Retired', 'Homemaker', 'Student',
+          'Defence Personnel', 'NRI',
+        ];
+        if (standardOccupations.includes(draftData.occupation)) { setOccupation(draftData.occupation); setOccupationOther(''); }
+        else { setOccupation('Others'); setOccupationOther(draftData.occupation); }
+      }
+      if (draftData.maritalStatus) setMaritalStatus(draftData.maritalStatus);
+      if (draftData.investments) setInvestments(draftData.investments);
+    }
     if (!followupCreatedFromDraft) setFollowupCreated(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client?.id]);
@@ -560,10 +572,15 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
   // typing (accidental navigation, browser crash) — debounced 1s after the
   // user stops typing, written to localStorage only, never creates or
   // updates a real MOM record on its own.
+  // Always holds a closure over the LATEST field values (refreshed every
+  // render, no dependency array) so the unmount-flush effect below — which
+  // intentionally has an empty dependency array, since it must only run
+  // once on the actual final unmount, not on every keystroke — can still
+  // call it and get current data instead of whatever was current on mount.
+  const writeAutosaveRef = useRef(() => {});
   useEffect(() => {
-    if (!client?.id || !meetingNumber) return;
-    if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
-    autoSaveRef.current = setTimeout(() => {
+    writeAutosaveRef.current = () => {
+      if (!client?.id || !meetingNumber) return;
       const now = new Date().toISOString();
       try {
         const localPayload = {
@@ -586,7 +603,13 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
         localStorage.setItem(`crm:mom:auto:${client.id}`, JSON.stringify(localPayload));
         setLastAutoSaved(new Date(now));
       } catch { /* ignore quota errors */ }
-    }, 1000);
+    };
+  });
+
+  useEffect(() => {
+    if (!client?.id || !meetingNumber) return;
+    if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
+    autoSaveRef.current = setTimeout(() => writeAutosaveRef.current(), 1000);
     return () => { if (autoSaveRef.current) clearTimeout(autoSaveRef.current); };
   }, [
     meetingNumber, meetingDate, advisorName, meetingMode, occupation, occupationOther,
@@ -596,6 +619,15 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
     followupRequired, followupDate, followupPurpose, followupNotes, editingMomId,
     followupCreated, client?.id,
   ]);
+
+  // Flush immediately on the workspace's actual final unmount (Close & Back
+  // to Lead, switching top tabs, closing the browser tab) — otherwise
+  // whatever the debounced write above hadn't gotten to yet (up to 1s of
+  // the most recent typing/toggle clicks) would just be discarded instead
+  // of saved, which is exactly the data loss autosave exists to prevent.
+  useEffect(() => {
+    return () => { writeAutosaveRef.current(); };
+  }, []);
 
   // A follow-up marked in the MOM creates a Task (due on the follow-up date,
   // with its own notification) and a calendar Meeting entry. Returns true if
