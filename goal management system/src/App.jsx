@@ -2261,7 +2261,11 @@ export default function App() {
           >
             <X size={14} /> Close &amp; Back to Lead
           </button>
-          <div className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+          {/* pt-20 (not the usual pt-4) — the floating close button above is
+              `fixed`, so it doesn't reserve any layout space; without extra
+              clearance here the "Saved MOM Drafts" panel and wizard tab bar
+              render right underneath it and visually collide. */}
+          <div className="max-w-7xl w-full mx-auto px-6 pt-20 pb-8">
             {momLeadMomsLoading ? (
               <div className="flex items-center justify-center py-24 text-slate-400 dark:text-slate-500 text-sm font-semibold">
                 Loading…

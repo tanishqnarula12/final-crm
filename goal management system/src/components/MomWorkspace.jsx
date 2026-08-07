@@ -1495,7 +1495,15 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
               <h3 className="text-lg font-bold text-slate-900 dark:text-white pb-3 border-b border-slate-200 dark:border-slate-800">Current Investments & Insurance Products</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {Object.keys(investments).map(key => (
+                {/* Fixed order from investmentLabels (a static, hardcoded
+                    object), not Object.keys(investments) — Postgres JSONB
+                    doesn't preserve object key insertion order, so after a
+                    save/reload round-trip the KEYS could come back
+                    reordered even though every value is still correctly
+                    attached to its own key. Rendering off the data itself
+                    made it look like rows randomly shuffled or "lost" their
+                    values on reopen. */}
+                {Object.keys(investmentLabels).map(key => (
                   <div key={key} className="flex items-center justify-between p-4 border border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-900/40">
                     <div className="flex items-center gap-3">
                       <span className="text-2xl">{investmentIcons[key]}</span>
