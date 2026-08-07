@@ -40,12 +40,16 @@ export const wrapStandaloneHtml = (innerHtml, title = 'Document', extraCss = '')
      sees. Without this, a plain browser print has no margin/page-break/color
      control at all, which is what "messy PDF" meant in practice. */
   @media print {
-    @page { margin: 8mm 10mm; size: A4; }
-    body { padding: 0 !important; }
+    @page { margin: 6mm; size: A4; }
+    body { padding: 10mm 8mm !important; }
     * {
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
       color-adjust: exact !important;
+    }
+    div[style*="border-radius:10px"] {
+      break-inside: avoid;
+      page-break-inside: avoid;
     }
   }
 </style></head>
@@ -60,12 +64,25 @@ export const wrapStandaloneHtml = (innerHtml, title = 'Document', extraCss = '')
 // saved document retroactively, old and new, without touching stored data.
 const PRINT_SAFETY_CSS = `
   @media print {
-    @page { margin: 8mm 10mm; size: A4; }
+    @page { margin: 6mm; size: A4; }
     html, body { background: #ffffff !important; }
+    /* @page margin support is inconsistent across print engines — body
+       padding is the reliable fallback so pages never end up flush edge-
+       to-edge even where @page is ignored. Overrides any padding:0 the
+       stored HTML's own print block may have set (this rule is injected
+       after it, so it wins at equal specificity). */
+    body { padding: 10mm 8mm !important; }
     * {
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
       color-adjust: exact !important;
+    }
+    /* Keep each card/section whole across a page break instead of slicing
+       it — every card in the generated documents (MOM, proposals, reviews)
+       shares this same rounded-corner container style. */
+    div[style*="border-radius:10px"] {
+      break-inside: avoid;
+      page-break-inside: avoid;
     }
   }
 `;

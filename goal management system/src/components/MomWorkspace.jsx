@@ -2224,29 +2224,32 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
       <style>{`
         @media print {
           @page {
-            margin: 8mm 10mm;
+            margin: 6mm;
             size: A4;
           }
 
           /* Hide all application chrome, header, footer, tabs */
-          header, 
+          header,
           footer,
           .w-full.overflow-x-auto,
           .print\\:hidden,
           button {
             display: none !important;
           }
-          
+
+          /* @page margin support is inconsistent across print engines —
+             body padding is the reliable fallback so the printed page
+             never ends up flush edge-to-edge even where @page is ignored. */
           body, html {
             background: white !important;
             color: black !important;
             margin: 0 !important;
-            padding: 0 !important;
+            padding: 10mm 8mm !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             color-adjust: exact !important;
           }
-          
+
           main {
             padding: 0 !important;
             margin: 0 !important;
@@ -2266,7 +2269,15 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
             background: white !important;
           }
 
-          .mom-print-card div {
+          /* Scoped to actual card containers only (every card in this doc
+             shares this rounded-corner style) — NOT every nested div. The
+             old unscoped ".mom-print-card div" rule caught the single
+             outermost wrapper div too (it wraps the whole multi-page
+             document), telling something several pages tall to "never
+             break", which made the print engine duplicate content across
+             the page boundary instead of resolving the conflict cleanly. */
+          .mom-print-card div[style*="border-radius:10px"] {
+            break-inside: avoid;
             page-break-inside: avoid;
           }
 
