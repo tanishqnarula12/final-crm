@@ -20,6 +20,7 @@ import ClientActivityLog from './ClientActivityLog';
 import { uid, calcGoal, fmtINR, fmtFull, fmtSip, goalEmoji, monthLabel, fmtDate } from '../utils/calc';
 import { hasAllocation, allocationTotals, filledItems } from '../utils/assets';
 import { cobrTotals } from '../utils/cobr';
+import { printHtmlDocument, printSafeDataUrl } from '../utils/documents';
 
 export default function ClientProfileView({
   client, clients = [], onEditClient, onDeleteClient, isViewer,
@@ -1944,12 +1945,7 @@ function DocPreviewModal({ doc, onClose }) {
               onClick={() => {
                 const isCustomHtml = doc.type === 'custom' && doc.attachment?.fileType === 'text/html' && doc.attachment?.html;
                 if (isCustomHtml) {
-                  const w = window.open('', '_blank');
-                  if (!w) { alert('Please allow pop-ups to print this document.'); return; }
-                  w.document.write(doc.attachment.html);
-                  w.document.close();
-                  w.focus();
-                  setTimeout(() => w.print(), 300);
+                  printHtmlDocument(doc.attachment.html);
                 } else {
                   window.print();
                 }
@@ -1997,10 +1993,12 @@ function CustomDocPreview({ doc }) {
     );
   }
 
-  const dataUrl = file.dataUrl || file.data;
   const isImage = file.fileType?.startsWith('image/');
   const isPdf = file.fileType === 'application/pdf';
   const isHtml = file.fileType === 'text/html' && !!file.html;
+  // Rebuild from the patched (print-safe) HTML, not the stale file.dataUrl
+  // captured at save time — same fix as DocumentsView's CustomDocPreview.
+  const dataUrl = isHtml ? printSafeDataUrl(file.html) : (file.dataUrl || file.data);
 
   return (
     <div className="space-y-6">
@@ -2019,14 +2017,7 @@ function CustomDocPreview({ doc }) {
           {isHtml && (
             <button
               type="button"
-              onClick={() => {
-                const w = window.open('', '_blank');
-                if (!w) { alert('Please allow pop-ups to print this document.'); return; }
-                w.document.write(file.html);
-                w.document.close();
-                w.focus();
-                setTimeout(() => w.print(), 300);
-              }}
+              onClick={() => printHtmlDocument(file.html)}
               className={btnPrimary + ' py-2 px-3.5 text-[11px]'}
             >
               Print / Save as PDF

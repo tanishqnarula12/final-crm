@@ -51,6 +51,58 @@ export const wrapStandaloneHtml = (innerHtml, title = 'Document', extraCss = '')
 </style></head>
 <body>${innerHtml}</body></html>`;
 
+// Print-safety CSS forced into a document at print time, regardless of what
+// CSS its stored `html` already carries. Documents saved before this fix
+// existed have NO print CSS baked in at all, so without this injection their
+// backgrounds (letterhead gradient, colored badge fills) print as blank
+// white — since browsers strip background colors by default when printing —
+// leaving white-on-white/near-invisible text. Injecting it here fixes every
+// saved document retroactively, old and new, without touching stored data.
+const PRINT_SAFETY_CSS = `
+  @media print {
+    @page { margin: 8mm 10mm; size: A4; }
+    html, body { background: #ffffff !important; }
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+  }
+`;
+
+// Injects PRINT_SAFETY_CSS into a saved document's raw HTML, regardless of
+// whether that HTML already carries print CSS of its own.
+export const patchHtmlForPrint = (html) => {
+  if (!html) return html;
+  return /<\/head>/i.test(html)
+    ? html.replace(/<\/head>/i, `<style>${PRINT_SAFETY_CSS}</style></head>`)
+    : `<style>${PRINT_SAFETY_CSS}</style>${html}`;
+};
+
+// Build a fresh, print-safe data: URL for a saved document's HTML — used so
+// a *downloaded* .html file also renders/prints correctly outside the app
+// (its own file.dataUrl was captured at save time and carries the same
+// stale CSS gap as file.html would).
+export const printSafeDataUrl = (html) =>
+  'data:text/html;charset=utf-8,' + encodeURIComponent(patchHtmlForPrint(html));
+
+// Open a saved document's raw HTML in a fresh window and print it there —
+// bypasses the fixed-height scrolling iframe used for on-screen preview,
+// and force-injects PRINT_SAFETY_CSS so colors/backgrounds always survive
+// printing even for documents saved long before that CSS existed.
+export const printHtmlDocument = (html) => {
+  const w = window.open('', '_blank');
+  if (!w) {
+    alert('Please allow pop-ups to print this document.');
+    return false;
+  }
+  w.document.write(patchHtmlForPrint(html));
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 300);
+  return true;
+};
+
 // Serialize a live DOM element to HTML, converting any <canvas> (e.g. Chart.js
 // charts) into static <img> snapshots so they survive in the saved document.
 export const snapshotElementHtml = (el) => {

@@ -8,6 +8,7 @@ import { calcGoal, fmtINR, fmtFull, fmtSip, goalEmoji, monthLabel, fmtDate } fro
 import { hasAllocation, allocationTotals, filledItems } from '../utils/assets';
 import { updateClient, deleteMom } from '../services/db';
 import { getCurrentUser } from '../utils/auth';
+import { printHtmlDocument, printSafeDataUrl } from '../utils/documents';
 
 // ---------------------------------------------------------------------------
 // Build a unified, DB-driven list of generated documents from the clients data.
@@ -616,12 +617,7 @@ function DocPreviewModal({ doc, onClose }) {
               onClick={() => {
                 const isCustomHtml = doc.type === 'custom' && doc.attachment?.fileType === 'text/html' && doc.attachment?.html;
                 if (isCustomHtml) {
-                  const w = window.open('', '_blank');
-                  if (!w) { alert('Please allow pop-ups to print this document.'); return; }
-                  w.document.write(doc.attachment.html);
-                  w.document.close();
-                  w.focus();
-                  setTimeout(() => w.print(), 300);
+                  printHtmlDocument(doc.attachment.html);
                 } else {
                   window.print();
                 }
@@ -669,10 +665,14 @@ function CustomDocPreview({ doc }) {
     );
   }
 
-  const dataUrl = file.dataUrl || file.data;
   const isImage = file.fileType?.startsWith('image/');
   const isPdf = file.fileType === 'application/pdf';
   const isHtml = file.fileType === 'text/html' && !!file.html;
+  // For HTML docs, rebuild the data URL from the patched (print-safe) HTML
+  // rather than file.dataUrl — that field was captured at save time and
+  // carries the same stale-CSS gap as file.html, so a downloaded copy would
+  // still print washed-out even after the in-app Print button was fixed.
+  const dataUrl = isHtml ? printSafeDataUrl(file.html) : (file.dataUrl || file.data);
 
   return (
     <div className="space-y-6">
@@ -690,18 +690,7 @@ function CustomDocPreview({ doc }) {
         <div className="flex items-center gap-2">
           {isHtml && (
             <button
-              onClick={() => {
-                // NOT window.print() — that prints the whole CRM page (sidebar,
-                // nav, everything) with the actual document squeezed into its
-                // iframe; opening the document alone in its own window is what
-                // makes "print" produce just the document, cleanly.
-                const w = window.open('', '_blank');
-                if (!w) { alert('Please allow pop-ups to print this document.'); return; }
-                w.document.write(file.html);
-                w.document.close();
-                w.focus();
-                setTimeout(() => w.print(), 300);
-              }}
+              onClick={() => printHtmlDocument(file.html)}
               className={btnSecondary + ' py-2 px-3.5 text-[11px]'}
             >
               <Printer size={13} /> Print / Save as PDF
