@@ -958,16 +958,16 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
     <div style="background:white;border:1px solid #d0daea;border-radius:10px;padding:22px 24px;margin-bottom:18px;">
       <div style="font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#6b84a8;margin-bottom:14px;">🧑 Client Profile</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-bottom:${(clientMaritalStatus === 'Married' && (clientSpouseName || kidsData.length)) ? '16px' : '0'};">
-        ${profileClientName ? `<div><div style="font-size:10px;color:#6b84a8;text-transform:uppercase;letter-spacing:1px;">Client</div><div style="font-weight:600;color:#0f1f3d;margin-top:3px;">${profileClientName}</div></div>` : ''}
-        ${clientMaritalStatus ? `<div><div style="font-size:10px;color:#6b84a8;text-transform:uppercase;letter-spacing:1px;">Marital Status</div><div style="font-weight:600;color:#0f1f3d;margin-top:3px;">${clientMaritalStatus === 'Married' ? '💍 Married' : '🙋 Single'}</div></div>` : ''}
-        ${clientOccupation ? `<div><div style="font-size:10px;color:#6b84a8;text-transform:uppercase;letter-spacing:1px;">Occupation</div><div style="font-weight:600;color:#0f1f3d;margin-top:3px;">${clientOccupation}</div></div>` : ''}
-        ${clientIncome ? `<div><div style="font-size:10px;color:#6b84a8;text-transform:uppercase;letter-spacing:1px;">Annual Income</div><div style="font-weight:600;color:#0f1f3d;margin-top:3px;">₹${Number(clientIncome).toLocaleString('en-IN')}</div></div>` : ''}
-        ${clientExpenses ? `<div><div style="font-size:10px;color:#6b84a8;text-transform:uppercase;letter-spacing:1px;">Annual Expenses</div><div style="font-weight:600;color:#0f1f3d;margin-top:3px;">₹${Number(clientExpenses).toLocaleString('en-IN')}</div></div>` : ''}
+        ${profileClientName ? `<div><div style="font-size:10px;color:#6b84a8;text-transform:uppercase;letter-spacing:1px;">Client</div><div style="font-size:13px;font-weight:600;color:#0f1f3d;margin-top:3px;">${profileClientName}</div></div>` : ''}
+        ${clientMaritalStatus ? `<div><div style="font-size:10px;color:#6b84a8;text-transform:uppercase;letter-spacing:1px;">Marital Status</div><div style="font-size:13px;font-weight:600;color:#0f1f3d;margin-top:3px;">${clientMaritalStatus === 'Married' ? '💍 Married' : '🙋 Single'}</div></div>` : ''}
+        ${clientOccupation ? `<div><div style="font-size:10px;color:#6b84a8;text-transform:uppercase;letter-spacing:1px;">Occupation</div><div style="font-size:13px;font-weight:600;color:#0f1f3d;margin-top:3px;">${clientOccupation}</div></div>` : ''}
+        ${clientIncome ? `<div><div style="font-size:10px;color:#6b84a8;text-transform:uppercase;letter-spacing:1px;">Annual Income</div><div style="font-size:13px;font-weight:600;color:#0f1f3d;margin-top:3px;">₹${Number(clientIncome).toLocaleString('en-IN')}</div></div>` : ''}
+        ${clientExpenses ? `<div><div style="font-size:10px;color:#6b84a8;text-transform:uppercase;letter-spacing:1px;">Annual Expenses</div><div style="font-size:13px;font-weight:600;color:#0f1f3d;margin-top:3px;">₹${Number(clientExpenses).toLocaleString('en-IN')}</div></div>` : ''}
       </div>
       ${clientMaritalStatus === 'Married' && (clientSpouseName || kidsData.length) ? `
       <div style="border-top:1px solid #e8f0fd;padding-top:14px;display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;">
-        ${clientSpouseName ? `<div><div style="font-size:10px;color:#6b84a8;text-transform:uppercase;letter-spacing:1px;">Spouse</div><div style="font-weight:600;color:#0f1f3d;margin-top:3px;">👫 ${clientSpouseName}</div></div>` : ''}
-        ${kidsData.length ? `<div><div style="font-size:10px;color:#6b84a8;text-transform:uppercase;letter-spacing:1px;">Children</div><div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:6px;">${kidsData.map(k => `<span style="background:#e8f0fd;color:#1044a3;font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;">👶 ${k.name}${k.age ? ' ('+k.age+'y)' : ''}</span>`).join('')}</div></div>` : ''}
+        ${clientSpouseName ? `<div><div style="font-size:10px;color:#6b84a8;text-transform:uppercase;letter-spacing:1px;">Spouse</div><div style="font-size:13px;font-weight:600;color:#0f1f3d;margin-top:3px;">👫 ${clientSpouseName}</div></div>` : ''}
+        ${kidsData.length ? `<div><div style="font-size:10px;color:#6b84a8;text-transform:uppercase;letter-spacing:1px;">Children</div><div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:6px;">${kidsData.map(k => `<span style="background:#e8f0fd;color:#1044a3;font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;">👶 ${k.name}${k.age ? ' ('+k.age+'y)' : ''}</span>`).join('')}</div></div>` : ''}
       </div>` : ''}
     </div>` : ''}
 
@@ -987,7 +987,7 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
             <span style="font-size:16px;line-height:1;">${icon}</span>
             <span style="font-size:13px;font-weight:500;color:#1e3a5f;">${label}</span>
             <div style="width:6px;height:6px;border-radius:50%;background:${dotColor};margin-left:2px;"></div>
-            <span style="font-size:12.5px;font-weight:700;color:${dotColor};">${val || 'N/A'}</span>
+            <span style="font-size:11px;font-weight:700;color:${dotColor};">${val || 'N/A'}</span>
           </div>`;
         }).join('')}
       </div>
@@ -1012,7 +1012,7 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
               <div style="background:#d0daea;height:6px;border-radius:99px;overflow:hidden;margin-bottom:4px;">
                 <div style="width:${pct}%;height:100%;background:${barColor};border-radius:99px;"></div>
               </div>
-              <div style="font-size:12px;font-weight:700;color:${barColor};text-align:right;">${pct}% complete</div>` : ''}
+              <div style="font-size:11px;font-weight:700;color:${barColor};text-align:right;">${pct}% complete</div>` : ''}
             </div>`;
           }).join('')}
         </div>
@@ -1024,7 +1024,7 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
     <div style="background:white;border:1px solid #d0daea;border-radius:10px;padding:22px 24px;margin-bottom:18px;">
       <div style="font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#6b84a8;margin-bottom:14px;">To Do List from Previous Meeting</div>
       ${lastDate ? `<div style="background:#f8f7f4;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;gap:24px;flex-wrap:wrap;">
-        <div><span style="font-size:11px;color:#7a7a9a;text-transform:uppercase;letter-spacing:1px;">Last Meeting</span><div style="font-weight:600;margin-top:2px;">${formatDate(lastDate)}</div></div>
+        <div><span style="font-size:10px;color:#7a7a9a;text-transform:uppercase;letter-spacing:1px;">Last Meeting</span><div style="font-size:13px;font-weight:600;margin-top:2px;">${formatDate(lastDate)}</div></div>
       </div>` : ''}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
         <div>
@@ -1032,28 +1032,28 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
           ${prevOurRecsFiltered.length ? prevOurRecsFiltered.map((r, i) => `
             <div style="border:1px solid #d0daea;border-radius:7px;padding:11px 13px;margin-bottom:8px;">
               <div style="display:flex;align-items:flex-start;gap:10px;">
-                <div style="width:22px;height:22px;border-radius:50%;background:#1044a3;color:white;font-size:10px;font-weight:700;display:grid;place-items:center;flex-shrink:0;">${i+1}</div>
+                <div style="width:22px;height:22px;border-radius:50%;background:#1044a3;color:white;font-size:11px;font-weight:700;display:grid;place-items:center;flex-shrink:0;">${i+1}</div>
                 <div>
                   <div style="font-size:13px;color:#0f1f3d;font-weight:500;line-height:1.4;">${r.text}</div>
-                  ${r.status ? `<div style="margin-top:6px;"><span style="background:${badgeBg(r.status)};color:${badgeColor(r.status)};font-size:10px;font-weight:700;padding:3px 8px;border-radius:99px;">${decIcon(r.status)} ${r.status}</span></div>` : ''}
+                  ${r.status ? `<div style="margin-top:6px;"><span style="background:${badgeBg(r.status)};color:${badgeColor(r.status)};font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;">${decIcon(r.status)} ${r.status}</span></div>` : ''}
                 </div>
               </div>
             </div>
-          `).join('') : '<div style="font-size:12.5px;color:#6b84a8;">No actions</div>'}
+          `).join('') : '<div style="font-size:11px;color:#6b84a8;">No actions</div>'}
         </div>
         <div>
           <div style="background:#fef6e4;border-left:3px solid #c47c05;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#c47c05;">👤 Client End</div>
           ${prevClientRecsFiltered.length ? prevClientRecsFiltered.map((r, i) => `
             <div style="border:1px solid #e2e0d8;border-radius:7px;padding:11px 13px;margin-bottom:8px;">
               <div style="display:flex;align-items:flex-start;gap:10px;">
-                <div style="width:22px;height:22px;border-radius:50%;background:#c47c05;color:white;font-size:10px;font-weight:700;display:grid;place-items:center;flex-shrink:0;">${i+1}</div>
+                <div style="width:22px;height:22px;border-radius:50%;background:#c47c05;color:white;font-size:11px;font-weight:700;display:grid;place-items:center;flex-shrink:0;">${i+1}</div>
                 <div>
                   <div style="font-size:13px;color:#0f1f3d;font-weight:500;line-height:1.4;">${r.text}</div>
-                  ${r.status ? `<div style="margin-top:6px;"><span style="background:${badgeBg(r.status)};color:${badgeColor(r.status)};font-size:10px;font-weight:700;padding:3px 8px;border-radius:99px;">${decIcon(r.status)} ${r.status}</span></div>` : ''}
+                  ${r.status ? `<div style="margin-top:6px;"><span style="background:${badgeBg(r.status)};color:${badgeColor(r.status)};font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;">${decIcon(r.status)} ${r.status}</span></div>` : ''}
                 </div>
               </div>
             </div>
-          `).join('') : '<div style="font-size:12.5px;color:#6b84a8;">No actions</div>'}
+          `).join('') : '<div style="font-size:11px;color:#6b84a8;">No actions</div>'}
         </div>
       </div>
     </div>` : ''}
@@ -1070,11 +1070,11 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
               <div style="display:flex;align-items:flex-start;gap:10px;">
                 <div style="width:22px;height:22px;border-radius:50%;background:#1044a3;color:white;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${i+1}</div>
                 <div style="flex:1;">
-                  <div style="font-size:13px;color:#0f1f3d;margin-bottom:6px;">${r.text}</div>
+                  <div style="font-size:13px;font-weight:500;color:#0f1f3d;margin-bottom:6px;">${r.text}</div>
                   ${r.dec ? `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:99px;background:${r.dec==='Agreed'?'#e8f0fd':r.dec==='Not Agreed'?'#fdf0ef':'#fdf8ec'};color:${r.dec==='Agreed'?'#1044a3':r.dec==='Not Agreed'?'#991b1b':'#b8860b'};">${decIcon(r.dec)} ${r.dec}</span>` : ''}
                 </div>
               </div>
-            </div>`).join('') : '<div style="color:#6b84a8;font-size:12.5px;padding:8px;">No actions added.</div>'}
+            </div>`).join('') : '<div style="color:#6b84a8;font-size:11px;padding:8px;">No actions added.</div>'}
         </div>
         <div>
           <div style="background:#fef6e4;border-left:3px solid #c47c05;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#c47c05;">👤 Client End</div>
@@ -1083,11 +1083,11 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
               <div style="display:flex;align-items:flex-start;gap:10px;">
                 <div style="width:22px;height:22px;border-radius:50%;background:#c47c05;color:white;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${i+1}</div>
                 <div style="flex:1;">
-                  <div style="font-size:13px;color:#0f1f3d;margin-bottom:6px;">${r.text}</div>
+                  <div style="font-size:13px;font-weight:500;color:#0f1f3d;margin-bottom:6px;">${r.text}</div>
                   ${r.dec ? `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:99px;background:${r.dec==='Agreed'?'#e8f0fd':r.dec==='Not Agreed'?'#fdf0ef':'#fdf8ec'};color:${r.dec==='Agreed'?'#1044a3':r.dec==='Not Agreed'?'#991b1b':'#b8860b'};">${decIcon(r.dec)} ${r.dec}</span>` : ''}
                 </div>
               </div>
-            </div>`).join('') : '<div style="color:#6b84a8;font-size:12.5px;padding:8px;">No actions added.</div>'}
+            </div>`).join('') : '<div style="color:#6b84a8;font-size:11px;padding:8px;">No actions added.</div>'}
         </div>
       </div>
     </div>` : ''}
@@ -1100,7 +1100,7 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
         ${discussionFiltered.map(d => `
           <li style="display:flex;align-items:flex-start;gap:10px;margin-bottom:9px;padding-bottom:9px;border-bottom:1px solid #f0ede8;">
             <div style="width:7px;height:7px;border-radius:50%;background:#1a5fd4;margin-top:6px;flex-shrink:0;"></div>
-            <span style="font-size:13.5px;color:#1a1a2e;overflow-wrap:anywhere;white-space:pre-wrap;">${d}</span>
+            <span style="font-size:13px;color:#1a1a2e;overflow-wrap:anywhere;white-space:pre-wrap;">${d}</span>
           </li>
         `).join('')}
       </ul>
@@ -1111,8 +1111,8 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
     <div style="background:linear-gradient(to right,#e8f0fd,white);border:1.5px solid #1a5fd4;border-radius:10px;padding:22px 24px;margin-bottom:18px;">
       <div style="font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#1a5fd4;margin-bottom:10px;">Next Follow-up Scheduled</div>
       <div style="display:flex;gap:24px;flex-wrap:wrap;">
-        <div><div style="font-size:11px;color:#7a7a9a;text-transform:uppercase;letter-spacing:1px;">Date</div><div style="font-size:16px;font-weight:700;color:#2d5016;margin-top:2px;">${formatDate(followupDateValue)}</div></div>
-        ${followupPurposeValue ? `<div><div style="font-size:11px;color:#7a7a9a;text-transform:uppercase;letter-spacing:1px;">Purpose</div><div style="font-weight:600;color:#1a1a2e;margin-top:2px;">${followupPurposeValue}</div></div>` : ''}
+        <div><div style="font-size:10px;color:#7a7a9a;text-transform:uppercase;letter-spacing:1px;">Date</div><div style="font-size:13px;font-weight:700;color:#2d5016;margin-top:2px;">${formatDate(followupDateValue)}</div></div>
+        ${followupPurposeValue ? `<div><div style="font-size:10px;color:#7a7a9a;text-transform:uppercase;letter-spacing:1px;">Purpose</div><div style="font-size:13px;font-weight:600;color:#1a1a2e;margin-top:2px;">${followupPurposeValue}</div></div>` : ''}
       </div>
       ${followupNotesValue ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #c8e0b0;font-size:13px;color:#3d3d5c;white-space:pre-wrap;text-align:left;">${followupNotesValue}</div>` : ''}
     </div>` : `
@@ -1122,7 +1122,7 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
 
     <!-- Footer -->
     <div style="text-align:center;padding:20px;color:#aaa;font-size:11px;letter-spacing:0.5px;">
-      <div style="margin-bottom:12px;font-size:12px;line-height:1.4;color:#888;">These Minutes of Meeting have been prepared based on our discussions and summarize the key points and agreed action items. If you have any questions or require any clarification, please feel free to contact our team.</div>
+      <div style="margin-bottom:12px;font-size:11px;line-height:1.4;color:#888;">These Minutes of Meeting have been prepared based on our discussions and summarize the key points and agreed action items. If you have any questions or require any clarification, please feel free to contact our team.</div>
       Document generated on ${formatDate(new Date().toISOString().split('T')[0])} · Team Fintness · Confidential
     </div>
   </div>
