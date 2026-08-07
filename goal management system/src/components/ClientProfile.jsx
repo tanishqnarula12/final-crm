@@ -20,7 +20,8 @@ import ClientActivityLog from './ClientActivityLog';
 import { uid, calcGoal, fmtINR, fmtFull, fmtSip, goalEmoji, monthLabel, fmtDate } from '../utils/calc';
 import { hasAllocation, allocationTotals, filledItems } from '../utils/assets';
 import { cobrTotals } from '../utils/cobr';
-import { printHtmlDocument, printSafeDataUrl } from '../utils/documents';
+import { printHtmlDocument, printSafeDataUrl, wrapStandaloneHtml } from '../utils/documents';
+import { buildMomHtml } from '../utils/momHtml';
 
 export default function ClientProfileView({
   client, clients = [], onEditClient, onDeleteClient, isViewer,
@@ -1946,6 +1947,12 @@ function DocPreviewModal({ doc, onClose }) {
                 const isCustomHtml = doc.type === 'custom' && doc.attachment?.fileType === 'text/html' && doc.attachment?.html;
                 if (isCustomHtml) {
                   printHtmlDocument(doc.attachment.html);
+                } else if (doc.type === 'mom' && doc.mom) {
+                  // Same polished, letterhead-branded rendering + print-safe
+                  // CSS as a saved MOM document — not the plain MomDoc table
+                  // below (that used window.print() on the live DOM, with no
+                  // page-margin/color-adjust/page-break handling at all).
+                  printHtmlDocument(wrapStandaloneHtml(buildMomHtml(doc.mom, doc.client), `Minutes of Meeting — ${doc.client.name}`));
                 } else {
                   window.print();
                 }
@@ -1967,7 +1974,9 @@ function DocPreviewModal({ doc, onClose }) {
             <div className="text-[11px] uppercase tracking-wider text-slate-500">{meta.label}</div>
           </div>
           {doc.type === 'custom' && <CustomDocPreview doc={doc} />}
-          {doc.type === 'mom' && <MomDoc mom={doc.mom} client={doc.client} />}
+          {doc.type === 'mom' && (
+            <div className="max-w-[800px] mx-auto" dangerouslySetInnerHTML={{ __html: buildMomHtml(doc.mom, doc.client) }} />
+          )}
           {doc.type === 'goal' && <GoalDoc goals={doc.goals} client={doc.client} />}
           {doc.type === 'asset' && <AssetDoc assetAllocation={doc.assetAllocation} client={doc.client} />}
           {doc.type === 'policy' && <PolicyDoc client={doc.client} />}
@@ -2086,53 +2095,6 @@ function BulletList({ items }) {
         </li>
       ))}
     </ul>
-  );
-}
-
-function MomDoc({ mom, client }) {
-  const d = mom.data || {};
-  return (
-    <div>
-      <DocSection title="Meeting Details">
-        <KVRow label="Client" value={client.name} />
-        <KVRow label="Meeting Number" value={mom.meetingNumber} />
-        <KVRow label="Meeting Date" value={mom.meetingDate ? fmtDate(mom.meetingDate) : '—'} />
-        <KVRow label="Advisor" value={d.advisorName} />
-        <KVRow label="Mode" value={d.meetingMode} />
-      </DocSection>
-
-      {(d.occupation || d.income || d.expenses || d.maritalStatus) && (
-        <DocSection title="Client Snapshot">
-          <KVRow label="Occupation" value={d.occupation} />
-          <KVRow label="Monthly Income" value={d.income} />
-          <KVRow label="Monthly Expenses" value={d.expenses} />
-          <KVRow label="Marital Status" value={d.maritalStatus} />
-          <KVRow label="Spouse" value={d.spouseName} />
-        </DocSection>
-      )}
-
-      {Array.isArray(d.goals) && d.goals.length > 0 && (
-        <DocSection title="Goals Discussed">
-          {d.goals.map((g, i) => (
-            <KVRow key={i} label={g.name} value={`Target ${fmtINR(g.target)} · Accumulated ${fmtINR(g.accumulated)}`} />
-          ))}
-        </DocSection>
-      )}
-
-      <DocSection title="Agenda"><BulletList items={d.agenda} /></DocSection>
-      <DocSection title="Discussion Points"><BulletList items={d.discussion} /></DocSection>
-      <DocSection title="Our Recommendations"><BulletList items={d.ourRecs} /></DocSection>
-      <DocSection title="Client Recommendations / Asks"><BulletList items={d.clientRecs} /></DocSection>
-
-      {d.followupRequired && (
-        <DocSection title="Follow-up">
-          <KVRow label="Required" value={d.followupRequired} />
-          <KVRow label="Date" value={d.followupDate ? fmtDate(d.followupDate) : ''} />
-          <KVRow label="Purpose" value={d.followupPurpose} />
-          <KVRow label="Notes" value={d.followupNotes} />
-        </DocSection>
-      )}
-    </div>
   );
 }
 
