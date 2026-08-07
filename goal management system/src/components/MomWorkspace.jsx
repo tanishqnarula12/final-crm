@@ -2181,13 +2181,19 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
               </div>
             </div>
             <div className="flex gap-2">
-              <button
-                onClick={handleSaveDocument}
-                disabled={savingDoc}
-                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 text-white border border-emerald-600 hover:bg-emerald-700 transition-all flex items-center gap-1 cursor-pointer disabled:opacity-60"
-              >
-                <Save size={13} /> {savingDoc ? 'Saving…' : 'Save Document'}
-              </button>
+              {/* Saves into client.clientDetails.attachments[] — meaningless
+                  (and would error) for a lead, which has no Documents store
+                  of its own yet. Print/Copy don't depend on a client record,
+                  so both stay available either way. */}
+              {subjectType !== 'lead' && (
+                <button
+                  onClick={handleSaveDocument}
+                  disabled={savingDoc}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 text-white border border-emerald-600 hover:bg-emerald-700 transition-all flex items-center gap-1 cursor-pointer disabled:opacity-60"
+                >
+                  <Save size={13} /> {savingDoc ? 'Saving…' : 'Save Document'}
+                </button>
+              )}
               <button
                 onClick={handlePrint}
                 className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 text-white border border-slate-700 hover:bg-slate-700 transition-all flex items-center gap-1 cursor-pointer"
