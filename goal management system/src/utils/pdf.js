@@ -18,6 +18,33 @@ const pdfINR = (n) => {
 };
 const pdfSip = (n) => isFinite(n) ? `Rs. ${Math.round(Number(n)).toLocaleString('en-IN')}` : 'Rs. 0';
 
+// Production serves the app's CSS as an external <link>, not inlined <style>
+// tags — so pointing the print window at that same <link href> makes it
+// depend on a fresh network fetch completing before anything renders
+// correctly. That fetch racing win.onload/the print timeout is exactly what
+// produced a flash of totally unstyled content (plain black text, no cards,
+// no colors) before the CSS caught up. Fetching each stylesheet's text here
+// (in the already-loaded main tab, so it's an instant cache hit) and
+// embedding it as an inline <style> block instead means the popup has every
+// rule available the instant its HTML is written — no network round trip,
+// no race, no flash.
+async function inlineStylesheets() {
+  const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+  const parts = await Promise.all(links.map(async (l) => {
+    try {
+      const res = await fetch(l.href);
+      if (!res.ok) throw new Error(String(res.status));
+      const text = await res.text();
+      return `<style>${text}</style>`;
+    } catch {
+      // Cross-origin (e.g. Google Fonts) or network failure — fall back to
+      // the link itself rather than dropping the stylesheet entirely.
+      return `<link rel="stylesheet" href="${l.href}">`;
+    }
+  }));
+  return parts.join('\n');
+}
+
 function buildGoalProjectionHTML(g) {
   const projection = buildProjection(g);
   if (!projection.length) return '';
@@ -61,9 +88,7 @@ export async function exportClientPdf(containerEl, client, includeProjection = t
   const styleTags = Array.from(document.querySelectorAll('style'))
     .map(s => `<style>${s.textContent}</style>`)
     .join('\n');
-  const linkTags = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
-    .map(l => `<link rel="stylesheet" href="${l.href}">`)
-    .join('\n');
+  const linkTags = await inlineStylesheets();
 
   const clone = containerEl.cloneNode(true);
 
@@ -279,9 +304,7 @@ export async function exportAssetAllocationPdf(containerEl, client) {
   const styleTags = Array.from(document.querySelectorAll('style'))
     .map(s => `<style>${s.textContent}</style>`)
     .join('\n');
-  const linkTags = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
-    .map(l => `<link rel="stylesheet" href="${l.href}">`)
-    .join('\n');
+  const linkTags = await inlineStylesheets();
 
   const clone = containerEl.cloneNode(true);
 
