@@ -359,9 +359,13 @@ function AssumptionsSection({ client, onSave, isViewer }) {
                         </td>
                         <td className="px-5 py-3">
                           {Array.isArray(g.mappedAssets) && g.mappedAssets.length > 0 ? (
-                            <span className="font-bold text-blue-700 dark:text-blue-400">
-                              {g.mappedAssets.map(a => `${a.label} · ${fmtINR(a.amount)}`).join(', ')}
-                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {g.mappedAssets.map(a => (
+                                <span key={a.id || a.label} className="inline-flex items-center px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 ring-1 ring-indigo-200/40 dark:ring-indigo-900/20 text-[11px] font-bold whitespace-nowrap">
+                                  {a.label} · {fmtINR(a.amount)}
+                                </span>
+                              ))}
+                            </div>
                           ) : (
                             <span className="italic text-slate-400 dark:text-slate-500">None</span>
                           )}
