@@ -288,6 +288,28 @@ export async function exportAssetAllocationPdf(containerEl, client) {
   // Remove all buttons (edit, back, export icons)
   clone.querySelectorAll('button').forEach(el => el.remove());
 
+  // Edit History is operational/internal — not something a client needs to
+  // see in their report. Remark stays (it's client-facing commentary).
+  clone.querySelectorAll('h3').forEach(el => {
+    if (el.textContent.includes('Edit History')) {
+      const wrapper = el.closest('.space-y-3') || el.parentElement;
+      if (wrapper) wrapper.remove();
+    }
+  });
+
+  // Keep the Net Worth Composition heading glued to its donut chart — without
+  // this, a page break could fall between the two (heading stranded alone at
+  // the bottom of one page, chart pushed to the top of the next).
+  clone.querySelectorAll('h3').forEach(el => {
+    if (el.textContent.includes('Net Worth Composition')) {
+      const section = el.closest('section');
+      if (section) {
+        section.style.breakInside = 'avoid';
+        section.style.pageBreakInside = 'avoid';
+      }
+    }
+  });
+
   // Strip animation classes so nothing is invisible on load
   // SVG elements (Lucide icons) have SVGAnimatedString className — skip those
   clone.querySelectorAll('[class]').forEach(el => {
