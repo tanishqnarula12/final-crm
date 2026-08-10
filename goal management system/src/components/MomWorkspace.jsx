@@ -19,7 +19,7 @@ import { updateLead } from '../services/leads';
 // `client` is then a lead-shaped object built by App.jsx's leadAsMomSubject()
 // with the same field footprint this component already reads (id, name, pan,
 // clientDetails, moms), so the rest of the file needs no other changes.
-export default function MomWorkspace({ client, onBack, subjectType = 'client', initialEditMomId = null }) {
+export default function MomWorkspace({ client, onBack, subjectType = 'client', initialEditMomId = null, sourceMeetingId = null }) {
   const [activeTab, setActiveTab] = useState(0); // 0 to 8
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
@@ -425,9 +425,18 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
     fetchClientMoms();
   }, [client]);
 
-  // Restore auto-saved progress when client changes (on mount)
+  // Restore auto-saved progress when client changes (on mount). Skipped
+  // entirely when an explicit initialEditMomId is pending — that means the
+  // caller (e.g. the Meetings table's "MOM Created" button) wants a SPECIFIC
+  // already-saved draft loaded, and this effect's job (recover an in-progress
+  // autosave, or else seed a brand-new draft's defaults / next meeting
+  // number) would otherwise race the initialEditMomId effect below: both
+  // depend on `client`, so whichever runs last wins, and without this guard
+  // that's nondeterministic (StrictMode's dev-only double-invoke made this
+  // resettable-after-the-fact race easy to hit — but the race exists with or
+  // without StrictMode any time `client`'s reference changes after mount).
   useEffect(() => {
-    if (!client?.id) return;
+    if (!client?.id || initialEditMomId) return;
     let editingIdFromDraft = null;
     let followupCreatedFromDraft = false;
     let draftData = null;
@@ -561,8 +570,7 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
       if (draftData.investments) setInvestments(draftData.investments);
     }
     if (!followupCreatedFromDraft) setFollowupCreated(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client?.id]);
+  }, [client?.id, initialEditMomId]);
 
   // Local-only recovery cache — no "Save Draft" button anywhere, and nothing
   // reaches the SERVER until an explicit "Save & Generate MOM Draft" click
@@ -742,6 +750,16 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
       // background autosave tick or was just created above doesn't matter.
       if (subjectType === 'lead' && !client.momId) {
         updateLead(client.id, { stage: 'Create MoM', momId }, getCurrentUser()?.name || 'System');
+      }
+      // Same idea for a MOM drafted from a specific Completed meeting (the
+      // Meetings table's "Create MOM" button) — stamp that meeting with the
+      // new MOM's id, once, so the button flips to "MOM Created" instead of
+      // re-showing "Create MOM" the next time this meeting is opened.
+      if (sourceMeetingId) {
+        const updatedMeetings = loadMeetings().map((mt) => (
+          mt.id === sourceMeetingId && !mt.momId ? { ...mt, momId } : mt
+        ));
+        saveMeetings(updatedMeetings);
       }
       // Trigger App.jsx parent to reload data
       if (window.refreshAppData) {

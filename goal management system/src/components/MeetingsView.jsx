@@ -223,7 +223,7 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
                 <th className="text-center px-5 py-3 font-bold">Mode</th>
                 <th className="text-left px-5 py-3 font-bold">With</th>
                 <th className="text-center px-5 py-3 font-bold">Status</th>
-                <th className="px-5 py-3"></th>
+                <th className="text-right px-5 py-3 font-bold">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/50 dark:divide-slate-800/50">
@@ -290,15 +290,25 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
                         </button>
                       )}
                       {m.status === 'Completed' && !m.leadId && onCreateMom && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onCreateMom(m); }}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm hover:shadow-cyan-500/25"
-                          title="Create Minutes of Meeting for this client"
-                        >
-                          <FileText size={14} /> Create MOM
-                        </button>
+                        m.momId ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onCreateMom(m); }}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-900/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                            title="MOM already created — click to open it"
+                          >
+                            <CheckCircle2 size={13} /> MOM Created
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onCreateMom(m); }}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm hover:shadow-cyan-500/25"
+                            title="Create Minutes of Meeting for this client"
+                          >
+                            <FileText size={14} /> Create MOM
+                          </button>
+                        )
                       )}
-                      {m.mode === 'Online' && m.link && m.status !== 'Completed' && (
+                      {m.mode === 'Online' && m.link && m.status === 'Scheduled' && (
                         <a
                           href={normalizeUrl(m.link)}
                           target="_blank"
@@ -502,7 +512,7 @@ function CalendarView({ meetings, onOpenMeeting, statusFilter, query }) {
                       key={m.id}
                       onClick={(e) => {
                         const link = normalizeUrl(m.link);
-                        if ((e.ctrlKey || e.metaKey) && m.mode === 'Online' && link) {
+                        if ((e.ctrlKey || e.metaKey) && m.mode === 'Online' && link && m.status === 'Scheduled') {
                           window.open(link, '_blank', 'noopener,noreferrer');
                         } else {
                           onOpenMeeting(m);
@@ -510,7 +520,7 @@ function CalendarView({ meetings, onOpenMeeting, statusFilter, query }) {
                       }}
                       onMouseEnter={(e) => showTip(m, e)}
                       onMouseLeave={scheduleHide}
-                      title={m.mode === 'Online' && m.link ? 'Ctrl/⌘ + Click to join the meeting' : ''}
+                      title={m.mode === 'Online' && m.link && m.status === 'Scheduled' ? 'Ctrl/⌘ + Click to join the meeting' : ''}
                       className={`w-full flex items-center gap-1 px-1 py-1 rounded-md text-[9px] font-semibold transition-all cursor-pointer hover:scale-[1.02] ${
                         cancelled
                           ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400'
@@ -579,7 +589,7 @@ function CalendarView({ meetings, onOpenMeeting, statusFilter, query }) {
             )}
             {hover.meeting.agenda && <div className="flex items-start gap-1.5 pt-1 text-slate-500 dark:text-slate-500"><CalendarDays size={11} className="text-slate-400 shrink-0 mt-0.5" /> <span className="line-clamp-2">{hover.meeting.agenda}</span></div>}
           </div>
-          {hover.meeting.mode === 'Online' && hover.meeting.link && (
+          {hover.meeting.mode === 'Online' && hover.meeting.link && hover.meeting.status === 'Scheduled' && (
             <a
               href={normalizeUrl(hover.meeting.link)}
               target="_blank"
@@ -590,7 +600,7 @@ function CalendarView({ meetings, onOpenMeeting, statusFilter, query }) {
             </a>
           )}
           <div className="mt-2.5 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-[9px] text-slate-400 dark:text-slate-500 font-medium">
-            {hover.meeting.mode === 'Online' && hover.meeting.link
+            {hover.meeting.mode === 'Online' && hover.meeting.link && hover.meeting.status === 'Scheduled'
               ? <>Tip: <span className="font-bold">Ctrl/⌘ + Click</span> the chip to join · Click to open details</>
               : <>Click the chip to open details</>}
           </div>
@@ -709,6 +719,7 @@ export function MeetingFormModal({ initial, clients = [], isViewer, lockClient =
   const buildMeeting = (overrides = {}) => ({
     id: initial?.id || uid(),
     leadId: initial?.leadId || undefined,
+    momId: initial?.momId || undefined,
     clientId: groupLeaderId,
     clientName,
     pan,
@@ -1007,12 +1018,21 @@ export function MeetingFormModal({ initial, clients = [], isViewer, lockClient =
               </>
             )}
             {isEdit && status === 'Completed' && !isLeadMeeting && onCreateMom && (
-              <button
-                onClick={() => onCreateMom(buildMeeting())}
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white rounded-xl shadow-lg shadow-cyan-500/15 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-              >
-                <FileText size={14} /> Create MOM
-              </button>
+              initial?.momId ? (
+                <button
+                  onClick={() => onCreateMom(buildMeeting())}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-900/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                >
+                  <CheckCircle2 size={14} /> MOM Created
+                </button>
+              ) : (
+                <button
+                  onClick={() => onCreateMom(buildMeeting())}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white rounded-xl shadow-lg shadow-cyan-500/15 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                >
+                  <FileText size={14} /> Create MOM
+                </button>
+              )
             )}
           </div>
           <div className="flex items-center gap-2 ml-auto">

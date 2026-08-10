@@ -190,6 +190,15 @@ export default function App() {
   // Asset allocation tab states
   const [assetClientId, setAssetClientId] = useState(null);
   const [momClientId, setMomClientId] = useState(null);
+  // Set when reopening an already-created client-side MOM (clicking the
+  // "MOM Created" pill in the Meetings table) — tells MomWorkspace which
+  // saved draft to load straight into edit mode instead of a fresh one.
+  const [momEditMomId, setMomEditMomId] = useState(null);
+  // Set while a fresh MOM is being drafted from a specific Completed meeting
+  // (the Meetings table's "Create MOM" button) — MomWorkspace stamps this
+  // meeting with the new MOM's id on first save, so the button can flip to
+  // "MOM Created" instead of re-showing "Create MOM" on the same meeting.
+  const [momSourceMeetingId, setMomSourceMeetingId] = useState(null);
   // Lead-side MOM (the "Create MoM" lead stage, before conversion) — rendered
   // as a full-screen overlay ON TOP of whatever view/tab is already active,
   // never a view/tab redirect, so closing it drops you back exactly where
@@ -866,6 +875,8 @@ export default function App() {
     setClientProfileId(null);
     setProposalClientId(null);
     setReviewClientId(null);
+    setMomEditMomId(null);
+    setMomSourceMeetingId(null);
     setMomClientId(clientId);
     setTab('mom');
   };
@@ -888,6 +899,13 @@ export default function App() {
     setMeetingFormLocked(false);
     setView('clients');
     goToMomMapping(clientId);
+    if (meeting?.momId) {
+      // A MOM already exists for this meeting — open it in edit mode.
+      setMomEditMomId(meeting.momId);
+    } else {
+      // Fresh draft — remember the meeting so it can be stamped on save.
+      setMomSourceMeetingId(meeting?.id || null);
+    }
   };
 
   const goToProposal = (clientId) => {
@@ -2048,6 +2066,8 @@ export default function App() {
             <MomWorkspace
               client={momClient}
               onBack={backToClients}
+              initialEditMomId={momEditMomId}
+              sourceMeetingId={momSourceMeetingId}
             />
           </div>
         )}
