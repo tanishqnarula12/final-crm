@@ -262,3 +262,168 @@ export async function exportClientPdf(containerEl, client, includeProjection = t
   win.onload = doPrint;
   setTimeout(doPrint, 1500);
 }
+
+// Same DOM-clone-and-print approach as exportClientPdf above (button
+// stripping, animation-class stripping, forcing responsive grids to their
+// desktop column count via inline style so Tailwind's @layer breakpoints
+// aren't lost in the print window) — kept as its own function rather than
+// sharing code with exportClientPdf so the goal-report-specific logic there
+// (projection table injection, Goals Summary/Planning Assumptions page-break
+// handling) can't accidentally affect this, and vice versa.
+export async function exportAssetAllocationPdf(containerEl, client) {
+  if (!containerEl) {
+    alert('Could not find print content. Please try again.');
+    return;
+  }
+
+  const styleTags = Array.from(document.querySelectorAll('style'))
+    .map(s => `<style>${s.textContent}</style>`)
+    .join('\n');
+  const linkTags = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+    .map(l => `<link rel="stylesheet" href="${l.href}">`)
+    .join('\n');
+
+  const clone = containerEl.cloneNode(true);
+
+  // Remove all buttons (edit, back, export icons)
+  clone.querySelectorAll('button').forEach(el => el.remove());
+
+  // Strip animation classes so nothing is invisible on load
+  // SVG elements (Lucide icons) have SVGAnimatedString className — skip those
+  clone.querySelectorAll('[class]').forEach(el => {
+    if (typeof el.className !== 'string') return;
+    const cls = el.className;
+
+    el.className = cls
+      .split(' ')
+      .filter(c =>
+        !c.startsWith('animate-') &&
+        !c.startsWith('hover:scale') &&
+        !c.startsWith('hover:-translate') &&
+        !c.startsWith('active:scale') &&
+        !c.startsWith('group-hover:opacity')
+      )
+      .join(' ');
+
+    // Force responsive grids to their multi-column layout via inline style —
+    // CSS class selectors can't reliably override Tailwind v4 @layer rules in print.
+    if (cls.includes('grid')) {
+      if (cls.includes('md:grid-cols-3') || cls.includes('lg:grid-cols-3')) {
+        el.style.display = 'grid';
+        el.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
+      } else if (cls.includes('md:grid-cols-2') || cls.includes('lg:grid-cols-2')) {
+        el.style.display = 'grid';
+        el.style.gridTemplateColumns = 'repeat(2, minmax(0, 1fr))';
+      } else if (cls.includes('md:grid-cols-4') || cls.includes('lg:grid-cols-4')) {
+        el.style.display = 'grid';
+        el.style.gridTemplateColumns = 'repeat(4, minmax(0, 1fr))';
+      }
+    }
+
+    // Avoid breaking small tiles/cards across a page — same rule as the goal
+    // report, so composition cards and net-worth tiles don't get sliced.
+    if (cls.includes('rounded-2xl') && (cls.includes(' p-5') || cls.includes(' p-3') || cls.includes(' p-6'))) {
+      el.style.breakInside = 'avoid';
+      el.style.pageBreakInside = 'avoid';
+    }
+  });
+
+  // Convert logo to base64 so it embeds correctly in the about:blank print window
+  const logoDataUrl = await new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => resolve('');
+    img.src = logoUrl;
+  });
+
+  const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  const html = `<!DOCTYPE html>
+<html class="${document.documentElement.className}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1280">
+  <title>${escHtml(client.name)} – Asset Allocation Report</title>
+  ${linkTags}
+  ${styleTags}
+  <style>
+    @page { size: A4 landscape; margin: 10mm 12mm; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    button { display: none !important; }
+    .animate-fade-in,
+    .animate-scale-up,
+    .animate-slide-up { animation: none !important; opacity: 1 !important; transform: none !important; }
+
+    .print-header {
+      background: #1e3a8a;
+      color: white;
+      padding: 14px 20px;
+      border-bottom: 4px solid #3b82f6;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .print-footer {
+      margin-top: 28px;
+      padding-top: 8px;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      font-size: 7.5pt;
+      color: #94a3b8;
+      font-family: Arial, sans-serif;
+    }
+  </style>
+</head>
+<body class="${document.body.className}" style="padding:16px;background:white;max-width:100%;margin:0;">
+  <div class="print-header">
+    <div style="display:flex;align-items:center;gap:12px;">
+      ${logoDataUrl ? `<img src="${logoDataUrl}" style="height:44px;width:44px;object-fit:contain;border-radius:10px;background:white;padding:3px;" />` : ''}
+      <div>
+        <div style="font-size:16pt;font-weight:bold;">Team Fintness</div>
+        <div style="font-size:8pt;color:#bae0ff;margin-top:2px;">Building fitter financial futures</div>
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:10pt;font-weight:bold;">ASSET ALLOCATION REPORT</div>
+      <div style="font-size:8pt;color:#bae0ff;margin-top:2px;">Generated ${dateStr}</div>
+    </div>
+  </div>
+  ${clone.outerHTML}
+  <div class="print-footer">
+    <span>Generated by Team Fintness Customer Relationship Management System</span>
+    <span>Confidential — For client use only</span>
+  </div>
+</body>
+</html>`;
+
+  // Open at 1280px so lg: breakpoints (≥1024px) fire correctly
+  const win = window.open('', '_blank', 'width=1280,height=900');
+  if (!win) {
+    alert('Please allow pop-ups to export the report.');
+    return;
+  }
+
+  win.document.write(html);
+  win.document.close();
+
+  let printed = false;
+  const doPrint = () => {
+    if (printed) return;
+    printed = true;
+    win.focus();
+    win.print();
+  };
+  win.onload = doPrint;
+  setTimeout(doPrint, 1500);
+}

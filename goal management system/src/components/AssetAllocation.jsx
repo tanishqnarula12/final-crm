@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Wallet, PieChart as PieIcon, Pencil, Plus, Search, Scale,
-  TrendingUp, Home, CreditCard, MessageSquare, History, ArrowRight, Save, Layers
+  TrendingUp, Home, CreditCard, MessageSquare, History, ArrowRight, Save, Layers, Download
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Card, Avatar, btnPrimary, btnSecondary, btnGhost, inputCls } from './UI';
@@ -10,6 +10,7 @@ import {
   normalizeAllocation, allocationTotals, groupComposition, sectionGroupColumns,
   hasAllocation, SECTION_COLORS, fmtPct
 } from '../utils/assets';
+import { exportAssetAllocationPdf } from '../utils/pdf';
 
 const tooltipStyle = {
   backgroundColor: 'var(--tooltip-bg)',
@@ -117,6 +118,20 @@ export function AssetAllocationDetail({ client, onEdit, onSaveRemark, isViewer }
   const t = useMemo(() => allocationTotals(alloc), [alloc]);
   const allocated = hasAllocation(client);
 
+  const containerRef = useRef(null);
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await exportAssetAllocationPdf(containerRef.current, client);
+    } catch (err) {
+      alert('Could not generate PDF: ' + err.message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const finRows = useMemo(() => groupComposition(alloc, 'financial'), [alloc]);
   const phyRows = useMemo(() => groupComposition(alloc, 'physical'), [alloc]);
   const liaRows = useMemo(() => groupComposition(alloc, 'liabilities'), [alloc]);
@@ -125,7 +140,7 @@ export function AssetAllocationDetail({ client, onEdit, onSaveRemark, isViewer }
   const liaCols = useMemo(() => sectionGroupColumns(alloc, 'liabilities').filter(c => c.items.length > 0), [alloc]);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div ref={containerRef} className="space-y-6 animate-fade-in">
       {/* Hero */}
       <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -144,11 +159,18 @@ export function AssetAllocationDetail({ client, onEdit, onSaveRemark, isViewer }
               </p>
             </div>
           </div>
-          {!isViewer && (
-            <button onClick={onEdit} className={btnPrimary + ' w-full md:w-auto'}>
-              <Pencil size={14} /> {allocated ? 'Edit Allocation' : 'Create Allocation'}
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            {allocated && (
+              <button onClick={handleExport} disabled={exporting} className={btnSecondary + ' flex-1 md:flex-none'}>
+                <Download size={14} className={exporting ? 'animate-bounce' : ''} /> {exporting ? 'Generating…' : 'Export PDF'}
+              </button>
+            )}
+            {!isViewer && (
+              <button onClick={onEdit} className={btnPrimary + ' flex-1 md:flex-none'}>
+                <Pencil size={14} /> {allocated ? 'Edit Allocation' : 'Create Allocation'}
+              </button>
+            )}
+          </div>
         </div>
 
         {allocated && (

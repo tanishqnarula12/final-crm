@@ -330,6 +330,7 @@ function AssumptionsSection({ client, onSave, isViewer }) {
                       <th className="text-right px-5 py-3 font-bold">Inflation</th>
                       <th className="text-right px-5 py-3 font-bold">Exp. Return</th>
                       <th className="text-right px-5 py-3 font-bold">SIP Step-Up</th>
+                      <th className="text-left px-5 py-3 font-bold">Mapped Assets</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200/50 dark:divide-slate-800/50">
@@ -355,6 +356,15 @@ function AssumptionsSection({ client, onSave, isViewer }) {
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 ring-1 ring-blue-200/40 dark:ring-blue-900/20 text-xs font-bold">
                             {g.sipIncRate}%
                           </span>
+                        </td>
+                        <td className="px-5 py-3">
+                          {Array.isArray(g.mappedAssets) && g.mappedAssets.length > 0 ? (
+                            <span className="font-bold text-blue-700 dark:text-blue-400">
+                              {g.mappedAssets.map(a => `${a.label} · ${fmtINR(a.amount)}`).join(', ')}
+                            </span>
+                          ) : (
+                            <span className="italic text-slate-400 dark:text-slate-500">None</span>
+                          )}
                         </td>
                       </tr>
                     ))}
