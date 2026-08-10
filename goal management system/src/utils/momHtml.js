@@ -103,7 +103,7 @@ export const buildMomHtml = (mom, client) => {
       </div>
       <div style="display:flex;gap:30px;margin-top:22px;flex-wrap:wrap;">
         <div><div style="font-size:10px;opacity:0.5;letter-spacing:1px;text-transform:uppercase;">Financial Consultant</div><div style="font-size:15px;font-weight:600;margin-top:2px;">${advisor}</div></div>
-        ${agenda.length ? `<div><div style="font-size:10px;opacity:0.5;letter-spacing:1px;text-transform:uppercase;">Purpose</div><div style="font-size:13px;margin-top:2px;">${agenda.join(' · ')}</div></div>` : ''}
+        ${agenda.length ? `<div><div style="font-size:10px;opacity:0.5;letter-spacing:1px;text-transform:uppercase;">Purpose</div><div style="font-size:13px;font-weight:600;margin-top:2px;">${agenda.join(' · ')}</div></div>` : ''}
       </div>
     </div>
 

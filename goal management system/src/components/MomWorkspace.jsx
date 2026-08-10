@@ -4,7 +4,7 @@ import {
   CheckCircle, RefreshCw, X, FileDown, Edit, Save
 } from 'lucide-react';
 import { addMom, addLeadMom, updateMom, deleteMom } from '../services/db';
-import { saveGeneratedDocument, wrapStandaloneHtml } from '../utils/documents';
+import { saveGeneratedDocument, wrapStandaloneHtml, printHtmlDocument } from '../utils/documents';
 import { buildMomHtml } from '../utils/momHtml';
 import { CoolSelect } from './UI';
 import { uid } from '../utils/calc';
@@ -886,17 +886,15 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
   };
 
   const handlePrint = () => {
-    const filename = meetingNumber 
-      ? `Minutes of Meeting - ${meetingNumber}_${client.name}` 
+    // Opens the MOM alone in a fresh window instead of window.print() on the
+    // live app page — the CRM's own sidebar/header never fully hid behind
+    // the print-mode CSS selectors (they didn't match every chrome element),
+    // so it kept bleeding into the printed output. An isolated window has
+    // none of that chrome to begin with, which is what actually fixes it.
+    const filename = meetingNumber
+      ? `Minutes of Meeting - ${meetingNumber}_${client.name}`
       : `Minutes of Meeting_${client.name}`;
-    
-    // Backup title
-    const originalTitle = document.title;
-    document.title = filename;
-    window.print();
-    setTimeout(() => {
-      document.title = originalTitle;
-    }, 1000);
+    printHtmlDocument(wrapStandaloneHtml(getMomHtml(), filename));
   };
 
   const handleCopyText = () => {
@@ -1989,89 +1987,6 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
           </div>
         </div>
       )}
-
-      {/* Global CSS for Print Mode to override Page style for printMOM */}
-      <style>{`
-        @media print {
-          @page {
-            margin: 6mm;
-            size: A4;
-          }
-
-          /* Hide all application chrome, header, footer, tabs */
-          header,
-          footer,
-          .w-full.overflow-x-auto,
-          .print\\:hidden,
-          button {
-            display: none !important;
-          }
-
-          /* @page margin support is inconsistent across print engines —
-             body padding is the reliable fallback so the printed page
-             never ends up flush edge-to-edge even where @page is ignored. */
-          body, html {
-            background: white !important;
-            color: black !important;
-            margin: 0 !important;
-            padding: 10mm 8mm !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            color-adjust: exact !important;
-          }
-
-          main {
-            padding: 0 !important;
-            margin: 0 !important;
-            max-width: 100% !important;
-          }
-
-          /* Ensure print container occupies full screen page and has no borders */
-          .mom-print-card {
-            display: block !important;
-            border: none !important;
-            box-shadow: none !important;
-            border-radius: 0 !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            background: white !important;
-          }
-
-          /* Scoped to actual card containers only (every card in this doc
-             shares this rounded-corner style) — NOT every nested div. The
-             old unscoped ".mom-print-card div" rule caught the single
-             outermost wrapper div too (it wraps the whole multi-page
-             document), telling something several pages tall to "never
-             break", which made the print engine duplicate content across
-             the page boundary instead of resolving the conflict cleanly. */
-          .mom-print-card div[style*="border-radius:10px"] {
-            break-inside: avoid;
-            page-break-inside: avoid;
-          }
-
-          /* CSS Grid does not fragment reliably across a print page break
-             in Chrome — even with break-inside:avoid on its container, a
-             grid's own children (e.g. the two-column To Do List) can still
-             split apart from their header onto the next page. Flex
-             paginates correctly, so force it here at print time. */
-          .mom-print-card div[style*="grid-template-columns"] {
-            display: flex !important;
-            flex-wrap: wrap !important;
-          }
-          .mom-print-card div[style*="grid-template-columns"] > div {
-            flex: 1 1 200px !important;
-          }
-
-          /* Force all backgrounds, colors, borders to print as-is */
-          * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            color-adjust: exact !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }

@@ -697,14 +697,9 @@ function CustomDocPreview({ doc }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {isHtml && (
-            <button
-              onClick={() => printHtmlDocument(file.html)}
-              className={btnSecondary + ' py-2 px-3.5 text-[11px]'}
-            >
-              <Printer size={13} /> Print / Save as PDF
-            </button>
-          )}
+          {/* Print lives only on the modal's outer header button now — this
+              inner one duplicated it right next to Download, which read as
+              two separate, confusing print controls for the same document. */}
           <a
             href={dataUrl}
             download={file.fileName}
@@ -754,21 +749,6 @@ function KVRow({ label, value }) {
       <span className="text-slate-500 dark:text-slate-400">{label}</span>
       <span className="font-semibold text-slate-800 dark:text-slate-200 text-right">{value}</span>
     </div>
-  );
-}
-
-function BulletList({ items }) {
-  const list = (items || []).filter(Boolean);
-  if (list.length === 0) return <p className="text-sm text-slate-400 dark:text-slate-500 italic">None recorded.</p>;
-  return (
-    <ul className="space-y-1.5">
-      {list.map((it, i) => (
-        <li key={i} className="flex gap-2 text-sm text-slate-700 dark:text-slate-300">
-          <span className="text-blue-500 mt-0.5">•</span>
-          <span>{typeof it === 'string' ? it : JSON.stringify(it)}</span>
-        </li>
-      ))}
-    </ul>
   );
 }
 
