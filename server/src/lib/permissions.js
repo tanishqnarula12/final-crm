@@ -154,6 +154,28 @@ export function can(user, module, action, record = null, ctx = {}) {
     return true;
   }
 
+  // Investment prospects at the "Pre-Qualified" entry stage are a hard
+  // VIEW restriction, independent of the matrix's normal ALL/ASSIGNED/NONE
+  // scoping (which has no per-record-field dimension to express "only while
+  // stage=X") — only that specific record's own assigned RM/Portfolio
+  // Manager may see it, plus Internal Manager (which already holds ALL-scope
+  // create/editDetails on this module by default — excluding it from view
+  // here would be a visibility regression, not a restriction). Once the RM
+  // moves the stage past Pre-Qualified, this block no longer applies and
+  // view falls through to the normal matrix (ALL by default), which is what
+  // actually exposes it to the Service Manager per the product requirement —
+  // there's no separate "reveal to Service Manager" rule needed, it's just
+  // what ALL-scope view already does for every later stage.
+  if (module === 'investmentProspects' && action === 'view' && record) {
+    const stage = record.stage ?? record.payload?.stage;
+    if (stage === 'Pre-Qualified') {
+      if ((user.roles || []).includes('INTERNAL_MANAGER')) return true;
+      const rmId = record.relationshipManager ?? record.payload?.relationshipManager;
+      const pmId = record.portfolioManager ?? record.payload?.portfolioManager;
+      return rmId === user.id || pmId === user.id;
+    }
+  }
+
   const roles = rolesFor(user, module, record);
   const scope = maxScope(roles, module, action);
   if (scope === 'NONE') return false;

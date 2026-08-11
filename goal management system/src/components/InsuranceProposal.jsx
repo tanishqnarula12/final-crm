@@ -42,6 +42,7 @@ export default function InsuranceProposal({ client, isViewer }) {
       list.push({
         name: client.name,
         relation: 'Self',
+        pan: client.pan || '',
         dob: client.clientDetails?.dob || '',
         smoking: 'No',
         tobacco: 'No',
@@ -56,6 +57,7 @@ export default function InsuranceProposal({ client, isViewer }) {
         list.push({
           name: f.name,
           relation: f.relation || '',
+          pan: f.pan || '',
           dob: f.dob || '',
           smoking: 'No',
           tobacco: 'No',
@@ -69,12 +71,15 @@ export default function InsuranceProposal({ client, isViewer }) {
     return [];
   });
 
-  // Resolve applicant options (Group leader client + family members)
+  // Resolve applicant options (Group leader client + family members) — each
+  // carries its OWN pan (family members have their own PAN, distinct from
+  // the group leader's) so a prospect created against a family-member
+  // applicant records their PAN, not always the client's.
   const applicantOptions = useMemo(() => {
     if (!client) return [];
-    const opts = [{ name: client.name, relation: 'Self', dob: client.clientDetails?.dob || '', smoking: 'No', tobacco: 'No', alcohol: 'No', ped: 'No' }];
+    const opts = [{ name: client.name, relation: 'Self', pan: client.pan || '', dob: client.clientDetails?.dob || '', smoking: 'No', tobacco: 'No', alcohol: 'No', ped: 'No' }];
     (client.clientDetails?.familyDetails || []).forEach(f => {
-      if (f.name) opts.push({ name: f.name, relation: f.relation || 'Member', dob: f.dob || '', smoking: f.smoking || 'No', tobacco: f.tobacco || 'No', alcohol: f.alcohol || 'No', ped: f.ped || 'No' });
+      if (f.name) opts.push({ name: f.name, relation: f.relation || 'Member', pan: f.pan || '', dob: f.dob || '', smoking: f.smoking || 'No', tobacco: f.tobacco || 'No', alcohol: f.alcohol || 'No', ped: f.ped || 'No' });
     });
     return opts;
   }, [client]);
@@ -135,6 +140,7 @@ export default function InsuranceProposal({ client, isViewer }) {
             list.push({
               name: client.name,
               relation: 'Self',
+              pan: client.pan || '',
               dob: client.clientDetails?.dob || '',
               smoking: 'No',
               tobacco: 'No',
@@ -149,6 +155,7 @@ export default function InsuranceProposal({ client, isViewer }) {
               list.push({
                 name: f.name,
                 relation: f.relation || '',
+                pan: f.pan || '',
                 dob: f.dob || '',
                 smoking: 'No',
                 tobacco: 'No',
@@ -183,6 +190,7 @@ export default function InsuranceProposal({ client, isViewer }) {
       list.push({
         name: client.name,
         relation: 'Self',
+        pan: client.pan || '',
         dob: client.clientDetails?.dob || '',
         smoking: 'No',
         tobacco: 'No',
@@ -197,6 +205,7 @@ export default function InsuranceProposal({ client, isViewer }) {
         list.push({
           name: f.name,
           relation: f.relation || '',
+          pan: f.pan || '',
           dob: f.dob || '',
           smoking: 'No',
           tobacco: 'No',
@@ -654,7 +663,10 @@ export default function InsuranceProposal({ client, isViewer }) {
       groupLeaderId: client?.id || '',
       groupLeader: client?.name || proposer,
       applicant: proposerName,
-      pan: client?.pan || '',
+      // PAN belongs to whichever applicant is actually the proposer — the
+      // group leader ("Self") or a family member — not always the client's
+      // own PAN, since a family-member proposer carries their own PAN.
+      pan: selfMember?.pan || client?.pan || '',
       serviceManager: d.serviceManager || '',
       relationshipManager: d.relationshipManager || '',
       portfolioManager: d.portfolioManager || '',

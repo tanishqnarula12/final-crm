@@ -71,7 +71,11 @@ export const CATEGORY_LABEL = {
 
 // Lifecycle stages for a business prospect — Investment prospects use the generic
 // pipeline; Insurance prospects use their own underwriting-shaped pipeline.
-export const PROSPECT_STAGES = ['Qualified', 'Work Executed', 'Close Won', 'Close Lost'];
+// "Pre-Qualified" is the entry stage for a new investment prospect — visible
+// only to that prospect's own assigned RM/Portfolio Manager (see the server's
+// permissions.js) until the RM moves it to "Qualified", at which point it
+// opens up to everyone (Service Manager included) same as any other stage.
+export const PROSPECT_STAGES = ['Pre-Qualified', 'Qualified', 'Work Executed', 'Close Won', 'Close Lost'];
 
 export const INSURANCE_PROSPECT_STAGES = [
   'Qualified',
@@ -84,6 +88,7 @@ export const INSURANCE_PROSPECT_STAGES = [
 ];
 
 export const PROSPECT_STAGE_THEME = {
+  'Pre-Qualified': 'bg-violet-50 text-violet-700 ring-violet-200/60 dark:bg-violet-950/30 dark:text-violet-400 dark:ring-violet-900/40',
   'Qualified': 'bg-blue-50 text-blue-700 ring-blue-200/60 dark:bg-blue-950/30 dark:text-blue-400 dark:ring-blue-900/40',
   'Work Executed': 'bg-amber-50 text-amber-700 ring-amber-200/60 dark:bg-amber-950/30 dark:text-amber-400 dark:ring-amber-900/40',
   'Close Won': 'bg-emerald-50 text-emerald-700 ring-emerald-200/60 dark:bg-emerald-950/30 dark:text-emerald-400 dark:ring-emerald-900/40',
@@ -104,6 +109,7 @@ export const INSURANCE_PROSPECT_STAGE_THEME = {
 // which pipeline (investment or insurance) a given prospect belongs to.
 export const ALL_STAGE_THEME = { ...PROSPECT_STAGE_THEME, ...INSURANCE_PROSPECT_STAGE_THEME };
 export const ALL_PROSPECT_STAGES = [
+  'Pre-Qualified',
   'Qualified',
   'Document Pending',
   'Proposal Submitted',
@@ -129,3 +135,12 @@ export const fmtAmountINR = (val) => {
   const n = Number(String(val ?? '').toString().replace(/,/g, '')) || 0;
   return '₹ ' + n.toLocaleString('en-IN');
 };
+
+// This prospect's audit trail — every create/edit/stage-change, by real
+// user. Server enforces the same 'view' check as the list route (403 if this
+// account can't see the prospect, e.g. a Service Manager before an RM moves
+// it past Pre-Qualified).
+export async function fetchProspectActivity(prospectId) {
+  const { logs } = await api.get(`/prospects/${prospectId}/activity`);
+  return logs;
+}

@@ -120,7 +120,7 @@ const DEF = {
   // (rather than silently inheriting the Proposal's create rule) so the
   // admin can see and tune it directly here — defaults mirror the matching
   // Proposal's create rule for a sane out-of-the-box behavior.
-  investmentProspects: { create: { _: N, PORTFOLIO_MANAGER: A, RM: S, INTERNAL_MANAGER: A }, view: { _: A }, editDetails: { _: N, PORTFOLIO_MANAGER: A, RM: S, INTERNAL_MANAGER: A }, changeStage: { _: N, SERVICE_MANAGER: A, INTERNAL_MANAGER: A } },
+  investmentProspects: { create: { _: N, PORTFOLIO_MANAGER: A, RM: S, INTERNAL_MANAGER: A }, view: { _: A }, editDetails: { _: N, PORTFOLIO_MANAGER: A, RM: S, INTERNAL_MANAGER: A }, changeStage: { _: N, SERVICE_MANAGER: A, INTERNAL_MANAGER: A, RM: S } },
   insuranceProspects: { create: { _: N, INSURANCE_MANAGER: A, INTERNAL_MANAGER: A }, view: { _: A }, editDetails: { _: N, INSURANCE_MANAGER: A, INTERNAL_MANAGER: A }, changeStage: { _: N, INSURANCE_MANAGER: A, INTERNAL_MANAGER: A } },
   documents: { upload: { _: A }, view: { _: A }, delete: { _: N } },
   meetings: { create: { _: A }, view: { _: A }, edit: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },

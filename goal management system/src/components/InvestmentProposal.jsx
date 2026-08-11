@@ -92,12 +92,15 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
 
   const [clientName, setClientName] = useState(() => getSavedVal('clientName', client?.name || ''));
 
-  // Resolve applicant options (Group leader client + family members)
+  // Resolve applicant options (Group leader client + family members) — each
+  // carries its OWN pan (family members have their own PAN, distinct from
+  // the group leader's) so a prospect created against a family-member
+  // applicant records their PAN, not always the client's.
   const applicantOptions = useMemo(() => {
     if (!client) return [];
-    const opts = [{ name: client.name, relation: 'Self' }];
+    const opts = [{ name: client.name, relation: 'Self', pan: client.pan || '' }];
     (client.clientDetails?.familyDetails || []).forEach(f => {
-      if (f.name) opts.push({ name: f.name, relation: f.relation || 'Member' });
+      if (f.name) opts.push({ name: f.name, relation: f.relation || 'Member', pan: f.pan || '' });
     });
     return opts;
   }, [client]);
@@ -698,11 +701,15 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       }
     });
     const d = client?.clientDetails || {};
+    // PAN belongs to whichever applicant was actually selected — the group
+    // leader themselves ("Self") or a family member — not always the client's
+    // own PAN, since a family-member applicant carries their own PAN.
+    const selectedApplicant = applicantOptions.find(o => o.name === clientName);
     setProspectBase({
       groupLeaderId: client?.id || '',
       groupLeader: client?.name || clientName,
       applicant: clientName || client?.name || '',
-      pan: client?.pan || '',
+      pan: selectedApplicant?.pan || client?.pan || '',
       serviceManager: d.serviceManager || '',
       relationshipManager: d.relationshipManager || '',
       portfolioManager: d.portfolioManager || '',

@@ -18,6 +18,7 @@ import { canDo, isAdmin } from '../utils/permissions';
 import { updateClient } from '../services/db';
 import { CountrySelect, StateSelect, CitySelect } from './LocationPicker';
 import { triggerInsuranceProspectDownload } from '../utils/prospectDownload';
+import ProspectActivityLog from './ProspectActivityLog';
 
 // KYC dropdown option sets
 const OCCUPATION_OPTIONS = ['Salaried', 'Self Employed', 'House Wife'];
@@ -436,19 +437,14 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
   const canEditDetails = !isEdit || canDo(prospectModuleKey, 'editDetails', initial);
   const canChangeStage = !isEdit || canDo(prospectModuleKey, 'changeStage', initial);
   const me = getCurrentUser();
-  // Once a prospect exists, everything that came from the original proposal
-  // is permanently locked — no ordinary role can edit it, unlike
-  // canEditDetails above which only gates *whether this account* may edit.
-  // Only prospect-management fields entered after the fact (stage, remarks,
-  // policy issuance) stay editable for that. Two different locks, though:
-  //   - detailsLocked: the prospect's own identifying details (closing date,
-  //     team assignments) — Admin may correct these (e.g. a wrong team
-  //     assignment) after the fact; nobody else can.
-  //   - proposalLocked: the original proposal's financial data (amount,
-  //     scheme table, other-code) — that's the source computation and stays
-  //     locked for EVERYONE, Admin included, once the prospect exists.
-  const detailsLocked = isEdit && !isAdmin(me);
-  const proposalLocked = isEdit;
+  // Both the prospect's own identifying details (closing date, team
+  // assignments) and the original proposal's financial data (amount, scheme
+  // table, other-code) are editable after creation for Admin or anyone the
+  // matrix grants editDetails on this prospect (canEditDetails, above) —
+  // everyone else sees them locked (native disabled <fieldset>, cascades to
+  // every input/select inside).
+  const detailsLocked = isEdit && !isAdmin(me) && !canEditDetails;
+  const proposalLocked = isEdit && !isAdmin(me) && !canEditDetails;
 
   // Shared header fields (apply to every prospect being created)
   const [groupLeader, setGroupLeader] = useState(seed.groupLeader || '');
@@ -808,7 +804,11 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
       otherCodeEnabled: !!it.otherCodeEnabled,
       otherCodeSource: it.otherCodeEnabled ? (it.otherCodeSource || '') : '',
       otherCodeAmount: it.otherCodeEnabled ? (it.otherCodeAmount || '') : '',
-      stage: isEdit ? stage : 'Qualified',
+      // New investment prospects start at Pre-Qualified (visible only to
+      // their own assigned RM/Portfolio Manager — see server permissions.js)
+      // until the RM moves them forward. Insurance prospects are unaffected —
+      // they keep their existing underwriting pipeline, starting at Qualified.
+      stage: isEdit ? stage : (it.proposalCategory === 'insurance' ? 'Qualified' : 'Pre-Qualified'),
       stageHistory,
       createdAt: (isEdit && initial?.createdAt) || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -858,16 +858,18 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
             </div>
           )}
 
+          {isEdit && initial?.id && <ProspectActivityLog prospectId={initial.id} />}
+
           {/* Prospect details (closing date, team assignments) — locked
               read-only (via a native disabled <fieldset>, which cascades to
-              every input/select inside) for everyone except Admin once the
-              prospect exists. `contents` keeps the fieldset itself out of the
-              layout so it doesn't disturb spacing/grid. */}
+              every input/select inside) unless this account is Admin or holds
+              editDetails on this prospect. `contents` keeps the fieldset
+              itself out of the layout so it doesn't disturb spacing/grid. */}
           {isEdit && detailsLocked && (
             <p className="text-[10px] text-amber-600 dark:text-amber-400 -mt-2">These are the original proposal details and can no longer be edited — only the stage, remarks, and policy issuance below can change.</p>
           )}
           {isEdit && !detailsLocked && (
-            <p className="text-[10px] text-blue-600 dark:text-blue-400 -mt-2">Admin override: these prospect details are normally locked after creation, but you may correct them here.</p>
+            <p className="text-[10px] text-blue-600 dark:text-blue-400 -mt-2">You have permission to edit this prospect's details — changes here are saved to its modification history.</p>
           )}
           {/* Shared prospect fields */}
           <fieldset disabled={detailsLocked} className="contents">
@@ -1797,13 +1799,14 @@ function ProspectTable({ table, onChange }) {
                       ) : (
                         <input
                           type="text"
-                          value={cell == null ? '' : String(cell)}
-                          onChange={(e) => onChange(ri, ci, e.target.value)}
+                          inputMode={isAmountCol ? 'numeric' : 'text'}
+                          value={cell == null ? '' : (isAmountCol ? String(cell).replace(/,/g, '') : String(cell))}
+                          onChange={(e) => onChange(ri, ci, isAmountCol ? e.target.value.replace(/[^0-9-]/g, '') : e.target.value)}
                           className={`w-full bg-transparent border-0 focus:bg-slate-50 dark:focus:bg-slate-900 focus:ring-1 focus:ring-blue-500 py-1 px-1.5 rounded text-xs text-slate-700 dark:text-slate-350 ${isAmountCol ? 'text-right font-mono font-semibold' : ''}`}
                         />
                       )
                     ) : (
-                      <span className="px-2 py-1.5 block text-slate-700 dark:text-slate-300">{cell === '' || cell == null ? '—' : String(cell)}</span>
+                      <span className="px-2 py-1.5 block text-slate-700 dark:text-slate-300">{cell === '' || cell == null ? '—' : (isAmountCol ? String(cell).replace(/,/g, '') : String(cell))}</span>
                     )}
                   </td>
                 );
@@ -1814,7 +1817,7 @@ function ProspectTable({ table, onChange }) {
             <tr className="bg-slate-50 dark:bg-slate-950/50 font-bold">
               {totalRow.map((cell, ci) => (
                 <td key={ci} className="px-3 py-2 text-slate-900 dark:text-white">
-                  {cell === '' || cell == null ? '' : (typeof cell === 'number' ? '₹ ' + cell.toLocaleString('en-IN') : String(cell))}
+                  {cell === '' || cell == null ? '' : String(cell)}
                 </td>
               ))}
             </tr>

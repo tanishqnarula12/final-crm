@@ -34,6 +34,11 @@ const TASK_STAGE_KEYS = new Set(['stage']);
 const NOISE_KEYS = new Set([
   'createdBy', 'assignedTo', 'departmentOwner', 'createdAt', 'updatedAt', 'deletedAt',
   'timeline', 'history', 'notes', 'followups', 'actuals', 'comments', 'cobrEntries', 'remarks',
+  // Prospects' own append-only log — already surfaced by the dedicated
+  // STAGE_CHANGE entry below, so diffing it here would just show a noisy,
+  // unreadable "[object Object] -> [object Object], [object Object]" for
+  // every save (it's an array of {at, by, from, to, remark} objects).
+  'stageHistory',
 ]);
 
 // Who may set/change the assignment field, per module policy.
