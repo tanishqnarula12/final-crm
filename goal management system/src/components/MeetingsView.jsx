@@ -283,7 +283,7 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
                       {isOverdue(m) && !isViewer && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onOpen(m); }}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm hover:shadow-amber-500/25"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer shadow-sm hover:shadow-amber-500/25"
                           title="Reschedule this overdue meeting"
                         >
                           <RotateCcw size={13} /> Reschedule
@@ -293,7 +293,7 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
                         m.momId ? (
                           <button
                             onClick={(e) => { e.stopPropagation(); onCreateMom(m); }}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-900/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-900/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer"
                             title="MOM already created — click to open it"
                           >
                             <CheckCircle2 size={13} /> MOM Created
@@ -301,7 +301,7 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
                         ) : (
                           <button
                             onClick={(e) => { e.stopPropagation(); onCreateMom(m); }}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm hover:shadow-cyan-500/25"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer shadow-sm hover:shadow-cyan-500/25"
                             title="Create Minutes of Meeting for this client"
                           >
                             <FileText size={14} /> Create MOM
@@ -314,7 +314,7 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm hover:shadow-blue-500/25"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer shadow-sm hover:shadow-blue-500/25"
                           title="Join the meeting"
                         >
                           <Video size={14} /> Join
