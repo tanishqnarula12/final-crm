@@ -325,7 +325,7 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
                       {!isViewer && canDeleteMeeting(getCurrentUser(), m) && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onDelete(m.id); }}
-                          className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100"
+                          className="hidden group-hover:inline-flex items-center text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all"
                           title="Delete meeting"
                         >
                           <Trash2 size={14} />
