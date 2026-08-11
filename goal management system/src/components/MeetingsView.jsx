@@ -223,7 +223,7 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
                 <th className="text-center px-5 py-3 font-bold">Mode</th>
                 <th className="text-left px-5 py-3 font-bold">With</th>
                 <th className="text-center px-5 py-3 font-bold">Status</th>
-                <th className="text-right px-5 py-3 font-bold">Actions</th>
+                <th className="text-right pl-5 pr-7 py-3 font-bold">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/50 dark:divide-slate-800/50">
@@ -280,6 +280,23 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
                   </td>
                   <td className="px-5 py-3 text-right">
                     <div className="flex items-center justify-end gap-1.5">
+                      {/* Delete is first in DOM order (not last) so that,
+                          with justify-end, revealing it on row-hover only
+                          grows the group leftward — the rightmost (always
+                          visible) button stays pinned to the same edge as
+                          the "Actions" header instead of jumping when
+                          Delete's hidden/inline-flex toggles. Only shows
+                          when the matrix actually grants meeting-delete
+                          (Admin-only by default). */}
+                      {!isViewer && canDeleteMeeting(getCurrentUser(), m) && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onDelete(m.id); }}
+                          className="hidden group-hover:inline-flex items-center text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all"
+                          title="Delete meeting"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                       {isOverdue(m) && !isViewer && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onOpen(m); }}
@@ -319,17 +336,6 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
                         >
                           <Video size={14} /> Join
                         </a>
-                      )}
-                      {/* Delete only shows when the matrix actually grants
-                          meeting-delete (Admin-only by default). */}
-                      {!isViewer && canDeleteMeeting(getCurrentUser(), m) && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onDelete(m.id); }}
-                          className="hidden group-hover:inline-flex items-center text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all"
-                          title="Delete meeting"
-                        >
-                          <Trash2 size={14} />
-                        </button>
                       )}
                     </div>
                   </td>
