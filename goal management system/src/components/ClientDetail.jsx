@@ -323,13 +323,13 @@ function AssumptionsSection({ client, onSave, isViewer }) {
             <div className="space-y-3">
               <h4 className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Quantitative Rates Matrix</h4>
               <div className="overflow-hidden border border-slate-200/60 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-950/50 shadow-sm">
-                <table className="w-full text-xs">
+                <table className="w-full text-xs [table-layout:fixed]">
                   <thead className="bg-slate-50/70 dark:bg-slate-900/40 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200/50 dark:border-slate-800/80">
                     <tr>
-                      <th className="text-left px-5 py-3 font-bold">Goal Category</th>
-                      <th className="text-right px-5 py-3 font-bold">Inflation</th>
-                      <th className="text-right px-5 py-3 font-bold">Exp. Return</th>
-                      <th className="text-right px-5 py-3 font-bold">SIP Step-Up</th>
+                      <th className="text-left px-5 py-3 font-bold w-[180px] whitespace-nowrap">Goal Category</th>
+                      <th className="text-right px-5 py-3 font-bold w-[90px] whitespace-nowrap">Inflation</th>
+                      <th className="text-right px-5 py-3 font-bold w-[100px] whitespace-nowrap">Exp. Return</th>
+                      <th className="text-right px-5 py-3 font-bold w-[100px] whitespace-nowrap">SIP Step-Up</th>
                       <th className="text-left px-5 py-3 font-bold">Mapped Assets</th>
                     </tr>
                   </thead>

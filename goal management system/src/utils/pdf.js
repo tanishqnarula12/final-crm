@@ -137,18 +137,29 @@ export async function exportClientPdf(containerEl, client, includeProjection = t
       )
       .join(' ');
 
-    // Force responsive grids to their multi-column layout via inline style —
-    // CSS class selectors can't reliably override Tailwind v4 @layer rules in print.
+    // Force responsive grids to a portrait-appropriate column count via
+    // inline style — CSS class selectors can't reliably override Tailwind
+    // v4 @layer rules in print, and a portrait A4 page (≈180mm usable width)
+    // is too narrow for the 3-across card grids these were designed for at
+    // desktop width — that's what was actually causing goal/composition
+    // cards to look "shrunk" next to an over-wide Mapped Assets column.
     if (cls.includes('grid')) {
-      if (cls.includes('md:grid-cols-3') || cls.includes('lg:grid-cols-3')) {
+      const isCardGrid = cls.includes('lg:grid-cols-3') || cls.includes('lg:grid-cols-2') ||
+        (cls.includes('md:grid-cols-2') && !cls.includes('md:grid-cols-3'));
+      if (isCardGrid) {
+        // Composition/goal cards carry real content (charts, stat grids,
+        // progress bars) — 2-3 across in a portrait page crushes them.
+        // Stack to one column so every card keeps its full, readable width.
+        el.style.display = 'grid';
+        el.style.gridTemplateColumns = '1fr';
+      } else if (cls.includes('md:grid-cols-3')) {
+        // Plain KPI tiles (label + one number) stay 3-across — each is
+        // short enough that 3 columns is still comfortable in portrait.
         el.style.display = 'grid';
         el.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
-      } else if (cls.includes('md:grid-cols-2') || cls.includes('lg:grid-cols-2')) {
-        el.style.display = 'grid';
-        el.style.gridTemplateColumns = 'repeat(2, minmax(0, 1fr))';
       } else if (cls.includes('md:grid-cols-4') || cls.includes('lg:grid-cols-4')) {
         el.style.display = 'grid';
-        el.style.gridTemplateColumns = 'repeat(4, minmax(0, 1fr))';
+        el.style.gridTemplateColumns = 'repeat(2, minmax(0, 1fr))';
       }
     }
 
@@ -206,12 +217,12 @@ export async function exportClientPdf(containerEl, client, includeProjection = t
 <html class="${document.documentElement.className}">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=1280">
+  <meta name="viewport" content="width=900">
   <title>${escHtml(client.name)} – Goal Report</title>
   ${linkTags}
   ${styleTags}
   <style>
-    @page { size: A4 landscape; margin: 10mm 12mm; }
+    @page { size: A4; margin: 14mm 16mm; }
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     button { display: none !important; }
     .animate-fade-in,
@@ -220,6 +231,8 @@ export async function exportClientPdf(containerEl, client, includeProjection = t
 
     /* Grid columns and break-inside are set via inline styles on the cloned DOM
        elements above — inline styles beat all CSS cascade / @layer ordering. */
+
+    body { font-size: 9.5pt; }
 
     .print-header {
       background: #1e3a8a;
@@ -267,8 +280,10 @@ export async function exportClientPdf(containerEl, client, includeProjection = t
 </body>
 </html>`;
 
-  // Open at 1280px so lg: breakpoints (≥1024px) fire correctly
-  const win = window.open('', '_blank', 'width=1280,height=900');
+  // Open at 900px — narrow enough that lg: breakpoints (≥1024px) never
+  // fire naturally, matching the portrait page this prints to; the grid
+  // columns actually used are still set explicitly above regardless.
+  const win = window.open('', '_blank', 'width=900,height=1000');
   if (!win) {
     alert('Please allow pop-ups to export the report.');
     return;
@@ -333,6 +348,20 @@ export async function exportAssetAllocationPdf(containerEl, client) {
     }
   });
 
+  // An on-screen empty-state nudge ("No physical assets recorded.", "No
+  // liabilities recorded — debt-free. 🎉") is only useful while the advisor
+  // is actively editing — in a finished client-facing report it's just an
+  // empty card taking up space for a category that has nothing in it. Every
+  // such message in this component starts with "No " and contains
+  // "recorded"; drop the Card it lives in (Card always carries rounded-2xl).
+  clone.querySelectorAll('p').forEach(el => {
+    const text = (el.textContent || '').trim();
+    if (/^No .*recorded/i.test(text)) {
+      const card = el.closest('.rounded-2xl');
+      if (card) card.remove();
+    }
+  });
+
   // Strip animation classes so nothing is invisible on load
   // SVG elements (Lucide icons) have SVGAnimatedString className — skip those
   clone.querySelectorAll('[class]').forEach(el => {
@@ -350,18 +379,29 @@ export async function exportAssetAllocationPdf(containerEl, client) {
       )
       .join(' ');
 
-    // Force responsive grids to their multi-column layout via inline style —
-    // CSS class selectors can't reliably override Tailwind v4 @layer rules in print.
+    // Force responsive grids to a portrait-appropriate column count via
+    // inline style — CSS class selectors can't reliably override Tailwind
+    // v4 @layer rules in print, and a portrait A4 page (≈180mm usable width)
+    // is too narrow for the 3-across card grids these were designed for at
+    // desktop width — that's what was actually causing composition cards to
+    // look shrunk.
     if (cls.includes('grid')) {
-      if (cls.includes('md:grid-cols-3') || cls.includes('lg:grid-cols-3')) {
+      const isCardGrid = cls.includes('lg:grid-cols-3') || cls.includes('lg:grid-cols-2') ||
+        (cls.includes('md:grid-cols-2') && !cls.includes('md:grid-cols-3'));
+      if (isCardGrid) {
+        // Composition cards carry real content (progress bars, per-holding
+        // rows) — 2-3 across in a portrait page crushes them. Stack to one
+        // column so every card keeps its full, readable width.
+        el.style.display = 'grid';
+        el.style.gridTemplateColumns = '1fr';
+      } else if (cls.includes('md:grid-cols-3')) {
+        // Plain KPI tiles (label + one number) stay 3-across — each is
+        // short enough that 3 columns is still comfortable in portrait.
         el.style.display = 'grid';
         el.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
-      } else if (cls.includes('md:grid-cols-2') || cls.includes('lg:grid-cols-2')) {
-        el.style.display = 'grid';
-        el.style.gridTemplateColumns = 'repeat(2, minmax(0, 1fr))';
       } else if (cls.includes('md:grid-cols-4') || cls.includes('lg:grid-cols-4')) {
         el.style.display = 'grid';
-        el.style.gridTemplateColumns = 'repeat(4, minmax(0, 1fr))';
+        el.style.gridTemplateColumns = 'repeat(2, minmax(0, 1fr))';
       }
     }
 
@@ -394,17 +434,19 @@ export async function exportAssetAllocationPdf(containerEl, client) {
 <html class="${document.documentElement.className}">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=1280">
+  <meta name="viewport" content="width=900">
   <title>${escHtml(client.name)} – Asset Allocation Report</title>
   ${linkTags}
   ${styleTags}
   <style>
-    @page { size: A4 landscape; margin: 10mm 12mm; }
+    @page { size: A4; margin: 14mm 16mm; }
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     button { display: none !important; }
     .animate-fade-in,
     .animate-scale-up,
     .animate-slide-up { animation: none !important; opacity: 1 !important; transform: none !important; }
+
+    body { font-size: 9.5pt; }
 
     .print-header {
       background: #1e3a8a;
@@ -452,8 +494,10 @@ export async function exportAssetAllocationPdf(containerEl, client) {
 </body>
 </html>`;
 
-  // Open at 1280px so lg: breakpoints (≥1024px) fire correctly
-  const win = window.open('', '_blank', 'width=1280,height=900');
+  // Open at 900px — narrow enough that lg: breakpoints (≥1024px) never
+  // fire naturally, matching the portrait page this prints to; the grid
+  // columns actually used are still set explicitly above regardless.
+  const win = window.open('', '_blank', 'width=900,height=1000');
   if (!win) {
     alert('Please allow pop-ups to export the report.');
     return;
