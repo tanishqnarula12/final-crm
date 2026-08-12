@@ -137,21 +137,25 @@ export async function exportClientPdf(containerEl, client, includeProjection = t
       )
       .join(' ');
 
-    // Force responsive grids to a portrait-appropriate column count via
-    // inline style — CSS class selectors can't reliably override Tailwind
-    // v4 @layer rules in print, and a portrait A4 page (≈180mm usable width)
+    // Force responsive grids to a portrait-appropriate layout via inline
+    // style — CSS class selectors can't reliably override Tailwind v4
+    // @layer rules in print, and a portrait A4 page (≈180mm usable width)
     // is too narrow for the 3-across card grids these were designed for at
-    // desktop width — that's what was actually causing goal/composition
-    // cards to look "shrunk" next to an over-wide Mapped Assets column.
+    // desktop width.
     if (cls.includes('grid')) {
       const isCardGrid = cls.includes('lg:grid-cols-3') || cls.includes('lg:grid-cols-2') ||
         (cls.includes('md:grid-cols-2') && !cls.includes('md:grid-cols-3'));
       if (isCardGrid) {
         // Composition/goal cards carry real content (charts, stat grids,
-        // progress bars) — 2-3 across in a portrait page crushes them.
-        // Stack to one column so every card keeps its full, readable width.
-        el.style.display = 'grid';
-        el.style.gridTemplateColumns = '1fr';
+        // progress bars) — 2-3 across in a portrait page crushes them, so
+        // stack to one column. Using flex instead of a 1-column grid here
+        // deliberately — Chrome's print pagination does not reliably
+        // fragment CSS Grid containers (same class of bug fixed earlier for
+        // the MoM document's two-column layout), which is what was putting
+        // each goal card alone on its own mostly-empty page. Flex-column
+        // paginates correctly.
+        el.style.display = 'flex';
+        el.style.flexDirection = 'column';
       } else if (cls.includes('md:grid-cols-3')) {
         // Plain KPI tiles (label + one number) stay 3-across — each is
         // short enough that 3 columns is still comfortable in portrait.
@@ -161,6 +165,18 @@ export async function exportClientPdf(containerEl, client, includeProjection = t
         el.style.display = 'grid';
         el.style.gridTemplateColumns = 'repeat(2, minmax(0, 1fr))';
       }
+    }
+
+    // A large figure truncated with an ellipsis is fine on a compact
+    // on-screen tile, but not acceptable in a report a client actually
+    // reads — every monetary value in this app pairs the `truncate` class
+    // with `tabular-nums`, so that combination reliably identifies "this is
+    // a number that must stay fully visible" without touching unrelated
+    // (and lower-stakes) name/label truncation elsewhere.
+    if (cls.includes('truncate') && cls.includes('tabular-nums')) {
+      el.style.whiteSpace = 'normal';
+      el.style.overflow = 'visible';
+      el.style.textOverflow = 'clip';
     }
 
     // Apply break-inside: avoid ONLY to small tile elements (p-5 SIP tiles, p-3 KV boxes),
@@ -217,7 +233,7 @@ export async function exportClientPdf(containerEl, client, includeProjection = t
 <html class="${document.documentElement.className}">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=900">
+  <meta name="viewport" content="width=680">
   <title>${escHtml(client.name)} – Goal Report</title>
   ${linkTags}
   ${styleTags}
@@ -280,10 +296,16 @@ export async function exportClientPdf(containerEl, client, includeProjection = t
 </body>
 </html>`;
 
-  // Open at 900px — narrow enough that lg: breakpoints (≥1024px) never
-  // fire naturally, matching the portrait page this prints to; the grid
-  // columns actually used are still set explicitly above regardless.
-  const win = window.open('', '_blank', 'width=900,height=1000');
+  // Open at 680px — matching the actual usable width of a portrait A4 page
+  // (210mm minus 16mm margins each side ≈ 178mm ≈ 673px at 96 CSS-px/in).
+  // The earlier 900px was wider than what the page can actually hold, so
+  // content laid out at that width (the Mapped Assets pill row in
+  // particular) got silently clipped at the physical page edge once
+  // printed instead of wrapping — a print destination doesn't reflow
+  // content that's wider than it is, it just cuts it off. Matching the
+  // layout width to the real page width up front means nothing there is
+  // ever wider than what actually gets printed.
+  const win = window.open('', '_blank', 'width=680,height=1000');
   if (!win) {
     alert('Please allow pop-ups to export the report.');
     return;
@@ -327,7 +349,7 @@ export async function exportAssetAllocationPdf(containerEl, client) {
   clone.querySelectorAll('button').forEach(el => el.remove());
 
   // Edit History is operational/internal — not something a client needs to
-  // see in their report. Remark stays (it's client-facing commentary).
+  // see in their report.
   clone.querySelectorAll('h3').forEach(el => {
     if (el.textContent.includes('Edit History')) {
       const wrapper = el.closest('.space-y-3') || el.parentElement;
@@ -335,30 +357,41 @@ export async function exportAssetAllocationPdf(containerEl, client) {
     }
   });
 
-  // Keep the Net Worth Composition heading glued to its donut chart — without
-  // this, a page break could fall between the two (heading stranded alone at
-  // the bottom of one page, chart pushed to the top of the next).
-  clone.querySelectorAll('h3').forEach(el => {
-    if (el.textContent.includes('Net Worth Composition')) {
-      const section = el.closest('section');
-      if (section) {
-        section.style.breakInside = 'avoid';
-        section.style.pageBreakInside = 'avoid';
-      }
-    }
-  });
-
   // An on-screen empty-state nudge ("No physical assets recorded.", "No
-  // liabilities recorded — debt-free. 🎉") is only useful while the advisor
-  // is actively editing — in a finished client-facing report it's just an
-  // empty card taking up space for a category that has nothing in it. Every
-  // such message in this component starts with "No " and contains
-  // "recorded"; drop the Card it lives in (Card always carries rounded-2xl).
+  // liabilities recorded — debt-free. 🎉", "No remark yet. Click ...") is
+  // only useful while the advisor is actively editing — in a finished
+  // client-facing report it's just an empty card taking up space for
+  // something that has nothing in it. Composition/breakdown emptiness
+  // messages all start with "No " and contain "recorded"; the Remark one
+  // says "No remark yet" instead, so it needs its own check, and it needs
+  // the whole heading+card block removed (unlike a composition card, an
+  // empty Remark has no data-bearing siblings left to justify keeping its
+  // heading around).
   clone.querySelectorAll('p').forEach(el => {
     const text = (el.textContent || '').trim();
     if (/^No .*recorded/i.test(text)) {
       const card = el.closest('.rounded-2xl');
       if (card) card.remove();
+    } else if (/^No remark yet/i.test(text)) {
+      const block = el.closest('.space-y-3');
+      if (block) block.remove();
+    }
+  });
+
+  // Never let a page break fall immediately after a section heading —
+  // otherwise the heading strands alone at the bottom of one page while its
+  // actual content (a chart, a row of cards) gets pushed to the next. Every
+  // section heading here renders via the same SectionHeading component, an
+  // <h3> nested two levels inside its icon+title wrapper; that wrapper is
+  // what needs to stay glued to whatever comes right after it. (This is a
+  // break-after hint on the heading block itself, not break-inside:avoid on
+  // the whole section — avoiding a break anywhere inside a section that
+  // could run longer than a page is what causes a blank trailing page.)
+  clone.querySelectorAll('h3').forEach(el => {
+    const headingBlock = el.parentElement?.parentElement;
+    if (headingBlock) {
+      headingBlock.style.breakAfter = 'avoid';
+      headingBlock.style.pageBreakAfter = 'avoid';
     }
   });
 
@@ -390,10 +423,14 @@ export async function exportAssetAllocationPdf(containerEl, client) {
         (cls.includes('md:grid-cols-2') && !cls.includes('md:grid-cols-3'));
       if (isCardGrid) {
         // Composition cards carry real content (progress bars, per-holding
-        // rows) — 2-3 across in a portrait page crushes them. Stack to one
-        // column so every card keeps its full, readable width.
-        el.style.display = 'grid';
-        el.style.gridTemplateColumns = '1fr';
+        // rows) — 2-3 across in a portrait page crushes them, so stack to
+        // one column. Using flex instead of a 1-column grid here
+        // deliberately — Chrome's print pagination does not reliably
+        // fragment CSS Grid containers, which was putting each composition
+        // card alone on its own mostly-empty page. Flex-column paginates
+        // correctly.
+        el.style.display = 'flex';
+        el.style.flexDirection = 'column';
       } else if (cls.includes('md:grid-cols-3')) {
         // Plain KPI tiles (label + one number) stay 3-across — each is
         // short enough that 3 columns is still comfortable in portrait.
@@ -403,6 +440,18 @@ export async function exportAssetAllocationPdf(containerEl, client) {
         el.style.display = 'grid';
         el.style.gridTemplateColumns = 'repeat(2, minmax(0, 1fr))';
       }
+    }
+
+    // A large figure truncated with an ellipsis is fine on a compact
+    // on-screen tile, but not acceptable in a report a client actually
+    // reads — every monetary value in this app pairs the `truncate` class
+    // with `tabular-nums`, so that combination reliably identifies "this is
+    // a number that must stay fully visible" without touching unrelated
+    // (and lower-stakes) name/label truncation elsewhere.
+    if (cls.includes('truncate') && cls.includes('tabular-nums')) {
+      el.style.whiteSpace = 'normal';
+      el.style.overflow = 'visible';
+      el.style.textOverflow = 'clip';
     }
 
     // Avoid breaking small tiles/cards across a page — same rule as the goal
@@ -434,7 +483,7 @@ export async function exportAssetAllocationPdf(containerEl, client) {
 <html class="${document.documentElement.className}">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=900">
+  <meta name="viewport" content="width=680">
   <title>${escHtml(client.name)} – Asset Allocation Report</title>
   ${linkTags}
   ${styleTags}
@@ -494,10 +543,16 @@ export async function exportAssetAllocationPdf(containerEl, client) {
 </body>
 </html>`;
 
-  // Open at 900px — narrow enough that lg: breakpoints (≥1024px) never
-  // fire naturally, matching the portrait page this prints to; the grid
-  // columns actually used are still set explicitly above regardless.
-  const win = window.open('', '_blank', 'width=900,height=1000');
+  // Open at 680px — matching the actual usable width of a portrait A4 page
+  // (210mm minus 16mm margins each side ≈ 178mm ≈ 673px at 96 CSS-px/in).
+  // The earlier 900px was wider than what the page can actually hold, so
+  // content laid out at that width (the Mapped Assets pill row in
+  // particular) got silently clipped at the physical page edge once
+  // printed instead of wrapping — a print destination doesn't reflow
+  // content that's wider than it is, it just cuts it off. Matching the
+  // layout width to the real page width up front means nothing there is
+  // ever wider than what actually gets printed.
+  const win = window.open('', '_blank', 'width=680,height=1000');
   if (!win) {
     alert('Please allow pop-ups to export the report.');
     return;
