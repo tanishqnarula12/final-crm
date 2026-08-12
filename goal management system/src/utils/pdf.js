@@ -179,6 +179,29 @@ export async function exportClientPdf(containerEl, client, includeProjection = t
       el.style.textOverflow = 'clip';
     }
 
+    // Mapped Assets pill badges (Planning Assumptions table) — full desktop
+    // size, several can be 200px+ wide each. The Mapped Assets column only
+    // has ~250-280px to work with on a portrait page (the other four rate
+    // columns take the rest), and flex-wrap can't shrink a single badge
+    // below its own text width — so at full size, a wide badge just
+    // overflowed the column instead of wrapping onto its own line within
+    // it. Shrinking font/padding here (print only, on-screen keeps the
+    // original size) is what actually lets every badge fit one-per-line
+    // inside the space available instead of being clipped.
+    if (cls.includes('rounded-full') && cls.includes('whitespace-nowrap') && cls.includes('bg-indigo-50')) {
+      el.style.fontSize = '8pt';
+      el.style.padding = '2px 7px';
+    }
+
+    // Cards use p-6 (24px) padding, sized for a 1280px desktop layout —
+    // on a ~673px-wide portrait page that's real width lost on both sides
+    // of every card. Tightening it to 14px reclaims ~20px per side without
+    // the card looking cramped, which is what the Mapped Assets column
+    // needed to actually fit its content instead of running off the page.
+    if (cls.includes('rounded-2xl') && cls.includes(' p-6')) {
+      el.style.padding = '14px';
+    }
+
     // Apply break-inside: avoid ONLY to small tile elements (p-5 SIP tiles, p-3 KV boxes),
     // NOT to large wrapper cards (p-6 rounded-2xl) which cause blank pages when avoided.
     if (cls.includes('rounded-2xl') && (cls.includes(' p-5') || cls.includes(' p-3'))) {
@@ -452,6 +475,14 @@ export async function exportAssetAllocationPdf(containerEl, client) {
       el.style.whiteSpace = 'normal';
       el.style.overflow = 'visible';
       el.style.textOverflow = 'clip';
+    }
+
+    // Cards use p-6 (24px) padding, sized for a 1280px desktop layout — on
+    // a ~673px-wide portrait page that's real width lost on both sides of
+    // every card. Tightening it to 14px reclaims ~20px per side without
+    // the card looking cramped.
+    if (cls.includes('rounded-2xl') && cls.includes(' p-6')) {
+      el.style.padding = '14px';
     }
 
     // Avoid breaking small tiles/cards across a page — same rule as the goal
