@@ -124,6 +124,13 @@ function buildOverviewPage(client, alloc, t, dateStr, pageNum, totalPages) {
       </div>` : ''}</div>
     </div>
 
+    <div style="font-size:14px;font-weight:700;color:#0f172a;margin-top:26px;margin-bottom:12px;">Asset &amp; liability composition</div>
+    <div style="display:flex;gap:12px;align-items:stretch;">
+      ${sectionCompositionCard('financial', alloc, t, true)}
+      ${sectionCompositionCard('physical', alloc, t, true)}
+      ${sectionCompositionCard('liabilities', alloc, t, true)}
+    </div>
+
     ${footerHtml(pageNum, totalPages)}
   ${pageClose()}`;
 }
@@ -133,32 +140,54 @@ function buildOverviewPage(client, alloc, t, dateStr, pageNum, totalPages) {
 // Commodity within Financial) — this is the "bifurcation" the on-screen
 // Asset & Liability Composition already shows as three separate cards;
 // a single flat table mixing all three sections together lost that.
-function sectionCompositionCard(sectionId, alloc, t) {
+// compact=true renders a smaller variant sized for a 3-up row on the
+// overview page instead of a full-width stacked card.
+function sectionCompositionCard(sectionId, alloc, t, compact = false) {
   const meta = SECTION_META[sectionId];
   const rows = groupComposition(alloc, sectionId);
   const total = t[sectionId];
 
+  const labelSize = compact ? '9.5px' : '11px';
+  const amtSize = compact ? '9.5px' : '11px';
+  const pctSize = compact ? '8.5px' : '10px';
+  const barH = compact ? '4px' : '6px';
+  const rowGap = compact ? '8px' : '12px';
+
   const rowsHtml = rows.map(r => {
     const pct = total > 0 ? (r.amount / total) * 100 : 0;
     return `
-    <div style="margin-bottom:12px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
-        <div style="display:flex;align-items:center;gap:7px;">
-          <span style="width:9px;height:9px;border-radius:2px;background:${r.color};display:inline-block;"></span>
-          <span style="font-size:11px;font-weight:600;color:#334155;">${r.label}</span>
+    <div style="margin-bottom:${rowGap};">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;gap:6px;">
+        <div style="display:flex;align-items:center;gap:6px;min-width:0;">
+          <span style="width:8px;height:8px;border-radius:2px;background:${r.color};display:inline-block;flex-shrink:0;"></span>
+          <span style="font-size:${labelSize};font-weight:600;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.label}</span>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span style="font-size:11px;font-weight:700;color:#0f172a;">${fmtINR(r.amount)}</span>
-          <span style="font-size:10px;font-weight:700;color:${r.color};width:38px;text-align:right;display:inline-block;">${fmtPct(r.amount, total)}</span>
+        <div style="display:flex;align-items:baseline;gap:6px;flex-shrink:0;">
+          <span style="font-size:${amtSize};font-weight:700;color:#0f172a;white-space:nowrap;">${fmtINR(r.amount)}</span>
+          <span style="font-size:${pctSize};font-weight:700;color:${r.color};white-space:nowrap;">${fmtPct(r.amount, total)}</span>
         </div>
       </div>
-      <div style="height:6px;border-radius:99px;background:white;overflow:hidden;">
+      <div style="height:${barH};border-radius:99px;background:white;overflow:hidden;">
         <div style="width:${Math.max(2, pct)}%;height:100%;background:${r.color};border-radius:99px;"></div>
       </div>
     </div>`;
   }).join('');
 
-  const emptyText = sectionId === 'liabilities' ? 'No liabilities recorded — debt-free. 🎉' : 'No holdings recorded yet.';
+  const emptyText = sectionId === 'liabilities' ? 'Debt-free 🎉' : 'No holdings yet.';
+
+  if (compact) {
+    return `
+    <div style="flex:1;min-width:0;background:${meta.bg};border:1px solid ${meta.border};border-radius:14px;padding:14px 15px;break-inside:avoid;page-break-inside:avoid;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:11px;gap:6px;">
+        <div style="display:flex;align-items:center;gap:7px;min-width:0;">
+          <div style="width:24px;height:24px;border-radius:7px;background:white;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">${meta.icon}</div>
+          <div style="font-size:10.5px;font-weight:800;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${meta.title}</div>
+        </div>
+      </div>
+      <div style="font-size:12.5px;font-weight:800;color:${meta.accent};margin-bottom:11px;">${fmtINR(total)}</div>
+      ${rowsHtml || `<div style="font-size:9px;color:#94a3b8;font-style:italic;">${emptyText}</div>`}
+    </div>`;
+  }
 
   return `
   <div style="background:${meta.bg};border:1px solid ${meta.border};border-radius:16px;padding:22px 24px;margin-bottom:20px;break-inside:avoid;page-break-inside:avoid;">
@@ -171,18 +200,6 @@ function sectionCompositionCard(sectionId, alloc, t) {
     </div>
     ${rowsHtml || `<div style="font-size:10.5px;color:#94a3b8;font-style:italic;">${emptyText}</div>`}
   </div>`;
-}
-
-function buildCompositionPage(alloc, t, dateStr, pageNum, totalPages) {
-  return `${pageOpen()}
-    ${letterheadHtml(dateStr)}
-    <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:#0f172a;letter-spacing:-0.4px;">Asset &amp; Liability Composition</div>
-    <div style="font-size:10.5px;color:#64748b;margin-top:4px;margin-bottom:22px;">How each section splits across its own asset/liability classes</div>
-    ${sectionCompositionCard('financial', alloc, t)}
-    ${sectionCompositionCard('physical', alloc, t)}
-    ${sectionCompositionCard('liabilities', alloc, t)}
-    ${footerHtml(pageNum, totalPages)}
-  ${pageClose()}`;
 }
 
 function holdingCard(col, sectionId) {
@@ -217,8 +234,22 @@ function holdingCard(col, sectionId) {
   </div>`;
 }
 
+function sectionHeadingHtml(sectionId, isFirstOnPage) {
+  const meta = SECTION_META[sectionId];
+  return `
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:13px;${isFirstOnPage ? '' : 'margin-top:6px;'}">
+    <div style="width:24px;height:24px;border-radius:7px;background:${meta.bg};border:1px solid ${meta.border};display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">${meta.icon}</div>
+    <div style="font-size:11.5px;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:${meta.accent};">${meta.title}</div>
+  </div>`;
+}
+
 function buildDetailPage(chunk, dateStr, pageNum, totalPages) {
-  const cards = chunk.map(({ col, sectionId }) => holdingCard(col, sectionId)).join('');
+  let lastSection = null;
+  const cards = chunk.map(({ col, sectionId }) => {
+    const heading = sectionId !== lastSection ? sectionHeadingHtml(sectionId, lastSection === null) : '';
+    lastSection = sectionId;
+    return heading + holdingCard(col, sectionId);
+  }).join('');
   return `${pageOpen()}
     ${letterheadHtml(dateStr)}
     <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:#0f172a;letter-spacing:-0.4px;">Allocation Details</div>
@@ -266,7 +297,7 @@ export function buildAssetReportHtml(client) {
   });
 
   const detailPageCount = Math.max(0, Math.ceil(allCols.length / 2));
-  const totalPages = 1 + 1 + detailPageCount + 1;
+  const totalPages = 1 + detailPageCount + 1;
 
   // Auto-generated insight: equity/debt/commodity mix as a share of total
   // assets, plus the single largest holding across the whole portfolio.
@@ -299,7 +330,6 @@ export function buildAssetReportHtml(client) {
 
   let pageNum = 1;
   let html = buildOverviewPage(client, alloc, t, dateStr, pageNum++, totalPages);
-  html += buildCompositionPage(alloc, t, dateStr, pageNum++, totalPages);
 
   for (let i = 0; i < allCols.length; i += 2) {
     html += buildDetailPage(allCols.slice(i, i + 2), dateStr, pageNum++, totalPages);
