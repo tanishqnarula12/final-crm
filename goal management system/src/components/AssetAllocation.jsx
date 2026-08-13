@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Wallet, PieChart as PieIcon, Pencil, Plus, Search, Scale,
   TrendingUp, Home, CreditCard, MessageSquare, History, ArrowRight, Save, Layers, Download
@@ -10,7 +10,7 @@ import {
   normalizeAllocation, allocationTotals, groupComposition, sectionGroupColumns,
   hasAllocation, SECTION_COLORS, fmtPct
 } from '../utils/assets';
-import { exportAssetAllocationPdf } from '../utils/pdf';
+import { exportAssetReportPdf } from '../utils/pdf';
 
 const tooltipStyle = {
   backgroundColor: 'var(--tooltip-bg)',
@@ -118,13 +118,12 @@ export function AssetAllocationDetail({ client, onEdit, onSaveRemark, isViewer }
   const t = useMemo(() => allocationTotals(alloc), [alloc]);
   const allocated = hasAllocation(client);
 
-  const containerRef = useRef(null);
   const [exporting, setExporting] = useState(false);
-  const handleExport = async () => {
+  const handleExport = () => {
     if (exporting) return;
     setExporting(true);
     try {
-      await exportAssetAllocationPdf(containerRef.current, client);
+      exportAssetReportPdf(client);
     } catch (err) {
       alert('Could not generate PDF: ' + err.message);
     } finally {
@@ -140,7 +139,7 @@ export function AssetAllocationDetail({ client, onEdit, onSaveRemark, isViewer }
   const liaCols = useMemo(() => sectionGroupColumns(alloc, 'liabilities').filter(c => c.items.length > 0), [alloc]);
 
   return (
-    <div ref={containerRef} className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in">
       {/* Hero */}
       <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">

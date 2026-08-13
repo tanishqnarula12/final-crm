@@ -1,6 +1,7 @@
 import { buildProjection } from './calc';
 import logoUrl from '../assets/logo.png';
 import { buildGoalReportHtml } from './goalReportHtml';
+import { buildAssetReportHtml } from './assetReportHtml';
 
 function escHtml(str) {
   return String(str)
@@ -618,6 +619,51 @@ export function exportGoalReportPdf(client) {
 <head>
   <meta charset="UTF-8">
   <title>${escHtml(client.name)} – Goal Report</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #f1f5f9; }
+    @page { size: A4; margin: 14mm 16mm; }
+    @media print {
+      html, body { background: #ffffff; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    }
+  </style>
+</head>
+<body>${bodyHtml}</body>
+</html>`;
+
+  const win = window.open('', '_blank', 'width=820,height=1000');
+  if (!win) {
+    alert('Please allow pop-ups to export the report.');
+    return;
+  }
+  win.document.write(html);
+  win.document.close();
+
+  let printed = false;
+  const doPrint = () => {
+    if (printed) return;
+    printed = true;
+    win.focus();
+    win.print();
+  };
+  win.onload = doPrint;
+  setTimeout(doPrint, 1200);
+}
+
+// Dedicated Asset Allocation Report — same pattern as exportGoalReportPdf
+// above (see assetReportHtml.js for the template itself). Kept as its own
+// function since exportAssetAllocationPdf (the older DOM-clone version)
+// stays around only until anything still depends on it being removed is
+// double-checked; nothing does, so it's safe to delete in a follow-up.
+export function exportAssetReportPdf(client) {
+  const bodyHtml = buildAssetReportHtml(client);
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${escHtml(client.name)} – Asset Allocation Report</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; }
