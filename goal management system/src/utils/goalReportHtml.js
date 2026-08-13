@@ -135,7 +135,7 @@ function buildOverviewPage(client, goalsCalc, totals, dateStr, pageNum, totalPag
   return `${pageOpen()}
     ${letterheadHtml(dateStr)}
     <div style="font-family:'Playfair Display',serif;font-size:26px;font-weight:700;color:#0f172a;letter-spacing:-0.5px;">Goal Planning Report</div>
-    <div style="font-size:11px;color:#64748b;margin-top:5px;padding-bottom:16px;border-bottom:1px solid #e2e8f0;">${client.name} &nbsp;·&nbsp; ${client.pan || '—'} &nbsp;·&nbsp; ${client.age ? client.age + ' years old' : ''}</div>
+    <div style="font-size:14px;font-weight:600;color:#475569;margin-top:7px;padding-bottom:16px;border-bottom:1px solid #e2e8f0;">${client.name} &nbsp;·&nbsp; ${client.pan || '—'} &nbsp;·&nbsp; ${client.age ? client.age + ' years old' : ''}</div>
 
     <div style="font-size:14px;font-weight:700;color:#0f172a;margin-top:22px;margin-bottom:12px;">Your financial planning at a glance</div>
     <div style="display:flex;gap:10px;">
