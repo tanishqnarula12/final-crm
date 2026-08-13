@@ -322,7 +322,7 @@ function AssumptionsSection({ client, onSave, isViewer }) {
                     table still ends up wider than the card, it scrolls
                     instead of silently clipping content off-screen. */}
                 <div className="overflow-x-auto">
-                <table className="w-full text-xs [table-layout:fixed]">
+                <table className="w-full max-w-[880px] mx-auto text-xs [table-layout:fixed]">
                   <thead className="bg-slate-50/70 dark:bg-slate-900/40 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200/50 dark:border-slate-800/80">
                     <tr>
                       <th className="text-left px-4 py-3 font-bold w-[150px] whitespace-nowrap">Goal Category</th>
