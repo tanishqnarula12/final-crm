@@ -96,19 +96,6 @@ function buildOverviewPage(client, alloc, t, dateStr, pageNum, totalPages) {
       </div>
     </div>`).join('');
 
-  // Portfolio composition table — group-level rows across all 3 sections.
-  const compRows = ['financial', 'physical', 'liabilities'].flatMap(sid => {
-    const meta = SECTION_META[sid];
-    const rows = groupComposition(alloc, sid);
-    return rows.map(r => `
-      <tr>
-        <td style="padding:9px 14px;border-bottom:1px solid #f1f5f9;font-size:9.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.3px;">${meta.icon} ${meta.title}</td>
-        <td style="padding:9px 14px;border-bottom:1px solid #f1f5f9;font-size:10.5px;font-weight:600;color:#0f172a;">${r.label}</td>
-        <td style="padding:9px 14px;border-bottom:1px solid #f1f5f9;text-align:right;font-size:10.5px;font-weight:700;color:#0f172a;">${fmtINR(r.amount)}</td>
-        <td style="padding:9px 14px;border-bottom:1px solid #f1f5f9;text-align:right;font-size:10px;font-weight:700;color:${meta.accent};">${fmtPct(r.amount, t[sid])}</td>
-      </tr>`);
-  }).join('');
-
   return `${pageOpen()}
     ${letterheadHtml(dateStr)}
     <div style="font-family:'Playfair Display',serif;font-size:26px;font-weight:700;color:#0f172a;letter-spacing:-0.5px;">Asset Allocation Report</div>
@@ -137,21 +124,63 @@ function buildOverviewPage(client, alloc, t, dateStr, pageNum, totalPages) {
       </div>` : ''}</div>
     </div>
 
-    <div style="font-size:14px;font-weight:700;color:#0f172a;margin-top:26px;margin-bottom:12px;">Portfolio composition</div>
-    <div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
-      <table style="width:100%;border-collapse:collapse;">
-        <thead>
-          <tr style="background:#0f1f3d;">
-            <th style="text-align:left;padding:10px 14px;font-size:9px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:white;white-space:nowrap;">Section</th>
-            <th style="text-align:left;padding:10px 14px;font-size:9px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:white;">Class</th>
-            <th style="text-align:right;padding:10px 14px;font-size:9px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:white;white-space:nowrap;">Amount</th>
-            <th style="text-align:right;padding:10px 14px;font-size:9px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:white;white-space:nowrap;">% of Section</th>
-          </tr>
-        </thead>
-        <tbody>${compRows || `<tr><td colspan="4" style="padding:16px;text-align:center;font-size:11px;color:#94a3b8;font-style:italic;">No holdings recorded yet.</td></tr>`}</tbody>
-      </table>
-    </div>
+    ${footerHtml(pageNum, totalPages)}
+  ${pageClose()}`;
+}
 
+// One card per top-level section (Financial / Physical / Liabilities),
+// showing that section's own group-level breakdown (e.g. Equity/Debt/
+// Commodity within Financial) — this is the "bifurcation" the on-screen
+// Asset & Liability Composition already shows as three separate cards;
+// a single flat table mixing all three sections together lost that.
+function sectionCompositionCard(sectionId, alloc, t) {
+  const meta = SECTION_META[sectionId];
+  const rows = groupComposition(alloc, sectionId);
+  const total = t[sectionId];
+
+  const rowsHtml = rows.map(r => {
+    const pct = total > 0 ? (r.amount / total) * 100 : 0;
+    return `
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+        <div style="display:flex;align-items:center;gap:7px;">
+          <span style="width:9px;height:9px;border-radius:2px;background:${r.color};display:inline-block;"></span>
+          <span style="font-size:11px;font-weight:600;color:#334155;">${r.label}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:11px;font-weight:700;color:#0f172a;">${fmtINR(r.amount)}</span>
+          <span style="font-size:10px;font-weight:700;color:${r.color};width:38px;text-align:right;display:inline-block;">${fmtPct(r.amount, total)}</span>
+        </div>
+      </div>
+      <div style="height:6px;border-radius:99px;background:white;overflow:hidden;">
+        <div style="width:${Math.max(2, pct)}%;height:100%;background:${r.color};border-radius:99px;"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const emptyText = sectionId === 'liabilities' ? 'No liabilities recorded — debt-free. 🎉' : 'No holdings recorded yet.';
+
+  return `
+  <div style="background:${meta.bg};border:1px solid ${meta.border};border-radius:16px;padding:22px 24px;margin-bottom:20px;break-inside:avoid;page-break-inside:avoid;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:34px;height:34px;border-radius:10px;background:white;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">${meta.icon}</div>
+        <div style="font-size:14px;font-weight:800;color:#0f172a;">${meta.title}</div>
+      </div>
+      <span style="font-size:12px;font-weight:800;color:${meta.accent};">${fmtINR(total)}</span>
+    </div>
+    ${rowsHtml || `<div style="font-size:10.5px;color:#94a3b8;font-style:italic;">${emptyText}</div>`}
+  </div>`;
+}
+
+function buildCompositionPage(alloc, t, dateStr, pageNum, totalPages) {
+  return `${pageOpen()}
+    ${letterheadHtml(dateStr)}
+    <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:#0f172a;letter-spacing:-0.4px;">Asset &amp; Liability Composition</div>
+    <div style="font-size:10.5px;color:#64748b;margin-top:4px;margin-bottom:22px;">How each section splits across its own asset/liability classes</div>
+    ${sectionCompositionCard('financial', alloc, t)}
+    ${sectionCompositionCard('physical', alloc, t)}
+    ${sectionCompositionCard('liabilities', alloc, t)}
     ${footerHtml(pageNum, totalPages)}
   ${pageClose()}`;
 }
@@ -237,7 +266,7 @@ export function buildAssetReportHtml(client) {
   });
 
   const detailPageCount = Math.max(0, Math.ceil(allCols.length / 2));
-  const totalPages = 1 + detailPageCount + 1;
+  const totalPages = 1 + 1 + detailPageCount + 1;
 
   // Auto-generated insight: equity/debt/commodity mix as a share of total
   // assets, plus the single largest holding across the whole portfolio.
@@ -270,6 +299,7 @@ export function buildAssetReportHtml(client) {
 
   let pageNum = 1;
   let html = buildOverviewPage(client, alloc, t, dateStr, pageNum++, totalPages);
+  html += buildCompositionPage(alloc, t, dateStr, pageNum++, totalPages);
 
   for (let i = 0; i < allCols.length; i += 2) {
     html += buildDetailPage(allCols.slice(i, i + 2), dateStr, pageNum++, totalPages);
