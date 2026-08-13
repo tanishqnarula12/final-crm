@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Download, Plus, Target, Trash2, Pencil, FileText, CheckCircle2, Save, TrendingUp, IndianRupee
 } from 'lucide-react';
@@ -8,7 +8,7 @@ import {
 import {
   calcGoal, currentRecordedCorpus, fmtINR, fmtFull, fmtSip, goalEmoji, achievementColor, generateAssumptionsText, monthLabel, goalCreatedLabel, needsKidName
 } from '../utils/calc';
-import { exportClientPdf } from '../utils/pdf';
+import { exportGoalReportPdf } from '../utils/pdf';
 
 // Theme mapper for different categories of wealth goals (Minimal & Premium edition)
 const getGoalTheme = (name) => {
@@ -55,15 +55,13 @@ const getGoalTheme = (name) => {
 };
 
 export default function ClientDetail({ client, totals, onAddGoal, onSelectGoal, onDeleteGoal, onSaveAssumptions, onEditClient, isViewer }) {
-  const containerRef = useRef(null);
   const [exporting, setExporting] = useState(false);
-  const [includeProjection, setIncludeProjection] = useState(false);
 
-  const handleExport = async () => {
+  const handleExport = () => {
     if (exporting) return;
     setExporting(true);
     try {
-      await exportClientPdf(containerRef.current, client, includeProjection);
+      exportGoalReportPdf(client);
     } catch (err) {
       alert('Could not generate PDF: ' + err.message);
     } finally {
@@ -72,7 +70,7 @@ export default function ClientDetail({ client, totals, onAddGoal, onSelectGoal, 
   };
 
   return (
-    <div ref={containerRef} className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in">
       {/* Client Summary Header */}
       <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 rounded-[24px]">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -101,17 +99,6 @@ export default function ClientDetail({ client, totals, onAddGoal, onSelectGoal, 
           <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
             <button onClick={handleExport} disabled={exporting} className={btnSecondary + ' flex-1 md:flex-none'}>
               <Download size={14} className={exporting ? 'animate-bounce' : ''} /> {exporting ? 'Generating…' : 'Export PDF'}
-            </button>
-            <button
-              onClick={() => setIncludeProjection(v => !v)}
-              title="Toggle Year-by-year projection tables in exported PDF"
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors flex-1 md:flex-none cursor-pointer ${
-                includeProjection
-                  ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-900/40'
-                  : 'bg-slate-50 dark:bg-slate-800/50 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700'
-              }`}
-            >
-              <TrendingUp size={12} /> {includeProjection ? 'Projections: On' : 'Projections: Off'}
             </button>
             {!isViewer && (
               <button onClick={onAddGoal} className={btnPrimary + ' flex-1 md:flex-none'}>

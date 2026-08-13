@@ -1,5 +1,6 @@
 import { buildProjection } from './calc';
 import logoUrl from '../assets/logo.png';
+import { buildGoalReportHtml } from './goalReportHtml';
 
 function escHtml(str) {
   return String(str)
@@ -601,4 +602,51 @@ export async function exportAssetAllocationPdf(containerEl, client) {
   };
   win.onload = doPrint;
   setTimeout(doPrint, 1500);
+}
+
+// Dedicated Goal Report — see goalReportHtml.js for why this exists as its
+// own hand-crafted, self-contained template instead of extending
+// exportClientPdf above (that DOM-clone approach is kept only as the
+// Asset Allocation report's implementation for now, pending the same
+// rebuild). No DOM cloning, no Tailwind stylesheet dependency, no grid-
+// forcing, no truncation/overflow fixes needed — the template is already
+// sized and paginated for exactly what a portrait A4 page can hold.
+export function exportGoalReportPdf(client) {
+  const bodyHtml = buildGoalReportHtml(client);
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${escHtml(client.name)} – Goal Report</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #f1f5f9; }
+    @page { size: A4; margin: 14mm 16mm; }
+    @media print {
+      html, body { background: #ffffff; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    }
+  </style>
+</head>
+<body>${bodyHtml}</body>
+</html>`;
+
+  const win = window.open('', '_blank', 'width=820,height=1000');
+  if (!win) {
+    alert('Please allow pop-ups to export the report.');
+    return;
+  }
+  win.document.write(html);
+  win.document.close();
+
+  let printed = false;
+  const doPrint = () => {
+    if (printed) return;
+    printed = true;
+    win.focus();
+    win.print();
+  };
+  win.onload = doPrint;
+  setTimeout(doPrint, 1200);
 }
