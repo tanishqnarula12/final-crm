@@ -182,7 +182,7 @@ function goalDetailCard(g, c) {
     </div>`;
 
   return `
-  <div style="background:${theme.bg};border:1px solid ${theme.border};border-radius:14px;padding:18px 20px;margin-bottom:14px;break-inside:avoid;page-break-inside:avoid;">
+  <div style="background:${theme.bg};border:1px solid ${theme.border};border-radius:14px;padding:18px 20px;margin-bottom:26px;break-inside:avoid;page-break-inside:avoid;">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
       <div>
         <div style="font-size:15px;font-weight:800;color:${theme.text};">${goalEmoji(g.name)} ${g.name}</div>
@@ -269,10 +269,10 @@ function buildFrameworkPage(client, goalsCalc, notesOnly, dateStr, pageNum, tota
       <table style="width:100%;border-collapse:collapse;">
         <thead>
           <tr style="background:#0f1f3d;">
-            <th style="text-align:left;padding:9px 14px;font-size:8.5px;font-weight:700;letter-spacing:0.7px;text-transform:uppercase;color:white;">Goal</th>
-            <th style="text-align:center;padding:9px 14px;font-size:8.5px;font-weight:700;letter-spacing:0.7px;text-transform:uppercase;color:white;">Inflation</th>
-            <th style="text-align:center;padding:9px 14px;font-size:8.5px;font-weight:700;letter-spacing:0.7px;text-transform:uppercase;color:white;">Return</th>
-            <th style="text-align:center;padding:9px 14px;font-size:8.5px;font-weight:700;letter-spacing:0.7px;text-transform:uppercase;color:white;">SIP Step-up</th>
+            <th style="text-align:left;padding:9px 14px;font-size:8.5px;font-weight:700;letter-spacing:0.7px;text-transform:uppercase;color:white;white-space:nowrap;">Goal</th>
+            <th style="text-align:center;padding:9px 14px;font-size:8.5px;font-weight:700;letter-spacing:0.7px;text-transform:uppercase;color:white;white-space:nowrap;">Inflation</th>
+            <th style="text-align:center;padding:9px 14px;font-size:8.5px;font-weight:700;letter-spacing:0.7px;text-transform:uppercase;color:white;white-space:nowrap;">Return</th>
+            <th style="text-align:center;padding:9px 14px;font-size:8.5px;font-weight:700;letter-spacing:0.7px;text-transform:uppercase;color:white;white-space:nowrap;">SIP Step-up</th>
             <th style="text-align:left;padding:9px 14px;font-size:8.5px;font-weight:700;letter-spacing:0.7px;text-transform:uppercase;color:white;">Mapped Assets</th>
           </tr>
         </thead>
