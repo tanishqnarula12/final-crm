@@ -74,12 +74,12 @@ function letterheadHtml(dateStr) {
       <img src="${LOGO_BASE64}" style="width:36px;height:36px;object-fit:contain;border-radius:8px;background:rgba(255,255,255,0.15);padding:3px;" />
       <div>
         <div style="font-size:13px;font-weight:700;">Team Fintness</div>
-        <div style="font-size:9px;opacity:0.6;letter-spacing:0.5px;margin-top:1px;">Building fitter financial futures</div>
+        <div style="font-size:9px;opacity:0.6;letter-spacing:0.5px;margin-top:1px;">Let's Build a Fitter Financial Future Together</div>
       </div>
     </div>
     <div style="text-align:right;">
-      <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;opacity:0.7;">GOAL REPORT</div>
-      <div style="font-size:9px;opacity:0.55;margin-top:1px;">${dateStr}</div>
+      <div style="font-size:9px;font-weight:800;letter-spacing:1.5px;opacity:0.95;">GOAL REPORT</div>
+      <div style="font-size:9px;font-weight:700;opacity:0.85;margin-top:1px;">${dateStr}</div>
     </div>
   </div>`;
 }
