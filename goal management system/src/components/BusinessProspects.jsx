@@ -893,31 +893,28 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
               every input/select inside) unless this account is Admin or holds
               editDetails on this prospect. `contents` keeps the fieldset
               itself out of the layout so it doesn't disturb spacing/grid. */}
-          {isEdit && detailsLocked && (
-            <p className="text-[10px] text-amber-600 dark:text-amber-400 -mt-2">These are the original proposal details and can no longer be edited — only the stage, remarks, and policy issuance below can change.</p>
-          )}
           {isEdit && !detailsLocked && (
             <p className="text-[10px] text-blue-600 dark:text-blue-400 -mt-2">You have permission to edit this prospect's details — changes here are saved to its modification history.</p>
           )}
           {/* Shared prospect fields */}
           <fieldset disabled={detailsLocked} className="contents">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Field label="Group Leader Name *" hint="Locked — set from the client record">
+            <Field label="Group Leader Name *">
               <div className="w-full px-3.5 py-2.5 text-sm border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400">
                 {groupLeader || '—'}
               </div>
             </Field>
-            <Field label="Applicant Name *" hint="Locked — set from the client record">
+            <Field label="Applicant Name *">
               <div className="w-full px-3.5 py-2.5 text-sm border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400">
                 {applicant || '—'}
               </div>
             </Field>
-            <Field label="PAN of Applicant" hint="Locked — set from the client record">
+            <Field label="PAN of Applicant">
               <div className="w-full px-3.5 py-2.5 text-sm border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 font-mono tracking-widest uppercase">
                 {pan || '—'}
               </div>
             </Field>
-            <Field label="Created Date & Time" hint="Set automatically">
+            <Field label="Created Date & Time">
               <div className="w-full px-3.5 py-2.5 text-sm border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 tabular-nums">
                 {isEdit && initial?.createdAt ? fmtProspectStamp(initial.createdAt) : 'On confirm'}
               </div>
@@ -925,12 +922,12 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
             <Field label="Closing Date">
               <input type="date" value={closingDate} onChange={(e) => setClosingDate(e.target.value)} className={inputCls} />
             </Field>
-            <Field label="Service Manager" hint="Prefilled from profile — editable"><TeamSelect value={serviceManager} onChange={setServiceManager} /></Field>
-            <Field label="Relationship Manager" hint="Prefilled from profile — editable"><TeamSelect value={relationshipManager} onChange={setRelationshipManager} /></Field>
-            <Field label="Owner" hint="Prefilled from profile — editable"><TeamSelect value={owner} onChange={setOwner} /></Field>
-            <Field label="Internal Manager" hint="Prefilled from profile — editable"><TeamSelect value={internalManager} onChange={setInternalManager} /></Field>
-            <Field label="Insurance Manager" hint="Prefilled from profile — editable"><TeamSelect value={insuranceManager} onChange={setInsuranceManager} /></Field>
-            <Field label="Portfolio Manager" hint="Prefilled from profile — editable"><TeamSelect value={portfolioManager} onChange={setPortfolioManager} /></Field>
+            <Field label="Service Manager"><TeamSelect value={serviceManager} onChange={setServiceManager} /></Field>
+            <Field label="Relationship Manager"><TeamSelect value={relationshipManager} onChange={setRelationshipManager} /></Field>
+            <Field label="Owner"><TeamSelect value={owner} onChange={setOwner} /></Field>
+            <Field label="Internal Manager"><TeamSelect value={internalManager} onChange={setInternalManager} /></Field>
+            <Field label="Insurance Manager"><TeamSelect value={insuranceManager} onChange={setInsuranceManager} /></Field>
+            <Field label="Portfolio Manager"><TeamSelect value={portfolioManager} onChange={setPortfolioManager} /></Field>
           </div>
           </fieldset>
 

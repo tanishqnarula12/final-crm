@@ -210,14 +210,11 @@ export async function notifyFromEvents(prisma, events) {
       // its own RM/Portfolio Manager (see permissions.js) — so notify ONLY
       // those two, never the Service Manager (they can't see it yet; a
       // notification linking to a record they're blocked from opening would
-      // just be broken). Once the RM moves it to Qualified, it's visible to
-      // everyone same as before — that's a plain permission change, not a
-      // notification event, so no separate "reveal" notification is sent.
-      // Insurance prospects are unaffected — no Pre-Qualified stage, keep
-      // notifying the RM + Service Manager as before (Service Manager owns
-      // changeStage on those and could always see them). Deduped so the same
-      // person holding both roles (or being the creator) isn't notified
-      // twice / about themself.
+      // just be broken). Insurance prospects are unaffected — no
+      // Pre-Qualified stage, keep notifying the RM + Service Manager as
+      // before (Service Manager owns changeStage on those and could always
+      // see them). Deduped so the same person holding both roles (or being
+      // the creator) isn't notified twice / about themself.
       const isPreQualified = ev.module === 'investmentProspects' && rec.stage === 'Pre-Qualified';
       const targets = isPreQualified
         ? [rec.assignedTo || rec.relationshipManager, rec.portfolioManager]
@@ -229,6 +226,19 @@ export async function notifyFromEvents(prisma, events) {
         items.push({
           userId: target, type: NOTIF.PROSPECT_ASSIGNED,
           title: 'Business prospect assigned to you', body: prospectLabel(rec),
+          link: { view: 'prospects', id: rec.id },
+        });
+      }
+    } else if (ev.type === 'STAGE_CHANGE' && ev.module === 'investmentProspects' && ev.to === 'Qualified') {
+      // Someone (often the Portfolio Manager/Internal Manager/Service
+      // Manager, all of whom also hold changeStage) moved it out of
+      // Pre-Qualified — tell the RM their prospect progressed, unless the
+      // RM did it themself.
+      const target = rec.assignedTo || rec.relationshipManager;
+      if (target && target !== ev.actorId) {
+        items.push({
+          userId: target, type: NOTIF.PROSPECT_ASSIGNED,
+          title: 'Prospect moved to Qualified', body: prospectLabel(rec),
           link: { view: 'prospects', id: rec.id },
         });
       }
