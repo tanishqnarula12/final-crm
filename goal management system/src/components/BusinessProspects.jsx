@@ -18,7 +18,6 @@ import { canDo, isAdmin } from '../utils/permissions';
 import { updateClient } from '../services/db';
 import { CountrySelect, StateSelect, CitySelect } from './LocationPicker';
 import { triggerInsuranceProspectDownload } from '../utils/prospectDownload';
-import ProspectActivityLog from './ProspectActivityLog';
 
 // KYC dropdown option sets
 const OCCUPATION_OPTIONS = ['Salaried', 'Self Employed', 'House Wife'];
@@ -756,6 +755,37 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
       policyIssueDate: stage === 'Policy Issued' ? policyIssueDate : (initial?.policyIssueDate || ''),
     };
     const historyAuthor = getCurrentUser()?.name || 'System';
+
+    // Auto-summarize any detail/proposal field changes so the Comments &
+    // Logs timeline below reflects every edit, not just stage moves and
+    // manually-typed notes — otherwise saving a Relationship Manager
+    // reassignment or a corrected amount without also typing a remark would
+    // leave no trace at all in the one log this app already has for a
+    // prospect.
+    const DETAIL_FIELD_LABELS = {
+      closingDate: 'Closing Date', serviceManager: 'Service Manager', relationshipManager: 'Relationship Manager',
+      owner: 'Owner', internalManager: 'Internal Manager', insuranceManager: 'Insurance Manager', portfolioManager: 'Portfolio Manager',
+    };
+    const editSummaryParts = [];
+    if (isEdit) {
+      Object.entries(DETAIL_FIELD_LABELS).forEach(([key, label]) => {
+        const before = initial?.[key] || '';
+        const after = shared[key] || '';
+        if (before !== after) {
+          const fmt = key === 'closingDate' ? (v => v || '—') : (v => (v ? (teamName(v) || v) : '—'));
+          editSummaryParts.push(`${label}: ${fmt(before)} → ${fmt(after)}`);
+        }
+      });
+      const it0 = items[0] || {};
+      if (String(it0.amount ?? '') !== String(initial?.amount ?? '')) {
+        editSummaryParts.push(`Amount: ${initial?.amount || '—'} → ${it0.amount || '—'}`);
+      }
+      if (JSON.stringify(it0.table?.rows || []) !== JSON.stringify(initial?.table?.rows || [])) {
+        editSummaryParts.push('Proposal table updated');
+      }
+    }
+    const editSummary = editSummaryParts.join('; ');
+
     let stageHistory = [...(initial?.stageHistory || [])];
     // First log entry, once, when the prospect is created: "Prospect created by
     // <user>" so the timeline always opens with who created it and when.
@@ -775,15 +805,15 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
         by: historyAuthor,
         from: initialStage,
         to: stage,
-        remark: stageRemark.trim()
+        remark: [stageRemark.trim(), editSummary].filter(Boolean).join(' — ')
       });
-    } else if (stageRemark.trim()) {
+    } else if (stageRemark.trim() || editSummary) {
       stageHistory.push({
         at: new Date().toISOString(),
         by: historyAuthor,
         from: '',
         to: '',
-        remark: stageRemark.trim()
+        remark: [stageRemark.trim(), editSummary].filter(Boolean).join(' — ')
       });
     }
 
@@ -857,8 +887,6 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
               {!canChangeStage && <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">You don't have permission to change this prospect's stage.</p>}
             </div>
           )}
-
-          {isEdit && initial?.id && <ProspectActivityLog prospectId={initial.id} />}
 
           {/* Prospect details (closing date, team assignments) — locked
               read-only (via a native disabled <fieldset>, which cascades to

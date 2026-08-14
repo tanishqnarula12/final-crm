@@ -16,7 +16,6 @@ import { parseBody } from '../lib/validate.js';
 import { syncBulk } from '../lib/syncModule.js';
 import { can } from '../lib/permissions.js';
 import { notifyFromEvents } from '../lib/notify.js';
-import { listActivity } from '../lib/activityLog.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -30,22 +29,6 @@ router.get('/', asyncHandler(async (req, res) => {
   const rows = await prisma.prospect.findMany({ where: { deletedAt: null }, orderBy: { createdAt: 'desc' } });
   const visible = rows.filter((r) => can(req.user, prospectModuleFor(r), 'view', r));
   res.json({ prospects: visible.map((r) => r.payload) });
-}));
-
-// GET /api/prospects/:id/activity — this prospect's modification history
-// (who edited what, and every stage change). Gated behind the same 'view'
-// check as the list route — a Pre-Qualified prospect's activity log is just
-// as sensitive as the record itself, so someone who can't see the prospect
-// (e.g. a Service Manager before the RM moves it to Qualified) can't see its
-// history either. logActivity/syncBulk already write CREATE/UPDATE/
-// STAGE_CHANGE/ASSIGN/DELETE entries for every prospect save — nothing new
-// to write here, just a scoped read.
-router.get('/:id/activity', asyncHandler(async (req, res) => {
-  const row = await prisma.prospect.findUnique({ where: { id: req.params.id } });
-  if (!row || row.deletedAt) return res.status(404).json({ error: 'Prospect not found' });
-  if (!can(req.user, prospectModuleFor(row), 'view', row)) return res.status(403).json({ error: 'Not permitted' });
-  const logs = await listActivity(prisma, { moduleName: prospectModuleFor(row), recordId: req.params.id });
-  res.json({ logs });
 }));
 
 router.put('/', asyncHandler(async (req, res) => {

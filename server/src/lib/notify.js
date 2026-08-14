@@ -206,13 +206,24 @@ export async function notifyFromEvents(prisma, events) {
         });
       }
     } else if (ev.type === 'CREATE' && (ev.module === 'investmentProspects' || ev.module === 'insuranceProspects')) {
-      // Notify the RM (assignedTo, or relationshipManager for the normal
-      // advisor-created flow) AND the Service Manager selected on the
-      // prospect — Service Manager owns changeStage on it, so they need to
-      // know a new one landed too. Deduped so the same person holding both
-      // roles (or being the creator) isn't notified twice / about themself.
+      // A new investment prospect starts at "Pre-Qualified", visible only to
+      // its own RM/Portfolio Manager (see permissions.js) — so notify ONLY
+      // those two, never the Service Manager (they can't see it yet; a
+      // notification linking to a record they're blocked from opening would
+      // just be broken). Once the RM moves it to Qualified, it's visible to
+      // everyone same as before — that's a plain permission change, not a
+      // notification event, so no separate "reveal" notification is sent.
+      // Insurance prospects are unaffected — no Pre-Qualified stage, keep
+      // notifying the RM + Service Manager as before (Service Manager owns
+      // changeStage on those and could always see them). Deduped so the same
+      // person holding both roles (or being the creator) isn't notified
+      // twice / about themself.
+      const isPreQualified = ev.module === 'investmentProspects' && rec.stage === 'Pre-Qualified';
+      const targets = isPreQualified
+        ? [rec.assignedTo || rec.relationshipManager, rec.portfolioManager]
+        : [rec.assignedTo || rec.relationshipManager, rec.serviceManager];
       const seen = new Set();
-      for (const target of [rec.assignedTo || rec.relationshipManager, rec.serviceManager]) {
+      for (const target of targets) {
         if (!target || target === ev.actorId || seen.has(target)) continue;
         seen.add(target);
         items.push({

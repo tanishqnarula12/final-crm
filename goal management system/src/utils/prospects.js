@@ -135,12 +135,3 @@ export const fmtAmountINR = (val) => {
   const n = Number(String(val ?? '').toString().replace(/,/g, '')) || 0;
   return '₹ ' + n.toLocaleString('en-IN');
 };
-
-// This prospect's audit trail — every create/edit/stage-change, by real
-// user. Server enforces the same 'view' check as the list route (403 if this
-// account can't see the prospect, e.g. a Service Manager before an RM moves
-// it past Pre-Qualified).
-export async function fetchProspectActivity(prospectId) {
-  const { logs } = await api.get(`/prospects/${prospectId}/activity`);
-  return logs;
-}
