@@ -1830,11 +1830,11 @@ function ProspectTable({ table, onChange }) {
                           inputMode={isAmountCol ? 'numeric' : 'text'}
                           value={cell == null ? '' : (isAmountCol ? String(cell).replace(/,/g, '') : String(cell))}
                           onChange={(e) => onChange(ri, ci, isAmountCol ? e.target.value.replace(/[^0-9-]/g, '') : e.target.value)}
-                          className={`w-full bg-transparent border-0 focus:bg-slate-50 dark:focus:bg-slate-900 focus:ring-1 focus:ring-blue-500 py-1 px-1.5 rounded text-xs text-slate-700 dark:text-slate-350 ${isAmountCol ? 'text-right font-mono font-semibold' : ''}`}
+                          className={`w-full bg-transparent border-0 focus:bg-slate-50 dark:focus:bg-slate-900 focus:ring-1 focus:ring-blue-500 py-1 px-1.5 rounded text-xs ${isAmountCol ? 'text-right font-mono font-bold text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-350'}`}
                         />
                       )
                     ) : (
-                      <span className="px-2 py-1.5 block text-slate-700 dark:text-slate-300">{cell === '' || cell == null ? '—' : (isAmountCol ? String(cell).replace(/,/g, '') : String(cell))}</span>
+                      <span className={`px-2 py-1.5 block ${isAmountCol ? 'text-right font-mono font-bold text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-300'}`}>{cell === '' || cell == null ? '—' : (isAmountCol ? String(cell).replace(/,/g, '') : String(cell))}</span>
                     )}
                   </td>
                 );
@@ -1843,11 +1843,15 @@ function ProspectTable({ table, onChange }) {
           ))}
           {totalRow && (
             <tr className="bg-slate-50 dark:bg-slate-950/50 font-bold">
-              {totalRow.map((cell, ci) => (
-                <td key={ci} className="px-3 py-2 text-slate-900 dark:text-white">
-                  {cell === '' || cell == null ? '' : String(cell)}
-                </td>
-              ))}
+              {totalRow.map((cell, ci) => {
+                const colName = cols[ci] || '';
+                const isAmountCol = (colName.toLowerCase().includes('amount') || colName.toLowerCase().includes('sip') || colName.toLowerCase().includes('term')) && !colName.toLowerCase().includes('date');
+                return (
+                  <td key={ci} className={`px-3 py-2 text-slate-900 dark:text-white ${isAmountCol ? 'text-right font-mono' : ''}`}>
+                    {cell === '' || cell == null ? '' : String(cell)}
+                  </td>
+                );
+              })}
             </tr>
           )}
         </tbody>
