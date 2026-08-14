@@ -972,7 +972,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
                   <div className="relative">
                     <IndianRupee size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                     <input
-                      value={active.amount}
+                      value={fmtAmt(active.amount)}
                       onChange={(e) => setActiveField('amount', e.target.value.replace(/[^0-9.]/g, ''))}
                       className={inputCls + ' pl-7 py-1.5 w-36 text-right tabular-nums font-bold'}
                     />
@@ -1789,6 +1789,28 @@ function isAmountColumnName(colName) {
   return (c.includes('amount') || c.includes('sip') || c.includes('term')) && !c.includes('date');
 }
 
+// Per-column minimum widths so narrow columns (date, amount) can't squeeze
+// wide ones (scheme name) into wrapping — the table grows past its
+// container instead, and overflow-x-auto turns that into a horizontal
+// scroll rather than a cramped, overlapping layout.
+function columnMinWidth(colName) {
+  const c = (colName || '').toLowerCase();
+  if (isAmountColumnName(colName)) return 110;
+  if (c.includes('scheme')) return 210;
+  if (c.includes('category')) return 150;
+  if (c.includes('date')) return 90;
+  return 130;
+}
+
+// Comma-format a whole-rupee amount for display (e.g. 150000 -> 1,50,000).
+// Row-level table cells intentionally stay plain per the numeric-input
+// requirement — this is only used for the top Amount field and the TOTAL row.
+function fmtAmt(v) {
+  if (v === '' || v == null) return '';
+  const n = Number(String(v).replace(/,/g, ''));
+  return Number.isNaN(n) ? String(v) : n.toLocaleString('en-IN');
+}
+
 // --- Renders the proposal table (cols + rows, optional total) --------------
 function ProspectTable({ table, onChange }) {
   const cols = table?.cols || [];
@@ -1799,9 +1821,9 @@ function ProspectTable({ table, onChange }) {
   }
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
-      <table className="w-full text-xs">
+      <table className="min-w-full text-xs">
         <thead className="bg-slate-50 dark:bg-slate-950/50 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-          <tr>{cols.map((c, i) => <th key={i} className={`px-3 py-2 ${isAmountColumnName(c) ? 'text-right' : 'text-left'}`}>{c}</th>)}</tr>
+          <tr>{cols.map((c, i) => <th key={i} style={{ minWidth: columnMinWidth(c) }} className={`px-3 py-2 whitespace-nowrap ${isAmountColumnName(c) ? 'text-right' : 'text-left'}`}>{c}</th>)}</tr>
         </thead>
         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
           {rows.map((r, ri) => (
@@ -1813,7 +1835,7 @@ function ProspectTable({ table, onChange }) {
                 const isAmountCol = isAmountColumnName(colName);
 
                 return (
-                  <td key={ci} className="px-1 py-1">
+                  <td key={ci} style={{ minWidth: columnMinWidth(colName) }} className="px-1 py-1">
                     {onChange ? (
                       isCategoryCol ? (
                         <CategoryCell
@@ -1851,8 +1873,8 @@ function ProspectTable({ table, onChange }) {
               {totalRow.map((cell, ci) => {
                 const isAmountCol = isAmountColumnName(cols[ci]);
                 return (
-                  <td key={ci} className={`px-3 py-2 text-slate-900 dark:text-white ${isAmountCol ? 'text-right tabular-nums' : ''}`}>
-                    {cell === '' || cell == null ? '' : String(cell)}
+                  <td key={ci} style={{ minWidth: columnMinWidth(cols[ci]) }} className={`px-3 py-2 text-slate-900 dark:text-white ${isAmountCol ? 'text-right tabular-nums' : ''}`}>
+                    {cell === '' || cell == null ? '' : (isAmountCol ? fmtAmt(cell) : String(cell))}
                   </td>
                 );
               })}
