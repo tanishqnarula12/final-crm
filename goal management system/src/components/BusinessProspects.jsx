@@ -436,14 +436,19 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
   const canEditDetails = !isEdit || canDo(prospectModuleKey, 'editDetails', initial);
   const canChangeStage = !isEdit || canDo(prospectModuleKey, 'changeStage', initial);
   const me = getCurrentUser();
+  // An existing prospect always opens read-only, even for someone with edit
+  // rights — they must explicitly click "Edit Details" to unlock it. A brand
+  // new prospect being created has nothing to "view" first, so it starts
+  // open for editing.
+  const [editMode, setEditMode] = useState(!isEdit);
   // Both the prospect's own identifying details (closing date, team
   // assignments) and the original proposal's financial data (amount, scheme
   // table, other-code) are editable after creation for Admin or anyone the
   // matrix grants editDetails on this prospect (canEditDetails, above) —
   // everyone else sees them locked (native disabled <fieldset>, cascades to
-  // every input/select inside).
-  const detailsLocked = isEdit && !isAdmin(me) && !canEditDetails;
-  const proposalLocked = isEdit && !isAdmin(me) && !canEditDetails;
+  // every input/select inside) — and even then, only once editMode is on.
+  const detailsLocked = isEdit && (!editMode || (!isAdmin(me) && !canEditDetails));
+  const proposalLocked = isEdit && (!editMode || (!isAdmin(me) && !canEditDetails));
 
   // Shared header fields (apply to every prospect being created)
   const [groupLeader, setGroupLeader] = useState(seed.groupLeader || '');
@@ -892,7 +897,15 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
               read-only (via a native disabled <fieldset>, which cascades to
               every input/select inside) unless this account is Admin or holds
               editDetails on this prospect. `contents` keeps the fieldset
-              itself out of the layout so it doesn't disturb spacing/grid. */}
+              itself out of the layout so it doesn't disturb spacing/grid.
+              Always opens read-only first; "Edit Details" switches it on. */}
+          {isEdit && !editMode && (isAdmin(me) || canEditDetails) && (
+            <div className="flex justify-end -mt-2">
+              <button type="button" onClick={() => setEditMode(true)} className={btnGhost + ' text-xs py-1.5 px-3'}>
+                <Pencil size={12} /> Edit Details
+              </button>
+            </div>
+          )}
           {isEdit && !detailsLocked && (
             <p className="text-[10px] text-blue-600 dark:text-blue-400 -mt-2">You have permission to edit this prospect's details — changes here are saved to its modification history.</p>
           )}
@@ -1029,10 +1042,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
 
           {/* Prospect-management fields — stay editable (subject to RBAC) even
               after the prospect has been created, unlike the locked fieldset above. */}
-          <fieldset disabled={isEdit && !canEditDetails} className="contents">
-          {!canEditDetails && isEdit && (
-            <p className="text-[10px] text-amber-600 dark:text-amber-400 -mt-2">You don't have permission to edit this prospect's details — only the stage above.</p>
-          )}
+          <fieldset disabled={isEdit && (!editMode || !canEditDetails)} className="contents">
               {/* Policy Issued — extra mandatory fields alongside the log entry */}
               {stage === 'Policy Issued' && (
                 <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/60 dark:bg-emerald-950/15 p-4 space-y-3">
