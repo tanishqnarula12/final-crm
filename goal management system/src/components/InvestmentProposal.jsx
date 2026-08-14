@@ -657,28 +657,36 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       const label = TYPES.find((p) => p.id === type)?.label || '';
       const sec = proposalDataState.find(s => s.label === label);
       if (type === 'sipchanges') {
+        // r[3] = currentSip (the amount being cancelled), r[4] = proposedSip
+        // (the amount being newly registered) — see the "sipchanges" keys
+        // order (category, scheme, date, currentSip, proposedSip, totalSip)
+        // used when excelRows is built above.
         const cancelRows = sec ? sec.rows.map(r => [
           r[0] || '',
           r[1] || '',
           r[2] || '',
-          ''
+          r[3] || ''
         ]) : [];
 
         const regRows = sec ? sec.rows.map(r => [
           r[0] || '',
           r[1] || '',
           r[2] || '',
-          ''
+          r[4] || ''
         ]) : [];
+
+        const parseAmt = (v) => Number(String(v || '').replace(/,/g, '')) || 0;
+        const cancelTotal = cancelRows.reduce((s, r) => s + parseAmt(r[3]), 0);
+        const regTotal = regRows.reduce((s, r) => s + parseAmt(r[3]), 0);
 
         drafts.push({
           proposalType: 'SIP Cancellation',
           proposalCategory,
           amount: '',
           table: {
-            cols: ["Category", "Scheme Name", "Date of SIP", "Amount (Rs)"],
+            cols: ["Category", "Scheme Name", "Date of SIP", "SIP Amount (Rs)"],
             rows: cancelRows,
-            totalRow: ["", "TOTAL", "", 0]
+            totalRow: ["", "TOTAL", "", cancelTotal]
           },
         });
         drafts.push({
@@ -686,9 +694,9 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
           proposalCategory,
           amount: '',
           table: {
-            cols: ["Category", "Scheme Name", "Date of SIP", "Amount (Rs)"],
+            cols: ["Category", "Scheme Name", "Date of SIP", "SIP Amount (Rs)"],
             rows: regRows,
-            totalRow: ["", "TOTAL", "", 0]
+            totalRow: ["", "TOTAL", "", regTotal]
           },
         });
       } else {
