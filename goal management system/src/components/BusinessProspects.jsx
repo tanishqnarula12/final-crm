@@ -620,6 +620,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
         proposalType: initial.proposalType,
         proposalCategory: initial.proposalCategory,
         amount: initial.amount,
+        proposalDate: initial.proposalDate || '',
         table: initial.table || { cols: [], rows: [] },
         remarks: initial.remarks || '',
         remarksBy: initial.remarksBy || '',
@@ -630,7 +631,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
         otherCodeSource: initial.otherCodeSource || '',
         otherCodeAmount: initial.otherCodeAmount || ''
       }]
-    : drafts.map(d => ({ remarks: '', sipRejected: '', sipContinue: '', otherCodeEnabled: false, otherCodeSource: '', otherCodeAmount: '', ...d }));
+    : drafts.map(d => ({ remarks: '', sipRejected: '', sipContinue: '', otherCodeEnabled: false, otherCodeSource: '', otherCodeAmount: '', proposalDate: '', ...d }));
   const [items, setItems] = useState(initialItems);
   const [activeIdx, setActiveIdx] = useState(0);
   const active = items[activeIdx] || items[0] || {};
@@ -680,16 +681,22 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
     }));
   };
 
-  // SIP/SWP-style proposals (Purchase with SIP, Special SIP, SIP
-  // Cancellation, SIP Pause, SWP, SWP Cancellation) carry one Date column
-  // that's really the same date for every row — shown once as a shared field
-  // above the table instead of repeated per row. Every row's cell still gets
-  // updated together so the underlying table data stays in sync.
+  // Every investment proposal shows a Date field beside Amount. SIP/SWP-style
+  // proposals (Purchase with SIP, Special SIP, SIP Cancellation, SIP Pause,
+  // SWP, SWP Cancellation) already carry one Date column per row that's
+  // really the same date for every row — that column is hidden from the
+  // table and shown once here instead, syncing every row when edited.
+  // Types with no such column (Lumpsum, Redemption, STP, Switch) instead use
+  // their own standalone proposalDate field, since there's no table row to
+  // sync it with.
   const dateColIndex = (active.table?.cols || []).findIndex(c => c.toLowerCase().includes('date'));
   const sharedDate = dateColIndex >= 0 ? (active.table?.rows?.[0]?.[dateColIndex] ?? '') : '';
   const handleSharedDateChange = (val) => {
     (active.table?.rows || []).forEach((_, ri) => handleTableChange(ri, dateColIndex, val));
   };
+  const showDateField = active.proposalCategory === 'investment';
+  const dateFieldValue = dateColIndex >= 0 ? sharedDate : (active.proposalDate || '');
+  const handleDateFieldChange = dateColIndex >= 0 ? handleSharedDateChange : (val) => setActiveField('proposalDate', val);
 
   // KYC section is only shown when at least one selected proposal in this
   // confirmation is an Insurance proposal (it's informational, not enforced).
@@ -900,6 +907,10 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
       proposalType: it.proposalType,
       proposalCategory: it.proposalCategory,
       amount: it.amount,
+      // Only meaningful for proposal types with no per-row date column of
+      // their own (Lumpsum, Redemption, STP, Switch) — SIP/SWP-style types
+      // instead keep their date synced across every row (see dateColIndex).
+      proposalDate: it.proposalDate || '',
       table: it.table || { cols: [], rows: [] },
       remarks: it.remarks || '',
       // Remarks is a single free-text field, not a log — track who last
@@ -1048,15 +1059,24 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
                   <span className="text-sm font-bold text-slate-900 dark:text-white">{active.proposalType}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  {dateColIndex >= 0 && (
+                  {showDateField && (
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date</span>
-                      <input
-                        value={sharedDate}
-                        onChange={(e) => handleSharedDateChange(e.target.value)}
-                        placeholder="e.g. 10th"
-                        className={inputCls + ' py-1.5 w-20 text-center'}
-                      />
+                      {dateColIndex >= 0 ? (
+                        <input
+                          value={dateFieldValue}
+                          onChange={(e) => handleDateFieldChange(e.target.value)}
+                          placeholder="e.g. 10th"
+                          className={inputCls + ' py-1.5 w-20 text-center'}
+                        />
+                      ) : (
+                        <input
+                          type="date"
+                          value={dateFieldValue}
+                          onChange={(e) => handleDateFieldChange(e.target.value)}
+                          className={inputCls + ' py-1.5 w-36'}
+                        />
+                      )}
                     </div>
                   )}
                   <div className="flex items-center gap-2">
@@ -1128,8 +1148,12 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
           </fieldset>
 
           {/* Prospect-management fields — stay editable (subject to RBAC) even
-              after the prospect has been created, unlike the locked fieldset above. */}
+              after the prospect has been created, unlike the locked fieldset above.
+              Wrapped in a real box (not just relying on the outer space-y-3) since
+              margin between two sibling display:contents fieldsets is discarded —
+              same root cause as the other spacing fixes on this card. */}
           <fieldset disabled={isEdit && (!editMode || !canEditDetails)} className="contents">
+              <div className="mt-3 space-y-3">
               {/* Policy Issued — extra mandatory fields alongside the log entry */}
               {stage === 'Policy Issued' && (
                 <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/60 dark:bg-emerald-950/15 p-4 space-y-3">
@@ -1163,6 +1187,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
                   </p>
                 )}
               </Field>
+              </div>
               </fieldset>
             </div>
           </div>
