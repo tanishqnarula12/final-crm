@@ -856,8 +856,34 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
       if (String(it0.amount ?? '') !== String(initial?.amount ?? '')) {
         editSummaryParts.push(`Amount: ${initial?.amount || '—'} → ${it0.amount || '—'}`);
       }
-      if (JSON.stringify(it0.table?.rows || []) !== JSON.stringify(initial?.table?.rows || [])) {
-        editSummaryParts.push('Proposal table updated');
+      const oldRows = initial?.table?.rows || [];
+      const newRows = it0.table?.rows || [];
+      if (JSON.stringify(newRows) !== JSON.stringify(oldRows)) {
+        // Report exactly which cell in which row changed, not just "the
+        // table changed" — column name comes from the table's own cols so
+        // this reads correctly whichever proposal type it is (SIP, STP,
+        // Redemption, ...).
+        const cols = it0.table?.cols || initial?.table?.cols || [];
+        const tableDiffParts = [];
+        const maxLen = Math.max(oldRows.length, newRows.length);
+        for (let ri = 0; ri < maxLen; ri++) {
+          const oldRow = oldRows[ri];
+          const newRow = newRows[ri];
+          if (oldRow && !newRow) {
+            tableDiffParts.push(`Row ${ri + 1} removed`);
+          } else if (!oldRow && newRow) {
+            tableDiffParts.push(`Row ${ri + 1} added`);
+          } else {
+            cols.forEach((colName, ci) => {
+              const before = oldRow[ci] ?? '';
+              const after = newRow[ci] ?? '';
+              if (String(before) !== String(after)) {
+                tableDiffParts.push(`${colName || `Col ${ci + 1}`} (Row ${ri + 1}): ${before === '' ? '—' : before} → ${after === '' ? '—' : after}`);
+              }
+            });
+          }
+        }
+        editSummaryParts.push(...(tableDiffParts.length ? tableDiffParts : ['Proposal table updated']));
       }
     }
     const editSummary = editSummaryParts.join('; ');
