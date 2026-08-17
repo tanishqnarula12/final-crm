@@ -13,6 +13,7 @@ const TYPES = [
   { id: "sipchanges", label: "Proposed SIP Changes" },
   { id: "sipcancel", label: "SIP Cancellation" },
   { id: "sippause", label: "SIP Pause" },
+  { id: "sipregistration", label: "SIP Registration" },
   { id: "stpcancel", label: "STP Cancelation" },
   { id: "swpcancel", label: "SWP Cancelation" },
   { id: "redemption", label: "Redemption Proposal" },
@@ -124,6 +125,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     sipchanges: [{ category: '', scheme: '', date: '', currentSip: '', proposedSip: '' }],
     sipcancel: [{ category: '', scheme: '', date: '', amount: '' }],
     sippause: [{ category: '', scheme: '', date: '', amount: '' }],
+    sipregistration: [{ category: '', scheme: '', date: '', amount: '' }],
     stpcancel: [{ fromCategory: '', fromScheme: '', toCategory: '', toScheme: '', amount: '' }],
     swpcancel: [{ category: '', scheme: '', date: '', amount: '' }],
     redemption: [{ category: '', scheme: '', amount: '', shortTerm: '', longTerm: '' }],
@@ -134,7 +136,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
   }));
 
   const [remarks, setRemarks] = useState(() => getSavedVal('remarks', {
-    sip: '', specialsip: '', sipchanges: '', sipcancel: '', sippause: '', stpcancel: '', swpcancel: '', redemption: '', lumpsum: '', stp: '', swp: '', switch: ''
+    sip: '', specialsip: '', sipchanges: '', sipcancel: '', sippause: '', sipregistration: '', stpcancel: '', swpcancel: '', redemption: '', lumpsum: '', stp: '', swp: '', switch: ''
   }));
 
   // Redemption settings
@@ -171,6 +173,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
             sipchanges: [{ category: '', scheme: '', date: '', currentSip: '', proposedSip: '' }],
             sipcancel: [{ category: '', scheme: '', date: '', amount: '' }],
             sippause: [{ category: '', scheme: '', date: '', amount: '' }],
+            sipregistration: [{ category: '', scheme: '', date: '', amount: '' }],
             stpcancel: [{ fromCategory: '', fromScheme: '', toCategory: '', toScheme: '', amount: '' }],
             swpcancel: [{ category: '', scheme: '', date: '', amount: '' }],
             redemption: [{ category: '', scheme: '', amount: '', shortTerm: '', longTerm: '' }],
@@ -184,7 +187,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
         }
         if (parsed.remarks !== undefined) {
           const mergedRemarks = {
-            sip: '', specialsip: '', sipchanges: '', sipcancel: '', sippause: '', stpcancel: '', swpcancel: '', redemption: '', lumpsum: '', stp: '', swp: '', switch: '',
+            sip: '', specialsip: '', sipchanges: '', sipcancel: '', sippause: '', sipregistration: '', stpcancel: '', swpcancel: '', redemption: '', lumpsum: '', stp: '', swp: '', switch: '',
             ...parsed.remarks
           };
           setRemarks(mergedRemarks);
@@ -207,6 +210,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       sipchanges: [{ category: '', scheme: '', date: '', currentSip: '', proposedSip: '' }],
       sipcancel: [{ category: '', scheme: '', date: '', amount: '' }],
       sippause: [{ category: '', scheme: '', date: '', amount: '' }],
+      sipregistration: [{ category: '', scheme: '', date: '', amount: '' }],
       stpcancel: [{ fromCategory: '', fromScheme: '', toCategory: '', toScheme: '', amount: '' }],
       swpcancel: [{ category: '', scheme: '', date: '', amount: '' }],
       redemption: [{ category: '', scheme: '', amount: '', shortTerm: '', longTerm: '' }],
@@ -216,7 +220,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       switch: [{ fromCategory: '', fromScheme: '', toCategory: '', toScheme: '', toAmount: '' }]
     });
     setRemarks({
-      sip: '', specialsip: '', sipchanges: '', sipcancel: '', sippause: '', stpcancel: '', swpcancel: '', redemption: '', lumpsum: '', stp: '', swp: '', switch: ''
+      sip: '', specialsip: '', sipchanges: '', sipcancel: '', sippause: '', sipregistration: '', stpcancel: '', swpcancel: '', redemption: '', lumpsum: '', stp: '', swp: '', switch: ''
     });
     setRedemptionIncludeExemption(true);
     setRedemptionBookedGain('');
@@ -279,6 +283,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       case 'sipchanges': return { category: '', scheme: '', date: '', currentSip: '', proposedSip: '' };
       case 'sipcancel': return { category: '', scheme: '', date: '', amount: '' };
       case 'sippause': return { category: '', scheme: '', date: '', amount: '' };
+      case 'sipregistration': return { category: '', scheme: '', date: '', amount: '' };
       case 'stpcancel': return { fromCategory: '', fromScheme: '', toCategory: '', toScheme: '', amount: '' };
       case 'swpcancel': return { category: '', scheme: '', date: '', amount: '' };
       case 'redemption': return { category: '', scheme: '', amount: '', shortTerm: '', longTerm: '' };
@@ -348,6 +353,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       sipchanges: [{ category: '', scheme: '', date: '', currentSip: '', proposedSip: '' }],
       sipcancel: [{ category: '', scheme: '', date: '', amount: '' }],
       sippause: [{ category: '', scheme: '', date: '', amount: '' }],
+      sipregistration: [{ category: '', scheme: '', date: '', amount: '' }],
       stpcancel: [{ fromCategory: '', fromScheme: '', toCategory: '', toScheme: '', amount: '' }],
       swpcancel: [{ category: '', scheme: '', date: '', amount: '' }],
       redemption: [{ category: '', scheme: '', amount: '', shortTerm: '', longTerm: '' }],
@@ -357,7 +363,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       switch: [{ fromCategory: '', fromScheme: '', toCategory: '', toScheme: '', toAmount: '' }]
     });
     setRemarks({
-      sip: '', specialsip: '', sipchanges: '', sipcancel: '', sippause: '', stpcancel: '', swpcancel: '', redemption: '', lumpsum: '', stp: '', swp: '', switch: ''
+      sip: '', specialsip: '', sipchanges: '', sipcancel: '', sippause: '', sipregistration: '', stpcancel: '', swpcancel: '', redemption: '', lumpsum: '', stp: '', swp: '', switch: ''
     });
     setRedemptionIncludeExemption(true);
     setRedemptionBookedGain('');
@@ -772,6 +778,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       case 'sipchanges': return "Based on our review, we propose the following changes to your existing Systematic Investment Plans (SIP) to optimize asset allocation and portfolio performance.";
       case 'sipcancel': return "This is in reference to our discussion regarding your ongoing SIP investments. Following a review of your portfolio and financial objectives, we recommend discontinuing the following SIPs. The proposed change is designed to better align your investments with your current requirements and overall financial plan.";
       case 'sippause': return "This is in reference to our discussion regarding your SIP investments. Considering your current financial situation and cash flow requirements, we recommend a temporary pause of the following SIPs for 2 months. The objective is to provide short-term flexibility while preserving your overall investment strategy.";
+      case 'sipregistration': return "This is in reference to our discussion regarding your investment strategy. We recommend registering the following new Systematic Investment Plans (SIP) to align with your long-term wealth accumulation objectives.";
       case 'stpcancel': return "This is in reference to our discussion regarding your ongoing STP investments. As the intended amount has been successfully transferred from the source scheme to the target scheme, we recommend discontinuing the following STP. The proposed change is intended to streamline your portfolio and ensure alignment with your current investment strategy and financial objectives.";
       case 'swpcancel': return "This is in reference to our discussion regarding your ongoing SWP investments. Following a review of your portfolio and financial objectives, we recommend discontinuing the following SWP. The proposed change is designed to better align your investments with your current requirements and overall financial plan.";
       case 'redemption': return "We recommend executing redemptions from the following mutual fund schemes. The estimated capital gains tax liabilities are summarized below.";
@@ -1097,6 +1104,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     sipchanges: ["Category", "Scheme Name", "Date of SIP", "Current SIP (Rs)", "Proposed SIP (Rs)", "Total SIP (Rs)"],
     sipcancel: ["Category", "Scheme Name", "Date of SIP", "SIP Amount (Rs)"],
     sippause: ["Category", "Scheme Name", "Date of SIP", "SIP Amount (Rs)"],
+    sipregistration: ["Category", "Scheme Name", "Date of SIP", "SIP Amount (Rs)"],
     stpcancel: ["From Category", "From Scheme Name", "To Category", "To Scheme Name", "STP Amount (Rs)"],
     swpcancel: ["Category", "Scheme Name", "Date of SWP", "SWP Amount (Rs)"],
     redemption: ["Category", "Scheme Name", "Amount (Rs)", "Short Term (Rs)", "Long Term (Rs)", "Tax Liability"],
@@ -1112,6 +1120,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     sipchanges: ["category", "scheme", "date", "currentSip", "proposedSip", "totalSip"],
     sipcancel: ["category", "scheme", "date", "amount"],
     sippause: ["category", "scheme", "date", "amount"],
+    sipregistration: ["category", "scheme", "date", "amount"],
     stpcancel: ["fromCategory", "fromScheme", "toCategory", "toScheme", "amount"],
     swpcancel: ["category", "scheme", "date", "amount"],
     redemption: ["category", "scheme", "amount", "shortTerm", "longTerm", "taxLiability"],
@@ -1127,6 +1136,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     sipchanges: ["currentSip", "proposedSip", "totalSip"],
     sipcancel: ["amount"],
     sippause: ["amount"],
+    sipregistration: ["amount"],
     stpcancel: ["amount"],
     swpcancel: ["amount"],
     redemption: ["amount", "shortTerm", "longTerm"],
@@ -1136,7 +1146,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     switch: ["toAmount"]
   };
 
-  const HAS_TOTAL = ["sip", "specialsip", "sipchanges", "sipcancel", "sippause", "stpcancel", "swpcancel", "redemption", "lumpsum", "stp", "swp", "switch"];
+  const HAS_TOTAL = ["sip", "specialsip", "sipchanges", "sipcancel", "sippause", "sipregistration", "stpcancel", "swpcancel", "redemption", "lumpsum", "stp", "swp", "switch"];
 
   const SPLIT_TOTAL = {
     // labelCols + cols.length must equal the total column count (incl. S.No)
