@@ -620,7 +620,6 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
         proposalType: initial.proposalType,
         proposalCategory: initial.proposalCategory,
         amount: initial.amount,
-        proposalDate: initial.proposalDate || '',
         table: initial.table || { cols: [], rows: [] },
         remarks: initial.remarks || '',
         remarksBy: initial.remarksBy || '',
@@ -631,7 +630,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
         otherCodeSource: initial.otherCodeSource || '',
         otherCodeAmount: initial.otherCodeAmount || ''
       }]
-    : drafts.map(d => ({ remarks: '', sipRejected: '', sipContinue: '', otherCodeEnabled: false, otherCodeSource: '', otherCodeAmount: '', proposalDate: '', ...d }));
+    : drafts.map(d => ({ remarks: '', sipRejected: '', sipContinue: '', otherCodeEnabled: false, otherCodeSource: '', otherCodeAmount: '', ...d }));
   const [items, setItems] = useState(initialItems);
   const [activeIdx, setActiveIdx] = useState(0);
   const active = items[activeIdx] || items[0] || {};
@@ -681,22 +680,15 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
     }));
   };
 
-  // Every investment proposal shows a Date field beside Amount. SIP/SWP-style
-  // proposals (Purchase with SIP, Special SIP, SIP Cancellation, SIP Pause,
-  // SWP, SWP Cancellation) already carry one Date column per row that's
-  // really the same date for every row — that column is hidden from the
-  // table and shown once here instead, syncing every row when edited.
-  // Types with no such column (Lumpsum, Redemption, STP, Switch) instead use
-  // their own standalone proposalDate field, since there's no table row to
-  // sync it with.
-  const dateColIndex = (active.table?.cols || []).findIndex(c => c.toLowerCase().includes('date'));
-  const sharedDate = dateColIndex >= 0 ? (active.table?.rows?.[0]?.[dateColIndex] ?? '') : '';
-  const handleSharedDateChange = (val) => {
-    (active.table?.rows || []).forEach((_, ri) => handleTableChange(ri, dateColIndex, val));
-  };
+  // Every investment proposal shows the prospect's own Closing Date beside
+  // Amount, for quick visibility/editing without scrolling up — it's the
+  // same shared field/state as the "Closing Date" in the details grid above,
+  // not a separate per-proposal value.
   const showDateField = active.proposalCategory === 'investment';
-  const dateFieldValue = dateColIndex >= 0 ? sharedDate : (active.proposalDate || '');
-  const handleDateFieldChange = dateColIndex >= 0 ? handleSharedDateChange : (val) => setActiveField('proposalDate', val);
+  // Only hide the details-grid Closing Date when every proposal here is
+  // investment (so it's always visible somewhere) — insurance/other-code
+  // prospects don't get the beside-Amount version, so they keep it here.
+  const allInvestment = items.every(it => it.proposalCategory === 'investment');
 
   // KYC section is only shown when at least one selected proposal in this
   // confirmation is an Insurance proposal (it's informational, not enforced).
@@ -907,10 +899,6 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
       proposalType: it.proposalType,
       proposalCategory: it.proposalCategory,
       amount: it.amount,
-      // Only meaningful for proposal types with no per-row date column of
-      // their own (Lumpsum, Redemption, STP, Switch) — SIP/SWP-style types
-      // instead keep their date synced across every row (see dateColIndex).
-      proposalDate: it.proposalDate || '',
       table: it.table || { cols: [], rows: [] },
       remarks: it.remarks || '',
       // Remarks is a single free-text field, not a log — track who last
@@ -1015,9 +1003,11 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
                 {isEdit && initial?.createdAt ? fmtProspectStamp(initial.createdAt) : 'On confirm'}
               </div>
             </Field>
-            <Field label="Closing Date">
-              <input type="date" value={closingDate} onChange={(e) => setClosingDate(e.target.value)} className={inputCls} />
-            </Field>
+            {!allInvestment && (
+              <Field label="Closing Date">
+                <input type="date" value={closingDate} onChange={(e) => setClosingDate(e.target.value)} className={inputCls} />
+              </Field>
+            )}
             <Field label="Service Manager"><TeamSelect value={serviceManager} onChange={setServiceManager} /></Field>
             <Field label="Relationship Manager"><TeamSelect value={relationshipManager} onChange={setRelationshipManager} /></Field>
             <Field label="Owner"><TeamSelect value={owner} onChange={setOwner} /></Field>
@@ -1061,22 +1051,13 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
                 <div className="flex items-center gap-3">
                   {showDateField && (
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date</span>
-                      {dateColIndex >= 0 ? (
-                        <input
-                          value={dateFieldValue}
-                          onChange={(e) => handleDateFieldChange(e.target.value)}
-                          placeholder="e.g. 10th"
-                          className={inputCls + ' py-1.5 w-20 text-center'}
-                        />
-                      ) : (
-                        <input
-                          type="date"
-                          value={dateFieldValue}
-                          onChange={(e) => handleDateFieldChange(e.target.value)}
-                          className={inputCls + ' py-1.5 w-36'}
-                        />
-                      )}
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Closing Date</span>
+                      <input
+                        type="date"
+                        value={closingDate}
+                        onChange={(e) => setClosingDate(e.target.value)}
+                        className={inputCls + ' py-1.5 w-36'}
+                      />
                     </div>
                   )}
                   <div className="flex items-center gap-2">
@@ -1095,7 +1076,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
                 </div>
               </div>
               <div className="mt-3">
-                <ProspectTable table={active.table} onChange={handleTableChange} hideCols={dateColIndex >= 0 ? [dateColIndex] : []} />
+                <ProspectTable table={active.table} onChange={handleTableChange} />
               </div>
 
               {/* Consider Other Code? — only for SIP / Lumpsum investment proposals */}
