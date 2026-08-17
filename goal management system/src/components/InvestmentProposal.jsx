@@ -8,7 +8,7 @@ import { saveGeneratedDocument, wrapStandaloneHtml } from '../utils/documents';
 import { ProspectModal } from './BusinessProspects';
 
 const TYPES = [
-  { id: "sip", label: "Fresh SIP" },
+  { id: "sip", label: "Purchase with SIP" },
   { id: "specialsip", label: "Special SIP" },
   { id: "sipchanges", label: "Proposed SIP Changes" },
   { id: "sipcancel", label: "SIP Cancellation" },

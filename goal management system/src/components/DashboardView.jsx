@@ -26,7 +26,7 @@ const normalizeUrl = (url) => {
 };
 
 // Investment proposalType buckets
-const SIP_IN_TYPES = ['Fresh SIP', 'Special SIP', 'SIP Registration'];
+const SIP_IN_TYPES = ['Purchase with SIP', 'Special SIP', 'SIP Registration'];
 const SIP_OUT_TYPES = ['SIP Cancellation'];
 const LUMP_TYPES = ['Lumpsum Investment'];
 const REDEEM_TYPES = ['Redemption Proposal'];

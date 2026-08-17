@@ -27,7 +27,7 @@ const YES_NO = ['Yes', 'No'];
 // proposals on the Create Prospect screen).
 const OTHER_CODE_SOURCES = ['MF', 'Stock', 'FD', 'LIC'];
 // Investment proposal types that may carry an Other Code annotation.
-const OTHER_CODE_ELIGIBLE = ['Fresh SIP', 'Special SIP', 'Lumpsum Investment'];
+const OTHER_CODE_ELIGIBLE = ['Purchase with SIP', 'Special SIP', 'Lumpsum Investment'];
 
 // Document categories required for every insurance prospect, plus the
 // occupation-conditional income-proof sets.
@@ -680,6 +680,17 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
     }));
   };
 
+  // SIP/SWP-style proposals (Purchase with SIP, Special SIP, SIP
+  // Cancellation, SIP Pause, SWP, SWP Cancellation) carry one Date column
+  // that's really the same date for every row — shown once as a shared field
+  // above the table instead of repeated per row. Every row's cell still gets
+  // updated together so the underlying table data stays in sync.
+  const dateColIndex = (active.table?.cols || []).findIndex(c => c.toLowerCase().includes('date'));
+  const sharedDate = dateColIndex >= 0 ? (active.table?.rows?.[0]?.[dateColIndex] ?? '') : '';
+  const handleSharedDateChange = (val) => {
+    (active.table?.rows || []).forEach((_, ri) => handleTableChange(ri, dateColIndex, val));
+  };
+
   // KYC section is only shown when at least one selected proposal in this
   // confirmation is an Insurance proposal (it's informational, not enforced).
   const hasInsuranceItem = items.some(it => it.proposalCategory === 'insurance');
@@ -1036,25 +1047,40 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
                   <span className={`inline-flex items-center px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider rounded-full ring-1 ${CATEGORY_THEME[active.proposalCategory] || CATEGORY_THEME.investment}`}>{CATEGORY_LABEL[active.proposalCategory] || active.proposalCategory}</span>
                   <span className="text-sm font-bold text-slate-900 dark:text-white">{active.proposalType}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    {active.proposalType === 'SIP Cancellation' || active.proposalType === 'SIP Registration' ? 'Amount *' : 'Amount'}
-                  </span>
-                  <div className="relative">
-                    <IndianRupee size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                    <input
-                      value={fmtAmt(active.amount)}
-                      onChange={(e) => setActiveField('amount', e.target.value.replace(/[^0-9.]/g, ''))}
-                      className={inputCls + ' pl-7 py-1.5 w-36 text-right tabular-nums font-bold'}
-                    />
+                <div className="flex items-center gap-3">
+                  {dateColIndex >= 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date</span>
+                      <input
+                        value={sharedDate}
+                        onChange={(e) => handleSharedDateChange(e.target.value)}
+                        placeholder="e.g. 10th"
+                        className={inputCls + ' py-1.5 w-20 text-center'}
+                      />
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      {active.proposalType === 'SIP Cancellation' || active.proposalType === 'SIP Registration' ? 'Amount *' : 'Amount'}
+                    </span>
+                    <div className="relative">
+                      <IndianRupee size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      <input
+                        value={fmtAmt(active.amount)}
+                        onChange={(e) => setActiveField('amount', e.target.value.replace(/[^0-9.]/g, ''))}
+                        className={inputCls + ' pl-7 py-1.5 w-36 text-right tabular-nums font-bold'}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
-              <ProspectTable table={active.table} onChange={handleTableChange} />
+              <div className="mt-3">
+                <ProspectTable table={active.table} onChange={handleTableChange} hideCols={dateColIndex >= 0 ? [dateColIndex] : []} />
+              </div>
 
               {/* Consider Other Code? — only for SIP / Lumpsum investment proposals */}
               {active.proposalCategory === 'investment' && OTHER_CODE_ELIGIBLE.includes(active.proposalType) && (
-                <div className="rounded-xl border border-indigo-200 dark:border-indigo-900/40 bg-indigo-50/50 dark:bg-indigo-950/15 p-4 space-y-3">
+                <div className="mt-3 rounded-xl border border-indigo-200 dark:border-indigo-900/40 bg-indigo-50/50 dark:bg-indigo-950/15 p-4 space-y-3">
                   <button
                     type="button"
                     onClick={() => setActiveField('otherCodeEnabled', !active.otherCodeEnabled)}
@@ -1880,10 +1906,14 @@ function fmtAmt(v) {
 }
 
 // --- Renders the proposal table (cols + rows, optional total) --------------
-function ProspectTable({ table, onChange }) {
+// `hideCols` — column indices to omit entirely (header, every row, and the
+// total row) — used for a Date column that's been pulled out into a single
+// shared field above the table instead of repeated per row.
+function ProspectTable({ table, onChange, hideCols = [] }) {
   const cols = table?.cols || [];
   const rows = table?.rows || [];
   const totalRow = table?.totalRow || null;
+  const visibleIdx = cols.map((_, i) => i).filter(i => !hideCols.includes(i));
   if (cols.length === 0 || rows.length === 0) {
     return <p className="text-xs text-slate-400 dark:text-slate-500 italic font-medium">No table data.</p>;
   }
@@ -1891,12 +1921,13 @@ function ProspectTable({ table, onChange }) {
     <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
       <table className="min-w-full text-xs">
         <thead className="bg-slate-50 dark:bg-slate-950/50 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-          <tr>{cols.map((c, i) => <th key={i} style={{ minWidth: columnMinWidth(c) }} className={`px-3 py-2 whitespace-nowrap ${isAmountColumnName(c) ? 'text-right' : 'text-left'}`}>{c}</th>)}</tr>
+          <tr>{visibleIdx.map((i) => <th key={i} style={{ minWidth: columnMinWidth(cols[i]) }} className={`px-3 py-2 whitespace-nowrap ${isAmountColumnName(cols[i]) ? 'text-right' : 'text-left'}`}>{cols[i]}</th>)}</tr>
         </thead>
         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
           {rows.map((r, ri) => (
             <tr key={ri}>
-              {(Array.isArray(r) ? r : cols.map(() => '')).map((cell, ci) => {
+              {visibleIdx.map((ci) => {
+                const cell = (Array.isArray(r) ? r : cols.map(() => ''))[ci];
                 const colName = cols[ci] || '';
                 const isCategoryCol = colName.toLowerCase().includes('category');
                 const isSchemeCol = colName.toLowerCase().includes('scheme');
@@ -1938,7 +1969,8 @@ function ProspectTable({ table, onChange }) {
           ))}
           {totalRow && (
             <tr className="bg-slate-50 dark:bg-slate-950/50 font-bold">
-              {totalRow.map((cell, ci) => {
+              {visibleIdx.map((ci) => {
+                const cell = totalRow[ci];
                 const isAmountCol = isAmountColumnName(cols[ci]);
                 return (
                   <td key={ci} style={{ minWidth: columnMinWidth(cols[ci]) }} className={`px-3 py-2 text-slate-900 dark:text-white ${isAmountCol ? 'text-right tabular-nums' : ''}`}>
