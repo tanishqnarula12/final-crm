@@ -3,11 +3,11 @@ import { createPortal } from 'react-dom';
 import SCHEMES from '../utils/schemes.json';
 import {
   UserCheck, Search, X, Trash2, Pencil, Briefcase, CalendarClock, IndianRupee, CheckCircle2,
-  LayoutGrid, Table as TableIcon, History, ArrowRight, Crown, Upload, Paperclip, ShieldCheck, Plus, Check, Download, Eye
+  LayoutGrid, Table as TableIcon, History, ArrowRight, Crown, Upload, Paperclip, ShieldCheck, Plus, Check, Download, Eye, Copy
 } from 'lucide-react';
 import { Card, Avatar, btnPrimary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
 import {
-  loadProspects, saveProspects, CATEGORY_THEME, CATEGORY_LABEL, fmtProspectStamp, fmtAmountINR,
+  loadProspects, saveProspects, addProspects, CATEGORY_THEME, CATEGORY_LABEL, fmtProspectStamp, fmtAmountINR,
   PROSPECT_STAGES, INSURANCE_PROSPECT_STAGES, ALL_STAGE_THEME, ALL_PROSPECT_STAGES
 } from '../utils/prospects';
 import { uid } from '../utils/calc';
@@ -200,6 +200,46 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
     persist(prospects.filter(p => p.id !== id));
   };
 
+  // Duplicate — reopens the standard "create prospect" modal pre-filled with
+  // this prospect's own details/proposal, seeded via base/drafts exactly like
+  // a fresh proposal would be. That reuses the modal's existing create-mode
+  // logic as-is: a new id, stage reset to the category's starting stage, a
+  // fresh "Prospect created" log entry, and the normal RBAC/validation path —
+  // nothing about duplication needs its own separate save logic.
+  const [duplicateSeed, setDuplicateSeed] = useState(null); // { base, drafts } | null
+  const handleDuplicate = (p) => {
+    if (!window.confirm('Create a copy of this prospect?')) return;
+    setDuplicateSeed({
+      base: {
+        groupLeaderId: p.groupLeaderId || '',
+        groupLeader: p.groupLeader || '',
+        applicant: p.applicant || '',
+        pan: p.pan || '',
+        closingDate: p.closingDate || '',
+        serviceManager: p.serviceManager || '',
+        relationshipManager: p.relationshipManager || '',
+        owner: p.owner || '',
+        internalManager: p.internalManager || '',
+        insuranceManager: p.insuranceManager || '',
+        portfolioManager: p.portfolioManager || '',
+        kyc: p.kyc || {},
+        documents: p.documents || {},
+      },
+      drafts: [{
+        proposalType: p.proposalType,
+        proposalCategory: p.proposalCategory,
+        amount: p.amount || '',
+        table: p.table ? JSON.parse(JSON.stringify(p.table)) : { cols: [], rows: [] },
+        remarks: p.remarks || '',
+        sipRejected: p.sipRejected || '',
+        sipContinue: p.sipContinue || '',
+        otherCodeEnabled: !!p.otherCodeEnabled,
+        otherCodeSource: p.otherCodeSource || '',
+        otherCodeAmount: p.otherCodeAmount || '',
+      }],
+    });
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -314,6 +354,9 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
                         {p.proposalCategory === 'insurance' && (
                           <button onClick={(e) => { e.stopPropagation(); triggerInsuranceProspectDownload(p); }} className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-50/50 dark:hover:bg-violet-950/30 transition-all" title="Download Report"><Download size={14} /></button>
                         )}
+                        {mayEditOrStage(p) && (
+                          <button onClick={(e) => { e.stopPropagation(); handleDuplicate(p); }} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/30 transition-all" title="Duplicate"><Copy size={14} /></button>
+                        )}
                         {mayDelete && (
                           <button onClick={(e) => { e.stopPropagation(); handleDelete(p.id); }} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all" title="Delete"><Trash2 size={14} /></button>
                         )}
@@ -340,6 +383,9 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
                   )}
                   {mayEditOrStage(p) && (
                     <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50/50 dark:hover:bg-blue-950/30" title="Edit"><Pencil size={13} /></button>
+                  )}
+                  {mayEditOrStage(p) && (
+                    <button onClick={() => handleDuplicate(p)} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50/50 dark:hover:bg-blue-950/30" title="Duplicate"><Copy size={13} /></button>
                   )}
                   {mayDelete && (
                     <button onClick={() => handleDelete(p.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50/50 dark:hover:bg-rose-950/30" title="Delete"><Trash2 size={13} /></button>
@@ -395,6 +441,21 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
           isViewer={isViewer}
           onClose={() => setEditing(null)}
           onConfirm={(list) => handleSaveEdit(list[0])}
+        />
+      )}
+
+      {/* Duplicate — opens the standard create-prospect modal pre-filled from
+          an existing prospect (see handleDuplicate), for review before it's
+          actually saved as a new record. */}
+      {duplicateSeed && (
+        <ProspectModal
+          mode="create"
+          base={duplicateSeed.base}
+          drafts={duplicateSeed.drafts}
+          clients={clients}
+          isViewer={isViewer}
+          onClose={() => setDuplicateSeed(null)}
+          onConfirm={(list) => { addProspects(list); setDuplicateSeed(null); }}
         />
       )}
     </div>
