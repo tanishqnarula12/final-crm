@@ -92,13 +92,12 @@ export async function markAllNotificationsRead() {
   catch (err) { console.error('Failed to mark all notifications read:', err); }
 }
 
-// A single synthesized "guitar strum" — no asset file to bundle, and it
-// respects an already-open AudioContext gesture policy (falls back silently
-// if the browser blocks autoplay). A G-major chord's notes plucked in quick
-// succession (~18ms apart, like a pick crossing the strings), each a bright
-// sawtooth run through a lowpass filter that closes fast (the "pluck"
-// brightness fading to a mellower body) with a snappy attack and a natural
-// exponential ring-out — replaces the earlier three-note synth arpeggio.
+// A synthesized "cha-ching" cash-register sound — no asset file to bundle,
+// and it respects an already-open AudioContext gesture policy (falls back
+// silently if the browser blocks autoplay). A bright bell "cha" (a fifth
+// interval for a metallic shimmer) followed by a few quick, high metallic
+// coin clinks — a "money" motif that fits an investment/insurance advisory
+// CRM better than a plain musical tone or guitar strum.
 let audioCtx = null;
 export function playNotificationJingle() {
   try {
@@ -107,24 +106,33 @@ export function playNotificationJingle() {
     if (!audioCtx) audioCtx = new Ctx();
     if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
     const now = audioCtx.currentTime;
-    const chord = [196.00, 246.94, 293.66, 392.00, 493.88]; // G3, B3, D4, G4, B4
-    chord.forEach((freq, i) => {
-      const at = i * 0.018;
+
+    // "Cha" — a bright bell ding (fundamental + a fifth above for shimmer).
+    [[1318.51, 0.15], [1975.53, 0.06]].forEach(([freq, vol]) => {
       const osc = audioCtx.createOscillator();
-      const filter = audioCtx.createBiquadFilter();
       const gain = audioCtx.createGain();
-      osc.type = 'sawtooth';
+      osc.type = 'sine';
       osc.frequency.value = freq;
-      filter.type = 'lowpass';
-      filter.Q.value = 0.7;
-      filter.frequency.setValueAtTime(4500, now + at);
-      filter.frequency.exponentialRampToValueAtTime(500, now + at + 0.5);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(vol, now + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.4);
+    });
+
+    // "-ching" — three quick metallic coin clinks right after.
+    [0.1, 0.16, 0.22].forEach((at, i) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = 2200 + i * 320;
       gain.gain.setValueAtTime(0.0001, now + at);
-      gain.gain.linearRampToValueAtTime(0.11, now + at + 0.006);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.9);
-      osc.connect(filter).connect(gain).connect(audioCtx.destination);
+      gain.gain.exponentialRampToValueAtTime(0.09, now + at + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.13);
+      osc.connect(gain).connect(audioCtx.destination);
       osc.start(now + at);
-      osc.stop(now + at + 0.95);
+      osc.stop(now + at + 0.15);
     });
   } catch { /* audio unavailable — silent */ }
 }

@@ -524,8 +524,8 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
           excelRows.push([
             row.category || "",
             row.scheme || "",
-            parseNum(row.amount) || "",
             !!row.allUnits,
+            parseNum(row.amount) || "",
             parseNum(row.shortTerm) || "",
             parseNum(row.longTerm) || "",
             taxDisp
@@ -534,7 +534,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
         const totalAmt = rows.reduce((s, r) => s + parseNum(r.amount), 0);
         const totalST = rows.reduce((s, r) => s + parseNum(r.shortTerm), 0);
         const totalLT = rows.reduce((s, r) => s + parseNum(r.longTerm), 0);
-        const totalRow = ["", "TOTAL", totalAmt, "", totalST, totalLT, ""];
+        const totalRow = ["", "TOTAL", "", totalAmt, totalST, totalLT, ""];
         extras.push(["Exemption:", rs.includeExemption ? "Included (Rs 1,25,000)" : "Excluded"]);
         if (rs.booked) extras.push(["Booked Capital Gain:", parseNum(redemptionBookedGain)]);
         extras.push(["Equity Tax Liability:", Math.round(calc.equityTax)]);
@@ -557,7 +557,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
         proposalData.push({
           label: label,
           sheetName: sheetName,
-          cols: ["Category", "Scheme Name", "Amount (Rs)", "All Units", "Short Term (Rs)", "Long Term (Rs)", "Tax Liability"],
+          cols: ["Category", "Scheme Name", "All Units", "Amount (Rs)", "Short Term (Rs)", "Long Term (Rs)", "Tax Liability"],
           rows: excelRows,
           totalRow: totalRow,
           extras: extras
@@ -1109,7 +1109,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     sipregistration: ["Category", "Scheme Name", "Date of SIP", "SIP Amount (Rs)"],
     stpcancel: ["From Category", "From Scheme Name", "To Category", "To Scheme Name", "STP Amount (Rs)"],
     swpcancel: ["Category", "Scheme Name", "Date of SWP", "SWP Amount (Rs)"],
-    redemption: ["Category", "Scheme Name", "Amount (Rs)", "All Units", "Short Term (Rs)", "Long Term (Rs)", "Tax Liability"],
+    redemption: ["Category", "Scheme Name", "All Units", "Amount (Rs)", "Short Term (Rs)", "Long Term (Rs)", "Tax Liability"],
     lumpsum: ["Category", "Scheme Name", "Amount (Rs)"],
     stp: ["From Category", "From Scheme Name", "From Amount (Rs)", "To Category", "To Scheme Name", "To Amount (Rs)"],
     swp: ["Category", "Scheme Name", "Date of SWP", "Amount (Rs)"],
@@ -1125,7 +1125,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     sipregistration: ["category", "scheme", "date", "amount"],
     stpcancel: ["fromCategory", "fromScheme", "toCategory", "toScheme", "amount"],
     swpcancel: ["category", "scheme", "date", "amount"],
-    redemption: ["category", "scheme", "amount", "allUnits", "shortTerm", "longTerm", "taxLiability"],
+    redemption: ["category", "scheme", "allUnits", "amount", "shortTerm", "longTerm", "taxLiability"],
     lumpsum: ["category", "scheme", "amount"],
     stp: ["fromCategory", "fromScheme", "fromAmount", "toCategory", "toScheme", "toAmount"],
     swp: ["category", "scheme", "date", "amount"],
