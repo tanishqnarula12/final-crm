@@ -1937,6 +1937,7 @@ function columnMinWidth(colName) {
   if (c.includes('scheme')) return 210;
   if (c.includes('category')) return 150;
   if (c.includes('date')) return 90;
+  if (c.includes('all units')) return 90;
   return 130;
 }
 
@@ -1965,7 +1966,11 @@ function ProspectTable({ table, onChange, hideCols = [] }) {
     <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
       <table className="min-w-full text-xs">
         <thead className="bg-slate-50 dark:bg-slate-950/50 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-          <tr>{visibleIdx.map((i) => <th key={i} style={{ minWidth: columnMinWidth(cols[i]) }} className={`px-3 py-2 whitespace-nowrap ${isAmountColumnName(cols[i]) ? 'text-right' : 'text-left'}`}>{cols[i]}</th>)}</tr>
+          <tr>{visibleIdx.map((i) => {
+            const cn = (cols[i] || '').toLowerCase();
+            const align = isAmountColumnName(cols[i]) ? 'text-right' : cn.includes('all units') ? 'text-center' : 'text-left';
+            return <th key={i} style={{ minWidth: columnMinWidth(cols[i]) }} className={`px-3 py-2 whitespace-nowrap ${align}`}>{cols[i]}</th>;
+          })}</tr>
         </thead>
         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
           {rows.map((r, ri) => (
@@ -1976,10 +1981,19 @@ function ProspectTable({ table, onChange, hideCols = [] }) {
                 const isCategoryCol = colName.toLowerCase().includes('category');
                 const isSchemeCol = colName.toLowerCase().includes('scheme');
                 const isAmountCol = isAmountColumnName(colName);
+                const isCheckboxCol = colName.toLowerCase().includes('all units');
 
                 return (
-                  <td key={ci} style={{ minWidth: columnMinWidth(colName) }} className="px-1 py-1">
-                    {onChange ? (
+                  <td key={ci} style={{ minWidth: columnMinWidth(colName) }} className={`px-1 py-1 ${isCheckboxCol ? 'text-center' : ''}`}>
+                    {isCheckboxCol ? (
+                      <input
+                        type="checkbox"
+                        checked={!!cell}
+                        disabled={!onChange}
+                        onChange={(e) => onChange(ri, ci, e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:cursor-default"
+                      />
+                    ) : onChange ? (
                       isCategoryCol ? (
                         <CategoryCell
                           value={cell}

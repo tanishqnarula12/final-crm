@@ -525,6 +525,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
             row.category || "",
             row.scheme || "",
             parseNum(row.amount) || "",
+            !!row.allUnits,
             parseNum(row.shortTerm) || "",
             parseNum(row.longTerm) || "",
             taxDisp
@@ -533,7 +534,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
         const totalAmt = rows.reduce((s, r) => s + parseNum(r.amount), 0);
         const totalST = rows.reduce((s, r) => s + parseNum(r.shortTerm), 0);
         const totalLT = rows.reduce((s, r) => s + parseNum(r.longTerm), 0);
-        const totalRow = ["", "TOTAL", totalAmt, totalST, totalLT, ""];
+        const totalRow = ["", "TOTAL", totalAmt, "", totalST, totalLT, ""];
         extras.push(["Exemption:", rs.includeExemption ? "Included (Rs 1,25,000)" : "Excluded"]);
         if (rs.booked) extras.push(["Booked Capital Gain:", parseNum(redemptionBookedGain)]);
         extras.push(["Equity Tax Liability:", Math.round(calc.equityTax)]);
@@ -556,7 +557,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
         proposalData.push({
           label: label,
           sheetName: sheetName,
-          cols: ["Category", "Scheme Name", "Amount (Rs)", "Short Term (Rs)", "Long Term (Rs)", "Tax Liability"],
+          cols: ["Category", "Scheme Name", "Amount (Rs)", "All Units", "Short Term (Rs)", "Long Term (Rs)", "Tax Liability"],
           rows: excelRows,
           totalRow: totalRow,
           extras: extras
