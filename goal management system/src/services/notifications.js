@@ -92,9 +92,11 @@ export async function markAllNotificationsRead() {
   catch (err) { console.error('Failed to mark all notifications read:', err); }
 }
 
-// A short two-tone "bell jingle" synthesized with the Web Audio API — no asset
+// A soft, single-tone "whistle" synthesized with the Web Audio API — no asset
 // file to bundle, and it respects an already-open AudioContext gesture policy
-// (falls back silently if the browser blocks autoplay).
+// (falls back silently if the browser blocks autoplay). Replaces the old
+// sharp, high-pitched two-note bell chime (880Hz/1174Hz ding-dong) with a
+// gentler, lower-pitched glide and a slow attack/decay envelope.
 let audioCtx = null;
 export function playNotificationJingle() {
   try {
@@ -103,18 +105,17 @@ export function playNotificationJingle() {
     if (!audioCtx) audioCtx = new Ctx();
     if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
     const now = audioCtx.currentTime;
-    // Two quick chime notes (a rising ding-dong).
-    [[880, 0], [1174.66, 0.14]].forEach(([freq, at]) => {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.0001, now + at);
-      gain.gain.exponentialRampToValueAtTime(0.22, now + at + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.42);
-      osc.connect(gain).connect(audioCtx.destination);
-      osc.start(now + at);
-      osc.stop(now + at + 0.45);
-    });
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    // A gentle upward glide (C5 -> E5) rather than two separate notes.
+    osc.frequency.setValueAtTime(523.25, now);
+    osc.frequency.linearRampToValueAtTime(659.25, now + 0.3);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.16, now + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.65);
   } catch { /* audio unavailable — silent */ }
 }

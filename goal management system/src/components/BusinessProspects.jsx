@@ -690,6 +690,18 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
   // prospects don't get the beside-Amount version, so they keep it here.
   const allInvestment = items.every(it => it.proposalCategory === 'investment');
 
+  // Redemption Proposal's Short Term / Long Term / Tax Liability columns are
+  // tax-computation detail from the original proposal builder — not useful
+  // once it's a prospect, so they're hidden from the table here (the
+  // underlying data is untouched; this only affects this view).
+  const redemptionHideCols = active.proposalType === 'Redemption Proposal'
+    ? (active.table?.cols || []).reduce((idx, c, i) => {
+        const lc = c.toLowerCase();
+        if (lc.includes('short term') || lc.includes('long term') || lc.includes('tax liability')) idx.push(i);
+        return idx;
+      }, [])
+    : [];
+
   // KYC section is only shown when at least one selected proposal in this
   // confirmation is an Insurance proposal (it's informational, not enforced).
   const hasInsuranceItem = items.some(it => it.proposalCategory === 'insurance');
@@ -1102,7 +1114,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
                 </div>
               </div>
               <div className="mt-3">
-                <ProspectTable table={active.table} onChange={handleTableChange} />
+                <ProspectTable table={active.table} onChange={handleTableChange} hideCols={redemptionHideCols} />
               </div>
 
               {/* Consider Other Code? — only for SIP / Lumpsum investment proposals */}
