@@ -92,11 +92,12 @@ export async function markAllNotificationsRead() {
   catch (err) { console.error('Failed to mark all notifications read:', err); }
 }
 
-// A soft, single-tone "whistle" synthesized with the Web Audio API — no asset
-// file to bundle, and it respects an already-open AudioContext gesture policy
-// (falls back silently if the browser blocks autoplay). Replaces the old
-// sharp, high-pitched two-note bell chime (880Hz/1174Hz ding-dong) with a
-// gentler, lower-pitched glide and a slow attack/decay envelope.
+// A quick three-note ascending arpeggio synthesized with the Web Audio API —
+// no asset file to bundle, and it respects an already-open AudioContext
+// gesture policy (falls back silently if the browser blocks autoplay). A
+// bright "triangle" wave through a C5-E5-G5 major triad, modern-app-style
+// (think Slack/iMessage), replacing the earlier sharp bell ding-dong and
+// then a plainer single-tone whistle.
 let audioCtx = null;
 export function playNotificationJingle() {
   try {
@@ -105,17 +106,17 @@ export function playNotificationJingle() {
     if (!audioCtx) audioCtx = new Ctx();
     if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
     const now = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'sine';
-    // A gentle upward glide (C5 -> E5) rather than two separate notes.
-    osc.frequency.setValueAtTime(523.25, now);
-    osc.frequency.linearRampToValueAtTime(659.25, now + 0.3);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.16, now + 0.1);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
-    osc.connect(gain).connect(audioCtx.destination);
-    osc.start(now);
-    osc.stop(now + 0.65);
+    [[523.25, 0], [659.25, 0.09], [783.99, 0.18]].forEach(([freq, at]) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, now + at);
+      gain.gain.exponentialRampToValueAtTime(0.16, now + at + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.28);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(now + at);
+      osc.stop(now + at + 0.3);
+    });
   } catch { /* audio unavailable — silent */ }
 }

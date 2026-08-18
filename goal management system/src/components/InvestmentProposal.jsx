@@ -73,6 +73,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     if (key === 'date') return { minWidth: '100px' };
     if (key === 'amount' || key === 'currentSip' || key === 'proposedSip' || key === 'totalSip' || key === 'shortTerm' || key === 'longTerm' || key === 'fromAmount' || key === 'toAmount') return { minWidth: '110px' };
     if (key === 'taxLiability') return { minWidth: '140px' };
+    if (key === 'allUnits') return { minWidth: '80px' };
     return { minWidth: '100px' };
   };
 
@@ -128,7 +129,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     sipregistration: [{ category: '', scheme: '', date: '', amount: '' }],
     stpcancel: [{ fromCategory: '', fromScheme: '', toCategory: '', toScheme: '', amount: '' }],
     swpcancel: [{ category: '', scheme: '', date: '', amount: '' }],
-    redemption: [{ category: '', scheme: '', amount: '', shortTerm: '', longTerm: '' }],
+    redemption: [{ category: '', scheme: '', amount: '', allUnits: false, shortTerm: '', longTerm: '' }],
     lumpsum: [{ category: '', scheme: '', amount: '' }],
     stp: [{ fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '' }],
     swp: [{ category: '', scheme: '', date: '', amount: '' }],
@@ -176,7 +177,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
             sipregistration: [{ category: '', scheme: '', date: '', amount: '' }],
             stpcancel: [{ fromCategory: '', fromScheme: '', toCategory: '', toScheme: '', amount: '' }],
             swpcancel: [{ category: '', scheme: '', date: '', amount: '' }],
-            redemption: [{ category: '', scheme: '', amount: '', shortTerm: '', longTerm: '' }],
+            redemption: [{ category: '', scheme: '', amount: '', allUnits: false, shortTerm: '', longTerm: '' }],
             lumpsum: [{ category: '', scheme: '', amount: '' }],
             stp: [{ fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '' }],
             swp: [{ category: '', scheme: '', date: '', amount: '' }],
@@ -213,7 +214,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       sipregistration: [{ category: '', scheme: '', date: '', amount: '' }],
       stpcancel: [{ fromCategory: '', fromScheme: '', toCategory: '', toScheme: '', amount: '' }],
       swpcancel: [{ category: '', scheme: '', date: '', amount: '' }],
-      redemption: [{ category: '', scheme: '', amount: '', shortTerm: '', longTerm: '' }],
+      redemption: [{ category: '', scheme: '', amount: '', allUnits: false, shortTerm: '', longTerm: '' }],
       lumpsum: [{ category: '', scheme: '', amount: '' }],
       stp: [{ fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '' }],
       swp: [{ category: '', scheme: '', date: '', amount: '' }],
@@ -286,7 +287,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       case 'sipregistration': return { category: '', scheme: '', date: '', amount: '' };
       case 'stpcancel': return { fromCategory: '', fromScheme: '', toCategory: '', toScheme: '', amount: '' };
       case 'swpcancel': return { category: '', scheme: '', date: '', amount: '' };
-      case 'redemption': return { category: '', scheme: '', amount: '', shortTerm: '', longTerm: '' };
+      case 'redemption': return { category: '', scheme: '', amount: '', allUnits: false, shortTerm: '', longTerm: '' };
       case 'lumpsum': return { category: '', scheme: '', amount: '' };
       case 'stp': return { fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '' };
       case 'swp': return { category: '', scheme: '', date: '', amount: '' };
@@ -356,7 +357,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       sipregistration: [{ category: '', scheme: '', date: '', amount: '' }],
       stpcancel: [{ fromCategory: '', fromScheme: '', toCategory: '', toScheme: '', amount: '' }],
       swpcancel: [{ category: '', scheme: '', date: '', amount: '' }],
-      redemption: [{ category: '', scheme: '', amount: '', shortTerm: '', longTerm: '' }],
+      redemption: [{ category: '', scheme: '', amount: '', allUnits: false, shortTerm: '', longTerm: '' }],
       lumpsum: [{ category: '', scheme: '', amount: '' }],
       stp: [{ fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '' }],
       swp: [{ category: '', scheme: '', date: '', amount: '' }],
@@ -927,7 +928,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
         <tr style='background:${bg}'>
           <td style='${tdS}color:#1a4a9c;font-weight:700;'>${i + 1}</td>
           <td style='${tdS}'>${row.category || "-"}</td>
-          <td style='${tdS}'>${row.scheme || "-"}</td>
+          <td style='${tdS}'>${row.scheme || "-"}${row.allUnits ? " <span style='color:#0047AB;font-weight:700;font-size:10px;white-space:nowrap;'>(All Units)</span>" : ""}</td>
           <td style='${tdS}text-align:right;white-space:nowrap;'>${fmtINRhtml(row.amount)}</td>
           <td style='${tdS}text-align:right;white-space:nowrap;'>${fmtINRhtml(row.shortTerm)}</td>
           <td style='${tdS}text-align:right;white-space:nowrap;'>${fmtINRhtml(row.longTerm)}</td>
@@ -1107,7 +1108,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     sipregistration: ["Category", "Scheme Name", "Date of SIP", "SIP Amount (Rs)"],
     stpcancel: ["From Category", "From Scheme Name", "To Category", "To Scheme Name", "STP Amount (Rs)"],
     swpcancel: ["Category", "Scheme Name", "Date of SWP", "SWP Amount (Rs)"],
-    redemption: ["Category", "Scheme Name", "Amount (Rs)", "Short Term (Rs)", "Long Term (Rs)", "Tax Liability"],
+    redemption: ["Category", "Scheme Name", "Amount (Rs)", "All Units", "Short Term (Rs)", "Long Term (Rs)", "Tax Liability"],
     lumpsum: ["Category", "Scheme Name", "Amount (Rs)"],
     stp: ["From Category", "From Scheme Name", "From Amount (Rs)", "To Category", "To Scheme Name", "To Amount (Rs)"],
     swp: ["Category", "Scheme Name", "Date of SWP", "Amount (Rs)"],
@@ -1123,7 +1124,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     sipregistration: ["category", "scheme", "date", "amount"],
     stpcancel: ["fromCategory", "fromScheme", "toCategory", "toScheme", "amount"],
     swpcancel: ["category", "scheme", "date", "amount"],
-    redemption: ["category", "scheme", "amount", "shortTerm", "longTerm", "taxLiability"],
+    redemption: ["category", "scheme", "amount", "allUnits", "shortTerm", "longTerm", "taxLiability"],
     lumpsum: ["category", "scheme", "amount"],
     stp: ["fromCategory", "fromScheme", "fromAmount", "toCategory", "toScheme", "toAmount"],
     swp: ["category", "scheme", "date", "amount"],
@@ -1437,6 +1438,21 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
                         return (
                           <td key={ki} className="px-3 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300" style={getColStyle(key)}>
                             {redemptionDisplays[index] || '—'}
+                          </td>
+                        );
+                      }
+
+                      // "All Units" — a plain flag with no calculation tied to
+                      // it, just marks this row as a full (not partial) redemption.
+                      if (activeTab === 'redemption' && key === 'allUnits') {
+                        return (
+                          <td key={ki} className="px-3 py-2 text-center" style={getColStyle(key)}>
+                            <input
+                              type="checkbox"
+                              checked={!!row.allUnits}
+                              onChange={(e) => updateRow(activeTab, index, key, e.target.checked)}
+                              className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            />
                           </td>
                         );
                       }
