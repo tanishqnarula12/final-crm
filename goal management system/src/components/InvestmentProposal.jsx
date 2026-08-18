@@ -57,10 +57,14 @@ const fmtAmt = (v) => {
 export default function InvestmentProposal({ client, isViewer, variant = 'investment' }) {
   const isOtherCode = variant === 'othercode';
   const proposalCategory = isOtherCode ? 'othercode' : 'investment';
-  // "Other Code" is a restricted clone of the Investment proposal — only the
-  // SIP Cancellation and Redemption components are offered.
+  // "Other Code" is a restricted clone of the Investment proposal — only
+  // SIP Cancellation, SIP Registration, and Redemption components are
+  // offered. Cancellation and Registration are kept symmetric here on
+  // purpose — an Other Code transaction is typically "cancel the SIP under
+  // the old code, register the same SIP under this one", so offering one
+  // without the other would be inconsistent.
   const availableTypes = isOtherCode
-    ? TYPES.filter(t => t.id === 'sipcancel' || t.id === 'redemption')
+    ? TYPES.filter(t => t.id === 'sipcancel' || t.id === 'sipregistration' || t.id === 'redemption')
     : TYPES;
 
   const totalSip = (row) => parseNum(row.currentSip) + parseNum(row.proposedSip);
