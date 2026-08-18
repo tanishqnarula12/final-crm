@@ -669,48 +669,55 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       const label = TYPES.find((p) => p.id === type)?.label || '';
       const sec = proposalDataState.find(s => s.label === label);
       if (type === 'sipchanges') {
-        // r[3] = currentSip (the amount being cancelled), r[4] = proposedSip
-        // (the amount being newly registered) — see the "sipchanges" keys
-        // order (category, scheme, date, currentSip, proposedSip, totalSip)
-        // used when excelRows is built above.
-        const cancelRows = sec ? sec.rows.map(r => [
-          r[0] || '',
-          r[1] || '',
-          r[2] || '',
-          r[3] || ''
-        ]) : [];
-
-        const regRows = sec ? sec.rows.map(r => [
-          r[0] || '',
-          r[1] || '',
-          r[2] || '',
-          r[4] || ''
-        ]) : [];
-
+        // Business rule: only the PROPOSED SIP (r[4]) decides where a scheme
+        // goes — never the current SIP (r[3]) or the total. A negative
+        // Proposed SIP is a partial/complete cancellation of that much SIP;
+        // a positive one is a fresh registration of that much SIP; zero
+        // means nothing changed for that scheme and it's skipped entirely.
+        // A scheme is NEVER split across both, and each draft is created
+        // only if at least one scheme actually qualifies for it — e.g. an
+        // all-increases proposal produces a Registration draft only, no
+        // empty Cancellation draft. Row order: (category, scheme, date,
+        // currentSip, proposedSip, totalSip).
         const parseAmt = (v) => Number(String(v || '').replace(/,/g, '')) || 0;
+        const cancelRows = [];
+        const regRows = [];
+        (sec ? sec.rows : []).forEach(r => {
+          const proposed = parseAmt(r[4]);
+          if (proposed < 0) {
+            cancelRows.push([r[0] || '', r[1] || '', r[2] || '', Math.abs(proposed)]);
+          } else if (proposed > 0) {
+            regRows.push([r[0] || '', r[1] || '', r[2] || '', proposed]);
+          }
+        });
+
         const cancelTotal = cancelRows.reduce((s, r) => s + parseAmt(r[3]), 0);
         const regTotal = regRows.reduce((s, r) => s + parseAmt(r[3]), 0);
 
-        drafts.push({
-          proposalType: 'SIP Cancellation',
-          proposalCategory,
-          amount: '',
-          table: {
-            cols: ["Category", "Scheme Name", "Date of SIP", "SIP Amount (Rs)"],
-            rows: cancelRows,
-            totalRow: ["", "TOTAL", "", cancelTotal]
-          },
-        });
-        drafts.push({
-          proposalType: 'SIP Registration',
-          proposalCategory,
-          amount: '',
-          table: {
-            cols: ["Category", "Scheme Name", "Date of SIP", "SIP Amount (Rs)"],
-            rows: regRows,
-            totalRow: ["", "TOTAL", "", regTotal]
-          },
-        });
+        if (cancelRows.length > 0) {
+          drafts.push({
+            proposalType: 'SIP Cancellation',
+            proposalCategory,
+            amount: '',
+            table: {
+              cols: ["Category", "Scheme Name", "Date of SIP", "SIP Amount (Rs)"],
+              rows: cancelRows,
+              totalRow: ["", "TOTAL", "", cancelTotal]
+            },
+          });
+        }
+        if (regRows.length > 0) {
+          drafts.push({
+            proposalType: 'SIP Registration',
+            proposalCategory,
+            amount: '',
+            table: {
+              cols: ["Category", "Scheme Name", "Date of SIP", "SIP Amount (Rs)"],
+              rows: regRows,
+              totalRow: ["", "TOTAL", "", regTotal]
+            },
+          });
+        }
       } else {
         drafts.push({
           proposalType: label,
@@ -720,6 +727,13 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
         });
       }
     });
+    // A "Proposed SIP Changes" proposal where every scheme has Proposed
+    // SIP = 0 produces no drafts at all — nothing changed, so there's
+    // nothing to confirm a prospect for.
+    if (drafts.length === 0) {
+      alert('No SIP changes to create a prospect for — every scheme has a Proposed SIP of 0.');
+      return;
+    }
     const d = client?.clientDetails || {};
     // PAN belongs to whichever applicant was actually selected — the group
     // leader themselves ("Self") or a family member — not always the client's
