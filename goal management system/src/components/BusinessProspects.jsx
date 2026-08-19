@@ -27,7 +27,7 @@ const YES_NO = ['Yes', 'No'];
 // proposals on the Create Prospect screen).
 const OTHER_CODE_SOURCES = ['MF', 'Stock', 'FD', 'LIC'];
 // Investment proposal types that may carry an Other Code annotation.
-const OTHER_CODE_ELIGIBLE = ['Purchase with SIP', 'Special SIP', 'Lumpsum Investment'];
+const OTHER_CODE_ELIGIBLE = ['Purchase with SIP', 'Special SIP', 'Lumpsum Investment', 'SIP Registration'];
 
 // Document categories required for every insurance prospect, plus the
 // occupation-conditional income-proof sets.

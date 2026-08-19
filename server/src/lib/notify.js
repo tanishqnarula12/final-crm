@@ -232,10 +232,14 @@ export async function notifyFromEvents(prisma, events) {
     } else if (ev.type === 'STAGE_CHANGE' && ev.module === 'investmentProspects' && ev.to === 'Qualified') {
       // Someone (often the Portfolio Manager/Internal Manager/Service
       // Manager, all of whom also hold changeStage) moved it out of
-      // Pre-Qualified — tell the RM their prospect progressed, unless the
-      // RM did it themself.
-      const target = rec.assignedTo || rec.relationshipManager;
-      if (target && target !== ev.actorId) {
+      // Pre-Qualified — tell the RM their prospect progressed, AND the
+      // Service Manager, since Qualified is the exact moment they gain
+      // visibility into it (see permissions.js). Deduped, actor excluded.
+      const targets = [rec.assignedTo || rec.relationshipManager, rec.serviceManager];
+      const seen = new Set();
+      for (const target of targets) {
+        if (!target || target === ev.actorId || seen.has(target)) continue;
+        seen.add(target);
         items.push({
           userId: target, type: NOTIF.PROSPECT_ASSIGNED,
           title: 'Prospect moved to Qualified', body: prospectLabel(rec),
