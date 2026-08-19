@@ -1,14 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import {
   Wallet, PieChart as PieIcon, Pencil, Plus, Search, Scale,
-  TrendingUp, Home, CreditCard, MessageSquare, History, ArrowRight, Save, Layers, Download
+  TrendingUp, Home, CreditCard, MessageSquare, History, ArrowRight, Save, Layers, Download, Target
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Card, Avatar, btnPrimary, btnSecondary, btnGhost, inputCls } from './UI';
 import { fmtINR, fmtFull, fmtDate } from '../utils/calc';
 import {
   normalizeAllocation, allocationTotals, groupComposition, sectionGroupColumns,
-  hasAllocation, SECTION_COLORS, fmtPct
+  hasAllocation, SECTION_COLORS, fmtPct, filledItems
 } from '../utils/assets';
 import { exportAssetReportPdf } from '../utils/pdf';
 
@@ -259,6 +259,11 @@ export function AssetAllocationDetail({ client, onEdit, onSaveRemark, isViewer }
             )}
           </section>
 
+          {/* Goal Mapping — which of this client's goals each holding has
+              been committed to, the mirror image of the "Mapped Assets"
+              column shown per-goal on the Goal Mapping page. */}
+          <AssetGoalMappingSection alloc={alloc} goals={client.goals} />
+
           {/* Liability Allocation Breakdown — every liability within its own
               category (each category column treated as 100%) */}
           <section className="space-y-4">
@@ -474,6 +479,79 @@ function AllocationDetailCard({ title, icon: Icon, accent, total, items, emptyTe
         </div>
       )}
     </Card>
+  );
+}
+
+// --- Goal Mapping table — every financial/physical holding with the goal(s)
+// it has been committed to (via the "Map Asset" section on the goal edit
+// modal), the asset-side mirror of the Quantitative Rates Matrix's Mapped
+// Assets column on the Goal Mapping page.
+function AssetGoalMappingSection({ alloc, goals }) {
+  const holdings = useMemo(() => (
+    ['financial', 'physical'].flatMap(sectionId =>
+      filledItems(alloc, sectionId).map(it => ({ ...it, sectionId }))
+    )
+  ), [alloc]);
+
+  const goalsByLabel = useMemo(() => {
+    const map = {};
+    (goals || []).forEach(g => {
+      (Array.isArray(g.mappedAssets) ? g.mappedAssets : []).forEach(a => {
+        const amt = Number(a.amount) || 0;
+        if (amt <= 0) return;
+        if (!map[a.label]) map[a.label] = [];
+        map[a.label].push({ goalName: g.name, amount: amt });
+      });
+    });
+    return map;
+  }, [goals]);
+
+  if (holdings.length === 0) return null;
+
+  return (
+    <section className="space-y-4">
+      <SectionHeading icon={Target} title="Goal Mapping" hint="Which goals each holding has been committed to" />
+      <div className="overflow-hidden border border-slate-200/60 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-950/50 shadow-sm">
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50/70 dark:bg-slate-900/40 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200/50 dark:border-slate-800/80">
+            <tr>
+              <th className="text-left px-5 py-3 font-bold">Asset</th>
+              <th className="text-right px-5 py-3 font-bold">Value</th>
+              <th className="text-left px-5 py-3 font-bold">Mapped To Goals</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200/50 dark:divide-slate-800/50">
+            {holdings.map(h => {
+              const mapped = goalsByLabel[h.label] || [];
+              return (
+                <tr key={`${h.sectionId}::${h.label}`} className="hover:bg-slate-50/40 dark:hover:bg-slate-900/20 transition-colors">
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: h.color }} />
+                      <span className="font-bold text-slate-900 dark:text-white">{h.label}</span>
+                    </div>
+                  </td>
+                  <td className="px-5 py-3 text-right font-mono font-bold text-slate-700 dark:text-slate-300 tabular-nums">{fmtINR(h.amount)}</td>
+                  <td className="px-5 py-3">
+                    {mapped.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 max-w-xs">
+                        {mapped.map((m, i) => (
+                          <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 ring-1 ring-indigo-200/40 dark:ring-indigo-900/20 text-[10px] font-bold whitespace-nowrap">
+                            {m.goalName} · {fmtINR(m.amount)}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-slate-350 dark:text-slate-600 text-[10px] font-medium italic">Not mapped</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

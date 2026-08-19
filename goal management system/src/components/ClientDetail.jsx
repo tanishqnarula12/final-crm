@@ -309,71 +309,58 @@ function AssumptionsSection({ client, onSave, isViewer }) {
           {client.goals && client.goals.length > 0 ? (
             <div className="space-y-3">
               <h4 className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Quantitative Rates Matrix</h4>
-              <div className="rounded-xl border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-950/50 shadow-sm overflow-hidden">
-                {/* table-layout:fixed keeps the four rate columns from being
-                    squeezed by a tall Mapped Assets cell, but on a narrower
-                    screen the same fixed layout would squeeze Mapped Assets
-                    itself down below what a single pill badge needs — and
-                    since flex-wrap can't shrink one badge below its own
-                    text width, that badge would overflow instead of
-                    wrapping. min-w-[220px] guarantees it always has enough
-                    room to wrap sensibly; overflow-x-auto on this inner
-                    wrapper (not the outer rounded corner one) means if the
-                    table still ends up wider than the card, it scrolls
-                    instead of silently clipping content off-screen. */}
-                <div className="overflow-x-auto">
-                <table className="w-full max-w-[880px] mx-auto text-xs [table-layout:fixed]">
+              <div className="overflow-hidden border border-slate-200/60 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-950/50 shadow-sm">
+                <table className="w-full text-xs">
                   <thead className="bg-slate-50/70 dark:bg-slate-900/40 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200/50 dark:border-slate-800/80">
                     <tr>
-                      <th className="text-left px-4 py-3 font-bold w-[150px] whitespace-nowrap">Goal Category</th>
-                      <th className="text-right px-3 py-3 font-bold w-[75px] whitespace-nowrap">Inflation</th>
-                      <th className="text-right px-3 py-3 font-bold w-[85px] whitespace-nowrap">Exp. Return</th>
-                      <th className="text-right px-3 py-3 font-bold w-[85px] whitespace-nowrap">SIP Step-Up</th>
-                      <th className="text-left px-4 py-3 font-bold min-w-[220px]">Mapped Assets</th>
+                      <th className="text-left px-5 py-3 font-bold">Goal Category</th>
+                      <th className="text-right px-5 py-3 font-bold">Inflation</th>
+                      <th className="text-right px-5 py-3 font-bold">Exp. Return</th>
+                      <th className="text-right px-5 py-3 font-bold">SIP Step-Up</th>
+                      <th className="text-left px-5 py-3 font-bold">Mapped Assets</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200/50 dark:divide-slate-800/50">
                     {client.goals.map(g => (
                       <tr key={g.id} className="hover:bg-slate-50/40 dark:hover:bg-slate-900/20 transition-colors">
-                        <td className="px-4 py-3 align-top">
+                        <td className="px-5 py-3">
                           <div className="flex items-center gap-2.5">
                             <span className="text-lg select-none">{goalEmoji(g.name)}</span>
                             <span className="font-bold text-slate-900 dark:text-white">{g.name}</span>
                           </div>
                         </td>
-                        <td className="px-3 py-3 text-right font-mono align-top">
+                        <td className="px-5 py-3 text-right font-mono">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-400 ring-1 ring-rose-200/40 dark:ring-rose-900/20 text-xs font-bold">
                             {g.inflation}%
                           </span>
                         </td>
-                        <td className="px-3 py-3 text-right font-mono align-top">
+                        <td className="px-5 py-3 text-right font-mono">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-200/40 dark:ring-emerald-900/20 text-xs font-bold">
                             {g.expectedReturn}%
                           </span>
                         </td>
-                        <td className="px-3 py-3 text-right font-mono align-top">
+                        <td className="px-5 py-3 text-right font-mono">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 ring-1 ring-blue-200/40 dark:ring-blue-900/20 text-xs font-bold">
                             {g.sipIncRate}%
                           </span>
                         </td>
-                        <td className="px-4 py-3 align-top">
+                        <td className="px-5 py-3">
                           {Array.isArray(g.mappedAssets) && g.mappedAssets.length > 0 ? (
-                            <div className="flex flex-wrap gap-1.5">
+                            <div className="flex flex-wrap gap-1.5 max-w-xs">
                               {g.mappedAssets.map(a => (
-                                <span key={a.id || a.label} className="inline-flex items-center px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 ring-1 ring-indigo-200/40 dark:ring-indigo-900/20 text-[11px] font-bold whitespace-nowrap">
+                                <span key={a.id || a.label} className="inline-flex items-center px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 ring-1 ring-indigo-200/40 dark:ring-indigo-900/20 text-[10px] font-bold whitespace-nowrap">
                                   {a.label} · {fmtINR(a.amount)}
                                 </span>
                               ))}
                             </div>
                           ) : (
-                            <span className="italic text-slate-400 dark:text-slate-500">None</span>
+                            <span className="text-slate-350 dark:text-slate-600 text-[10px] font-medium italic">None</span>
                           )}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                </div>
               </div>
             </div>
           ) : (
