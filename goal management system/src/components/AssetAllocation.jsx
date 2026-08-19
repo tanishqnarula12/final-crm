@@ -259,11 +259,6 @@ export function AssetAllocationDetail({ client, onEdit, onSaveRemark, isViewer }
             )}
           </section>
 
-          {/* Goal Mapping — which of this client's goals each holding has
-              been committed to, the mirror image of the "Mapped Assets"
-              column shown per-goal on the Goal Mapping page. */}
-          <AssetGoalMappingSection alloc={alloc} goals={client.goals} />
-
           {/* Liability Allocation Breakdown — every liability within its own
               category (each category column treated as 100%) */}
           <section className="space-y-4">
@@ -280,6 +275,11 @@ export function AssetAllocationDetail({ client, onEdit, onSaveRemark, isViewer }
               </Card>
             )}
           </section>
+
+          {/* Goal Mapping — which of this client's goals each holding has
+              been committed to, the mirror image of the "Mapped Assets"
+              column shown per-goal on the Goal Mapping page. */}
+          <AssetGoalMappingSection alloc={alloc} goals={client.goals} />
         </>
       )}
 
@@ -517,7 +517,7 @@ function AssetGoalMappingSection({ alloc, goals }) {
             <tr>
               <th className="text-left px-5 py-3 font-bold">Asset</th>
               <th className="text-right px-5 py-3 font-bold">Value</th>
-              <th className="text-left px-5 py-3 font-bold">Mapped To Goals</th>
+              <th className="text-left pl-9 pr-5 py-3 font-bold">Mapped To Goals</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200/50 dark:divide-slate-800/50">
@@ -525,16 +525,16 @@ function AssetGoalMappingSection({ alloc, goals }) {
               const mapped = goalsByLabel[h.label] || [];
               return (
                 <tr key={`${h.sectionId}::${h.label}`} className="hover:bg-slate-50/40 dark:hover:bg-slate-900/20 transition-colors">
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-3 align-top">
                     <div className="flex items-center gap-2.5">
                       <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: h.color }} />
                       <span className="font-bold text-slate-900 dark:text-white">{h.label}</span>
                     </div>
                   </td>
-                  <td className="px-5 py-3 text-right font-mono font-bold text-slate-700 dark:text-slate-300 tabular-nums">{fmtINR(h.amount)}</td>
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-3 text-right font-mono font-bold text-slate-700 dark:text-slate-300 tabular-nums align-top">{fmtINR(h.amount)}</td>
+                  <td className="pl-9 pr-5 py-3 align-top">
                     {mapped.length > 0 ? (
-                      <div className="flex flex-wrap gap-1.5 max-w-xs">
+                      <div className="flex flex-wrap gap-1.5">
                         {mapped.map((m, i) => (
                           <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 ring-1 ring-indigo-200/40 dark:ring-indigo-900/20 text-[10px] font-bold whitespace-nowrap">
                             {m.goalName} · {fmtINR(m.amount)}

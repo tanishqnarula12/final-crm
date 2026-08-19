@@ -323,30 +323,35 @@ function AssumptionsSection({ client, onSave, isViewer }) {
                   <tbody className="divide-y divide-slate-200/50 dark:divide-slate-800/50">
                     {client.goals.map(g => (
                       <tr key={g.id} className="hover:bg-slate-50/40 dark:hover:bg-slate-900/20 transition-colors">
-                        <td className="px-5 py-3">
+                        <td className="px-5 py-3 align-top">
                           <div className="flex items-center gap-2.5">
                             <span className="text-lg select-none">{goalEmoji(g.name)}</span>
-                            <span className="font-bold text-slate-900 dark:text-white">{g.name}</span>
+                            <span className="font-bold text-slate-900 dark:text-white">
+                              {g.name}
+                              {needsKidName(g.name) && g.kidName && (
+                                <span className="font-semibold text-slate-400 dark:text-slate-500"> · {g.kidName}</span>
+                              )}
+                            </span>
                           </div>
                         </td>
-                        <td className="px-5 py-3 text-right font-mono">
+                        <td className="px-5 py-3 text-right font-mono align-top">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-400 ring-1 ring-rose-200/40 dark:ring-rose-900/20 text-xs font-bold">
                             {g.inflation}%
                           </span>
                         </td>
-                        <td className="px-5 py-3 text-right font-mono">
+                        <td className="px-5 py-3 text-right font-mono align-top">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-200/40 dark:ring-emerald-900/20 text-xs font-bold">
                             {g.expectedReturn}%
                           </span>
                         </td>
-                        <td className="px-5 py-3 text-right font-mono">
+                        <td className="px-5 py-3 text-right font-mono align-top">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 ring-1 ring-blue-200/40 dark:ring-blue-900/20 text-xs font-bold">
                             {g.sipIncRate}%
                           </span>
                         </td>
-                        <td className="px-5 py-3">
+                        <td className="px-5 py-3 align-top">
                           {Array.isArray(g.mappedAssets) && g.mappedAssets.length > 0 ? (
-                            <div className="flex flex-wrap gap-1.5 max-w-xs">
+                            <div className="flex flex-wrap gap-1.5">
                               {g.mappedAssets.map(a => (
                                 <span key={a.id || a.label} className="inline-flex items-center px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 ring-1 ring-indigo-200/40 dark:ring-indigo-900/20 text-[10px] font-bold whitespace-nowrap">
                                   {a.label} · {fmtINR(a.amount)}
