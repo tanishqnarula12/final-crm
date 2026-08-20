@@ -168,9 +168,10 @@ export default function CobrView({
           dateField={{ key: 'dueDate', label: 'Due date' }}
           onOpen={(r) => setEditor({ type: REC.RENEWAL, record: r })}
           emptyText="No renewals tracked yet."
-          minWidth={960}
+          minWidth={1080}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
+            { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
             { key: 'insuranceType', label: 'Insurance Type' },
             { key: 'premiumAmount', label: 'Premium Amount', align: 'right', render: (r) => money(r.premiumAmount), sortValue: (r) => Number(r.premiumAmount) || 0 },
             { key: 'dueDate', label: 'Due Date', render: (r) => d(r.dueDate) },
@@ -188,9 +189,10 @@ export default function CobrView({
           dateField={{ key: 'dueDate', label: 'Target date' }}
           onOpen={(r) => setEditor({ type: REC.CLAIM, record: r })}
           emptyText="No claims registered yet."
-          minWidth={1040}
+          minWidth={1160}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
+            { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
             { key: 'insuranceType', label: 'Insurance Type' },
             { key: 'claimType', label: 'Claim Type' },
             { key: 'claimAmount', label: 'Claim Amount', align: 'right', render: (r) => money(r.claimAmount), sortValue: (r) => Number(r.claimAmount) || 0 },
@@ -208,9 +210,10 @@ export default function CobrView({
           dateField={{ key: 'maturityDate', label: 'Maturity' }}
           onOpen={(r) => setEditor({ type: REC.FD, record: r })}
           emptyText="No fixed deposits tracked yet."
-          minWidth={980}
+          minWidth={1100}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
+            { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
             { key: 'bankName', label: 'Bank' },
             { key: 'startingDate', label: 'Starting Date', render: (r) => d(r.startingDate) },
             { key: 'maturityDate', label: 'Maturity Date', render: (r) => d(r.maturityDate) },
@@ -229,9 +232,10 @@ export default function CobrView({
           dateField={{ key: 'dueDate', label: 'Next due' }}
           onOpen={(r) => setEditor({ type: REC.POLICY, record: r })}
           emptyText="No other policies recorded yet."
-          minWidth={1080}
+          minWidth={1200}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
+            { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
             { key: 'insuranceType', label: 'Insurance Type' },
             { key: 'companyName', label: 'Company' },
             { key: 'policyNumber', label: 'Policy No.' },
@@ -311,15 +315,16 @@ function CobrTab({ cobrTasks, onOpenCobr }) {
             <table className="w-full text-left min-w-[980px]">
               <thead>
                 <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800">
-                  <th className="px-4 py-3">Group Leader</th>
-                  <th className="px-4 py-3">Applicant</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Assigned To</th>
-                  <th className="px-4 py-3">Stage</th>
-                  <th className="px-4 py-3 text-right">Total</th>
-                  <th className="px-4 py-3 text-right text-emerald-500">Done</th>
-                  <th className="px-4 py-3 text-right text-rose-500">Rejected</th>
-                  <th className="px-4 py-3 text-right text-slate-400">Pending</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Group Leader</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Applicant</th>
+                  <th className="px-4 py-3 whitespace-nowrap">PAN</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Type</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Assigned To</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Stage</th>
+                  <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
+                  <th className="px-4 py-3 text-right text-emerald-500 whitespace-nowrap">Done</th>
+                  <th className="px-4 py-3 text-right text-rose-500 whitespace-nowrap">Rejected</th>
+                  <th className="px-4 py-3 text-right text-slate-400 whitespace-nowrap">Pending</th>
                 </tr>
               </thead>
               <tbody>
@@ -332,10 +337,11 @@ function CobrTab({ cobrTasks, onOpenCobr }) {
                       onClick={() => onOpenCobr(t, true)}
                       className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors cursor-pointer"
                     >
-                      <td className="px-4 py-3 text-xs font-bold text-slate-800 dark:text-slate-200">{t.groupLeader || '—'}</td>
-                      <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">{t.applicant || '—'}</td>
-                      <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">{t.cobrType || '—'}</td>
-                      <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">{teamName(t.assignedTo) || '—'}</td>
+                      <td className="px-4 py-3 text-xs font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">{t.groupLeader || '—'}</td>
+                      <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">{t.applicant || '—'}</td>
+                      <td className="px-4 py-3 text-xs font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap">{t.pan || '—'}</td>
+                      <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">{t.cobrType || '—'}</td>
+                      <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">{teamName(t.assignedTo) || '—'}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ring-1 rounded-full ${STAGE_THEME[t.stage] || 'bg-slate-100 text-slate-600 ring-slate-200/60 dark:bg-slate-800 dark:text-slate-400'}`}>
                           {t.stage || 'Open'}

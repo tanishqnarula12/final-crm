@@ -1,12 +1,13 @@
 // Modal chrome + the parts every COBR-workspace record editor repeats:
-// assignment fields, and the comments/logs timeline.
+// assignment fields, the stage picker, and the comments/logs timeline.
 import React from 'react';
-import { X, MessageSquare, Paperclip } from 'lucide-react';
+import { X, MessageSquare, Paperclip, ArrowRight } from 'lucide-react';
 import { Avatar, inputCls, selectCls, Field, CoolSelect } from '../UI';
 import { fmtTaskStamp } from '../../utils/tasks';
 import { loadTeam, teamName } from '../../services/team';
 import { fmtINR } from '../../utils/calc';
 import { AttachmentChips } from './AttachmentField';
+import { stageBadgeCls, STAGE_BTN_TONE, STAGE_SETS } from '../../utils/cobrModules';
 
 export function RecordModal({ title, subtitle, onClose, children, footer, maxWidth = 'max-w-3xl' }) {
   return (
@@ -102,6 +103,55 @@ export function AssignmentFields({ assignedTo, subPersons = [], dueDate, dueLabe
         )}
       </Field>
     </>
+  );
+}
+
+// Current-stage badge + a row of outline pill buttons for every OTHER stage —
+// the same visual language as Claim's "What happened next?" workflow buttons,
+// reused verbatim so every register's stage control looks identical rather
+// than each screen inventing its own. Unlike Claim (which only offers the
+// stages reachable from a transition map), these registers have a simple
+// vocabulary with no branching, so every other stage is clickable directly —
+// this replaces what used to be a plain dropdown, not the underlying rule
+// that any stage can be picked.
+export function StagePicker({ type, stage, onSelect, disabled = false }) {
+  const stages = STAGE_SETS[type]?.stages || [];
+  const options = stages.filter((s) => s !== stage);
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Current Stage</span>
+        <span className={`inline-flex items-center px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full ring-1 ${stageBadgeCls(type, stage)}`}>
+          {stage}
+        </span>
+      </div>
+
+      {disabled ? (
+        <p className="text-[11px] text-slate-400 italic">You do not have permission to change the stage.</p>
+      ) : options.length === 0 ? (
+        <p className="text-[11px] text-slate-400 italic">No other stages available.</p>
+      ) : (
+        <>
+          <p className="text-[11px] text-slate-400 mb-2">Update stage</p>
+          <div className="flex flex-wrap gap-2">
+            {options.map((s) => {
+              const tone = STAGE_SETS[type]?.tone?.[s] || 'slate';
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => onSelect(s)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${STAGE_BTN_TONE[tone] || STAGE_BTN_TONE.blue}`}
+                >
+                  {s} <ArrowRight size={11} />
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

@@ -9,7 +9,7 @@ import React, { useState, useMemo } from 'react';
 import { inputCls, selectCls, Field, CoolSelect } from '../UI';
 import ClientApplicantFields from './ClientApplicantFields';
 import AttachmentField from './AttachmentField';
-import { RecordModal, AssignmentFields, LogTimeline, StageHistory } from './RecordShell';
+import { RecordModal, AssignmentFields, LogTimeline, StageHistory, StagePicker } from './RecordShell';
 import { btnPrimary, btnGhost } from '../UI';
 import { REC, POLICY_STAGES, INSURANCE_TYPES, makeHistoryEntry, recordTaskName, stageBadgeCls } from '../../utils/cobrModules';
 import { getCurrentUser } from '../../utils/auth';
@@ -170,13 +170,7 @@ export default function OtherPolicyModal({ record, clients = [], onClose, onSave
       </div>
 
       <div className="rounded-2xl border border-slate-200/60 dark:border-slate-800/80 bg-slate-50/60 dark:bg-slate-950/30 p-4 space-y-3">
-        <Field label="Status / Stage">
-          <fieldset disabled={!canChangeStage} className="contents">
-            <CoolSelect value={stage} onChange={(e) => setStage(e.target.value)} className={selectCls + (!canChangeStage ? ' opacity-60 cursor-not-allowed' : '')}>
-              {POLICY_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </CoolSelect>
-          </fieldset>
-        </Field>
+        <StagePicker type={REC.POLICY} stage={stage} onSelect={setStage} disabled={!canChangeStage} />
 
         {stageChanged && (
           <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/10 p-3">

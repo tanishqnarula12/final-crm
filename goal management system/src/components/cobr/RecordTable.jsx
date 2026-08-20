@@ -129,20 +129,25 @@ export default function RecordTable({
           <div className="overflow-x-auto">
             <table className="w-full text-left" style={{ minWidth: `${minWidth}px` }}>
               <thead>
+                {/* whitespace-nowrap on every header keeps the bold/tracked-out
+                    header font from wrapping to two lines while the lighter
+                    body font on the same column stays single-line below it —
+                    that mismatch is what made the header row look misaligned
+                    against the data rows. */}
                 <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800">
-                  <th className="px-4 py-3 w-14">S. No.</th>
+                  <th className="px-4 py-3 w-12 whitespace-nowrap">S.No.</th>
                   {columns.map((c) => (
                     <th
                       key={c.key}
                       onClick={() => toggleSort(c.key)}
-                      className={`px-4 py-3 cursor-pointer select-none hover:text-slate-600 dark:hover:text-slate-300 transition-colors ${c.align === 'right' ? 'text-right' : ''}`}
+                      className={`px-4 py-3 cursor-pointer select-none whitespace-nowrap hover:text-slate-600 dark:hover:text-slate-300 transition-colors ${c.align === 'right' ? 'text-right' : ''}`}
                     >
                       {c.label}<SortIcon colKey={c.key} />
                     </th>
                   ))}
                   <th
                     onClick={() => toggleSort('stage')}
-                    className="px-4 py-3 cursor-pointer select-none hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                    className="px-4 py-3 cursor-pointer select-none whitespace-nowrap hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                   >
                     Status<SortIcon colKey="stage" />
                   </th>
@@ -155,13 +160,13 @@ export default function RecordTable({
                     onClick={() => onOpen && onOpen(r)}
                     className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors cursor-pointer"
                   >
-                    <td className="px-4 py-3 text-xs text-slate-400 tabular-nums">{i + 1}</td>
+                    <td className="px-4 py-3 text-xs text-slate-400 tabular-nums whitespace-nowrap">{i + 1}</td>
                     {columns.map((c) => (
-                      <td key={c.key} className={`px-4 py-3 text-xs ${c.align === 'right' ? 'text-right tabular-nums' : ''} ${c.cls || 'text-slate-600 dark:text-slate-300'}`}>
+                      <td key={c.key} className={`px-4 py-3 text-xs whitespace-nowrap ${c.align === 'right' ? 'text-right tabular-nums' : ''} ${c.cls || 'text-slate-600 dark:text-slate-300'}`}>
                         {c.render ? c.render(r) : (r[c.key] || '—')}
                       </td>
                     ))}
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ring-1 rounded-full ${stageBadgeCls(type, r.stage)}`}>
                         {r.stage || '—'}
                       </span>

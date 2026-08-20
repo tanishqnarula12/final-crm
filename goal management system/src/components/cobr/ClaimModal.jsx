@@ -15,19 +15,15 @@ import { RecordModal, AssignmentFields, LogTimeline, StageHistory } from './Reco
 import { btnPrimary, btnGhost } from '../UI';
 import {
   REC, CLAIM_STAGES, CLAIM_TYPES, INSURANCE_TYPES, claimActionsFor, claimIsClosed,
-  claimSettledTotal, makeHistoryEntry, recordTaskName, stageBadgeCls,
+  claimSettledTotal, makeHistoryEntry, recordTaskName, stageBadgeCls, STAGE_BTN_TONE,
 } from '../../utils/cobrModules';
 import { getCurrentUser } from '../../utils/auth';
 import { uid, fmtINR } from '../../utils/calc';
 import { canDo } from '../../utils/permissions';
 
-const TONE_BTN = {
-  amber: 'bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-900/50 hover:bg-amber-50 dark:hover:bg-amber-950/40',
-  emerald: 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-900/50 hover:bg-emerald-50 dark:hover:bg-emerald-950/40',
-  rose: 'bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-400 border-rose-300 dark:border-rose-900/50 hover:bg-rose-50 dark:hover:bg-rose-950/40',
-  blue: 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-900/50 hover:bg-blue-50 dark:hover:bg-blue-950/40',
-  violet: 'bg-white dark:bg-slate-900 text-violet-700 dark:text-violet-400 border-violet-300 dark:border-violet-900/50 hover:bg-violet-50 dark:hover:bg-violet-950/40',
-};
+// Shared with Renewal/FD/Policy's StagePicker (RecordShell.jsx) so every
+// register's stage control uses the exact same button styling.
+const TONE_BTN = STAGE_BTN_TONE;
 
 export default function ClaimModal({ record, clients = [], onClose, onSave }) {
   const isEdit = !!record;
@@ -246,7 +242,7 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
 
         {!isEdit ? (
           <p className="text-[11px] text-slate-400 italic">
-            The claim starts at “Document Collected”. Create it first, then drive the workflow from here.
+            The claim starts at “Qualified”. Create it first, then drive the workflow from here.
           </p>
         ) : closed ? (
           <p className="text-[11px] text-slate-400 italic">

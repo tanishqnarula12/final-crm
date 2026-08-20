@@ -59,6 +59,7 @@ export const TONE = {
 // RENEWALS
 // ---------------------------------------------------------------------------
 export const RENEWAL_STAGES = [
+  'Qualified',
   'WhatsApp Link Sent',
   'Call Done',
   'Payment Done',
@@ -68,7 +69,8 @@ export const RENEWAL_STAGES = [
 ];
 
 export const RENEWAL_STAGE_TONE = {
-  'WhatsApp Link Sent': 'slate',
+  Qualified: 'slate',
+  'WhatsApp Link Sent': 'blue',
   'Call Done': 'blue',
   'Payment Done': 'amber',
   'Policy Document Upload': 'violet',
@@ -99,6 +101,7 @@ export const RENEWAL_OPPORTUNITIES = ['Up Sell', 'Cross Sell'];
 // times until the claim is Settled or Rejected.
 // ---------------------------------------------------------------------------
 export const CLAIM_STAGES = [
+  'Qualified',
   'Document Collected',
   'Claim Submitted',
   'Additional Document Required',
@@ -112,7 +115,8 @@ export const CLAIM_STAGES = [
 ];
 
 export const CLAIM_STAGE_TONE = {
-  'Document Collected': 'slate',
+  Qualified: 'slate',
+  'Document Collected': 'blue',
   'Claim Submitted': 'blue',
   'Additional Document Required': 'amber',
   'Documents Submitted': 'blue',
@@ -139,6 +143,9 @@ const INSURER_DECISION = [
 // action whose `to` equals its own stage is a deliberate loop (recorded in
 // history, stage unchanged) — which is exactly the Ombudsman re-denial.
 export const CLAIM_ACTIONS = {
+  Qualified: [
+    { key: 'collect', label: 'Document Collected', to: 'Document Collected', tone: 'blue' },
+  ],
   'Document Collected': [
     { key: 'submit', label: 'Claim Submitted', to: 'Claim Submitted', tone: 'blue' },
   ],
@@ -177,10 +184,11 @@ export function claimSettledTotal(history = []) {
 // ---------------------------------------------------------------------------
 // FIXED DEPOSITS
 // ---------------------------------------------------------------------------
-export const FD_STAGES = ['WhatsApp Message Sent', 'FD Renewed by Client', 'Invested With Us'];
+export const FD_STAGES = ['Qualified', 'WhatsApp Message Sent', 'FD Renewed by Client', 'Invested With Us'];
 
 export const FD_STAGE_TONE = {
-  'WhatsApp Message Sent': 'slate',
+  Qualified: 'slate',
+  'WhatsApp Message Sent': 'blue',
   'FD Renewed by Client': 'blue',
   'Invested With Us': 'emerald',
 };
@@ -191,9 +199,10 @@ export const FD_TERMINAL = new Set(['FD Renewed by Client', 'Invested With Us'])
 // OTHER INSURANCE POLICIES — a register of policies held outside the
 // renewal/claim flows.
 // ---------------------------------------------------------------------------
-export const POLICY_STAGES = ['Active', 'Due for Renewal', 'Lapsed', 'Matured', 'Surrendered', 'Closed'];
+export const POLICY_STAGES = ['Qualified', 'Active', 'Due for Renewal', 'Lapsed', 'Matured', 'Surrendered', 'Closed'];
 
 export const POLICY_STAGE_TONE = {
+  Qualified: 'slate',
   Active: 'emerald',
   'Due for Renewal': 'amber',
   Lapsed: 'rose',
@@ -212,6 +221,19 @@ export const STAGE_SETS = {
   [REC.CLAIM]: { stages: CLAIM_STAGES, tone: CLAIM_STAGE_TONE, terminal: CLAIM_TERMINAL },
   [REC.FD]: { stages: FD_STAGES, tone: FD_STAGE_TONE, terminal: FD_TERMINAL },
   [REC.POLICY]: { stages: POLICY_STAGES, tone: POLICY_STAGE_TONE, terminal: POLICY_TERMINAL },
+};
+
+// Outline pill-button tone classes for the stage picker — the same look
+// used for Claim's "What happened next?" action buttons, reused verbatim by
+// Renewal/FD/Policy's stage picker so every register's stage control looks
+// identical, not just Claim's.
+export const STAGE_BTN_TONE = {
+  slate: 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/60',
+  amber: 'bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-900/50 hover:bg-amber-50 dark:hover:bg-amber-950/40',
+  emerald: 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-900/50 hover:bg-emerald-50 dark:hover:bg-emerald-950/40',
+  rose: 'bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-400 border-rose-300 dark:border-rose-900/50 hover:bg-rose-50 dark:hover:bg-rose-950/40',
+  blue: 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-900/50 hover:bg-blue-50 dark:hover:bg-blue-950/40',
+  violet: 'bg-white dark:bg-slate-900 text-violet-700 dark:text-violet-400 border-violet-300 dark:border-violet-900/50 hover:bg-violet-50 dark:hover:bg-violet-950/40',
 };
 
 export const stageBadgeCls = (type, stage) => {

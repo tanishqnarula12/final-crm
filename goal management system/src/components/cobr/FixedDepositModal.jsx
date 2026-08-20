@@ -3,10 +3,10 @@
 // Stored as a Task row (relatedTo: 'FD'). Selecting the "Invested With Us"
 // stage reveals the Investment Amount field, which is then required.
 import React, { useState, useMemo } from 'react';
-import { inputCls, selectCls, Field, CoolSelect } from '../UI';
+import { inputCls, Field } from '../UI';
 import ClientApplicantFields from './ClientApplicantFields';
 import AttachmentField from './AttachmentField';
-import { RecordModal, AssignmentFields, LogTimeline, StageHistory } from './RecordShell';
+import { RecordModal, AssignmentFields, LogTimeline, StageHistory, StagePicker } from './RecordShell';
 import { btnPrimary, btnGhost } from '../UI';
 import { REC, FD_STAGES, makeHistoryEntry, recordTaskName, stageBadgeCls } from '../../utils/cobrModules';
 import { getCurrentUser } from '../../utils/auth';
@@ -154,13 +154,7 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
       </div>
 
       <div className="rounded-2xl border border-slate-200/60 dark:border-slate-800/80 bg-slate-50/60 dark:bg-slate-950/30 p-4 space-y-3">
-        <Field label="Status / Stage">
-          <fieldset disabled={!canChangeStage} className="contents">
-            <CoolSelect value={stage} onChange={(e) => setStage(e.target.value)} className={selectCls + (!canChangeStage ? ' opacity-60 cursor-not-allowed' : '')}>
-              {FD_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </CoolSelect>
-          </fieldset>
-        </Field>
+        <StagePicker type={REC.FD} stage={stage} onSelect={setStage} disabled={!canChangeStage} />
 
         {investedWithUs && (
           <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/10 p-3">
