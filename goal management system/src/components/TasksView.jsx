@@ -49,9 +49,21 @@ export default function TasksView({ clients = [], isViewer, activeTaskId, setAct
     }
   }, [activeTaskId, tasks, setActiveTaskId, onOpenTask]);
 
+  // The COBR workspace's newer registers (Renewals / Claims / Fixed Deposits /
+  // Other Insurance Policies) are Task rows, but they have their own editors
+  // and stage vocabularies over in that workspace — the generic Task form
+  // can't render them — so they're scoped out of this list. COBR itself stays
+  // (its checklist editor is deliberately reached from here).
+  // NOTE: only the DISPLAY is scoped; `tasks` state stays whole because
+  // handleDelete saves straight from it.
+  const scopedTasks = useMemo(
+    () => tasks.filter(t => !['RENEWAL', 'CLAIM', 'FD', 'POLICY'].includes(t.relatedTo)),
+    [tasks]
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return tasks
+    return scopedTasks
       .filter(t => stageFilter === 'all' || t.stage === stageFilter)
       .filter(t => !q ||
         (t.taskName || '').toLowerCase().includes(q) ||
@@ -61,13 +73,13 @@ export default function TasksView({ clients = [], isViewer, activeTaskId, setAct
         (t.nftType || '').toLowerCase().includes(q) ||
         (teamName(t.assignedTo) || '').toLowerCase().includes(q))
       .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-  }, [tasks, query, stageFilter]);
+  }, [scopedTasks, query, stageFilter]);
 
   const counts = useMemo(() => {
-    const c = { all: tasks.length };
-    TASK_STAGES.forEach(s => { c[s] = tasks.filter(t => t.stage === s).length; });
+    const c = { all: scopedTasks.length };
+    TASK_STAGES.forEach(s => { c[s] = scopedTasks.filter(t => t.stage === s).length; });
     return c;
-  }, [tasks]);
+  }, [scopedTasks]);
 
   const openCreate = () => { onOpenTask && onOpenTask(null); };
   const openEdit = (task) => { onOpenTask && onOpenTask(task); };

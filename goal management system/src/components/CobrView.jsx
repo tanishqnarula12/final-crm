@@ -1,16 +1,30 @@
-// COBR (Change of Broker) module — its own top-level sidebar section.
+// COBR workspace — its own top-level sidebar section, now with five tabs:
+// COBR (Change of Broker), Renewals, Claim, Fixed Deposit and Other Insurance
+// Policies.
 //
-// COBR records ARE Task rows (relatedTo: 'COBR') filtered out of the shared
-// `loadTasks()` cache — same sync/save pipeline as the Tasks module
-// (tasksChangeCounter bump on save), just a specialized list + editor.
+// Every record in every tab IS a Task row, distinguished by `relatedTo`
+// (see utils/cobrModules.js) — same sync/save pipeline as the Tasks module
+// (tasksChangeCounter bump on save), just specialized lists + editors.
+//
+// The COBR tab's behaviour is deliberately unchanged from before the other
+// four tabs existed.
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, ArrowLeftRight } from 'lucide-react';
+import { Plus, Search, ArrowLeftRight, RefreshCw, ShieldAlert, Landmark, FileCheck2 } from 'lucide-react';
 import { Card, btnPrimary, selectCls, CoolSelect } from './UI';
 import { loadTasks } from '../utils/tasks';
 import { COBR_STAGES, cobrTotals, isCobrTask } from '../utils/cobr';
+import {
+  REC, RENEWAL_STAGES, CLAIM_STAGES, FD_STAGES, POLICY_STAGES,
+  isRenewal, isClaim, isFd, isPolicy, isOpenStage,
+} from '../utils/cobrModules';
 import { teamName } from '../services/team';
 import { fmtINR } from '../utils/calc';
 import { canDo } from '../utils/permissions';
+import RecordTable from './cobr/RecordTable';
+import RenewalModal from './cobr/RenewalModal';
+import ClaimModal from './cobr/ClaimModal';
+import FixedDepositModal from './cobr/FixedDepositModal';
+import OtherPolicyModal from './cobr/OtherPolicyModal';
 
 const STAGE_THEME = {
   Open: 'bg-blue-50 text-blue-700 ring-blue-200/60 dark:bg-blue-950/30 dark:text-blue-400 dark:ring-blue-900/40',
@@ -18,12 +32,42 @@ const STAGE_THEME = {
   Completed: 'bg-emerald-50 text-emerald-700 ring-emerald-200/60 dark:bg-emerald-950/30 dark:text-emerald-400 dark:ring-emerald-900/40',
 };
 
-export default function CobrView({ isViewer, tasksChangeCounter, onNewCobr, onOpenCobr, activeCobrId, setActiveCobrId }) {
+const TABS = [
+  { id: REC.COBR, label: 'COBR', icon: ArrowLeftRight },
+  { id: REC.RENEWAL, label: 'Renewals', icon: RefreshCw },
+  { id: REC.CLAIM, label: 'Claim', icon: ShieldAlert },
+  { id: REC.FD, label: 'Fixed Deposit', icon: Landmark },
+  { id: REC.POLICY, label: 'Other Insurance Policies', icon: FileCheck2 },
+];
+
+const d = (s) => (s ? new Date(s).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
+const money = (v) => (v === '' || v == null ? '—' : fmtINR(Number(v) || 0));
+
+export default function CobrView({
+  isViewer,
+  clients = [],
+  tasksChangeCounter,
+  onNewCobr,
+  onOpenCobr,
+  activeCobrId,
+  setActiveCobrId,
+  onSaveRecord,
+}) {
+  const [tab, setTab] = useState(REC.COBR);
   const [tasks, setTasks] = useState(() => loadTasks());
-  const [query, setQuery] = useState('');
-  const [stageFilter, setStageFilter] = useState('all');
+  // Which record editor is open, if any: { type, record|null }
+  const [editor, setEditor] = useState(null);
 
   useEffect(() => { setTasks(loadTasks()); }, [tasksChangeCounter]);
+
+  const mayCreate = !isViewer && canDo('cobr', 'create');
+
+  const rowsFor = useMemo(() => ({
+    [REC.RENEWAL]: tasks.filter(isRenewal),
+    [REC.CLAIM]: tasks.filter(isClaim),
+    [REC.FD]: tasks.filter(isFd),
+    [REC.POLICY]: tasks.filter(isPolicy),
+  }), [tasks]);
 
   const cobrTasks = useMemo(() => tasks.filter(isCobrTask), [tasks]);
 
@@ -32,10 +76,194 @@ export default function CobrView({ isViewer, tasksChangeCounter, onNewCobr, onOp
   useEffect(() => {
     if (activeCobrId) {
       const found = cobrTasks.find((t) => t.id === activeCobrId);
-      if (found) onOpenCobr(found, true);
+      if (found) { setTab(REC.COBR); onOpenCobr(found, true); }
       if (setActiveCobrId) setActiveCobrId(null);
     }
   }, [activeCobrId, cobrTasks, setActiveCobrId, onOpenCobr]);
+
+  const openCount = (type) => (rowsFor[type] || []).filter((r) => isOpenStage(type, r.stage)).length;
+
+  const handleSaved = (rec) => {
+    onSaveRecord && onSaveRecord(rec);
+    setEditor(null);
+  };
+
+  const active = TABS.find((t) => t.id === tab);
+
+  return (
+    <div className="space-y-5 animate-fade-in">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5">
+          <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 flex items-center justify-center">
+            {active?.icon ? <active.icon size={20} /> : <ArrowLeftRight size={20} />}
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">
+              {tab === REC.COBR ? 'Change of Broker (COBR)' : active?.label}
+            </h2>
+            <p className="text-xs text-slate-400">
+              {tab === REC.COBR && 'Broker-change requests — tracked as tasks, with a per-scheme checklist.'}
+              {tab === REC.RENEWAL && 'Policy renewals — from the first WhatsApp link through to the document being shared.'}
+              {tab === REC.CLAIM && 'Insurance claims — full workflow, including the Ombudsman escalation path.'}
+              {tab === REC.FD && 'Fixed deposits nearing maturity — and whether the money comes back to us.'}
+              {tab === REC.POLICY && 'Other policies held by clients, tracked outside the renewal and claim flows.'}
+            </p>
+          </div>
+        </div>
+
+        {mayCreate && (
+          tab === REC.COBR ? (
+            <button onClick={onNewCobr} className={btnPrimary + ' text-xs'}>
+              <Plus size={14} /> New COBR
+            </button>
+          ) : (
+            <button onClick={() => setEditor({ type: tab, record: null })} className={btnPrimary + ' text-xs'}>
+              <Plus size={14} /> New {tab === REC.POLICY ? 'Policy' : active?.label.replace(/s$/, '')}
+            </button>
+          )
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-1.5 flex-wrap border-b border-slate-100 dark:border-slate-800 pb-px">
+        {TABS.map((t) => {
+          const on = t.id === tab;
+          const badge = t.id === REC.COBR
+            ? cobrTasks.filter((x) => (x.stage || 'Open') !== 'Completed').length
+            : openCount(t.id);
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-t-xl text-xs font-bold transition-all cursor-pointer border-b-2 -mb-px ${
+                on
+                  ? 'border-violet-500 text-violet-600 dark:text-violet-400 bg-violet-50/50 dark:bg-violet-950/20'
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+              }`}
+            >
+              <t.icon size={13} /> {t.label}
+              {badge > 0 && (
+                <span className={`ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black ${
+                  on ? 'bg-violet-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                }`}>
+                  {badge > 99 ? '99+' : badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === REC.COBR && (
+        <CobrTab cobrTasks={cobrTasks} onOpenCobr={onOpenCobr} />
+      )}
+
+      {tab === REC.RENEWAL && (
+        <RecordTable
+          type={REC.RENEWAL}
+          rows={rowsFor[REC.RENEWAL]}
+          stages={RENEWAL_STAGES}
+          searchFields={['applicant', 'groupLeader', 'pan', 'policyNumber', 'policyName', 'insuranceType']}
+          searchPlaceholder="Search applicant, PAN, policy no., insurance type…"
+          dateField={{ key: 'dueDate', label: 'Due date' }}
+          onOpen={(r) => setEditor({ type: REC.RENEWAL, record: r })}
+          emptyText="No renewals tracked yet."
+          minWidth={960}
+          columns={[
+            { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
+            { key: 'insuranceType', label: 'Insurance Type' },
+            { key: 'premiumAmount', label: 'Premium Amount', align: 'right', render: (r) => money(r.premiumAmount), sortValue: (r) => Number(r.premiumAmount) || 0 },
+            { key: 'dueDate', label: 'Due Date', render: (r) => d(r.dueDate) },
+          ]}
+        />
+      )}
+
+      {tab === REC.CLAIM && (
+        <RecordTable
+          type={REC.CLAIM}
+          rows={rowsFor[REC.CLAIM]}
+          stages={CLAIM_STAGES}
+          searchFields={['applicant', 'groupLeader', 'pan', 'policyNumber', 'claimType', 'insuranceType']}
+          searchPlaceholder="Search applicant, PAN, policy no., claim type…"
+          dateField={{ key: 'dueDate', label: 'Target date' }}
+          onOpen={(r) => setEditor({ type: REC.CLAIM, record: r })}
+          emptyText="No claims registered yet."
+          minWidth={1040}
+          columns={[
+            { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
+            { key: 'insuranceType', label: 'Insurance Type' },
+            { key: 'claimType', label: 'Claim Type' },
+            { key: 'claimAmount', label: 'Claim Amount', align: 'right', render: (r) => money(r.claimAmount), sortValue: (r) => Number(r.claimAmount) || 0 },
+          ]}
+        />
+      )}
+
+      {tab === REC.FD && (
+        <RecordTable
+          type={REC.FD}
+          rows={rowsFor[REC.FD]}
+          stages={FD_STAGES}
+          searchFields={['applicant', 'groupLeader', 'pan', 'bankName']}
+          searchPlaceholder="Search applicant, PAN, bank…"
+          dateField={{ key: 'maturityDate', label: 'Maturity' }}
+          onOpen={(r) => setEditor({ type: REC.FD, record: r })}
+          emptyText="No fixed deposits tracked yet."
+          minWidth={980}
+          columns={[
+            { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
+            { key: 'bankName', label: 'Bank' },
+            { key: 'startingDate', label: 'Starting Date', render: (r) => d(r.startingDate) },
+            { key: 'maturityDate', label: 'Maturity Date', render: (r) => d(r.maturityDate) },
+            { key: 'maturityAmount', label: 'Maturity Amount', align: 'right', render: (r) => money(r.maturityAmount), sortValue: (r) => Number(r.maturityAmount) || 0 },
+          ]}
+        />
+      )}
+
+      {tab === REC.POLICY && (
+        <RecordTable
+          type={REC.POLICY}
+          rows={rowsFor[REC.POLICY]}
+          stages={POLICY_STAGES}
+          searchFields={['applicant', 'groupLeader', 'pan', 'companyName', 'policyName', 'policyNumber', 'insuranceType']}
+          searchPlaceholder="Search applicant, PAN, company, policy…"
+          dateField={{ key: 'dueDate', label: 'Next due' }}
+          onOpen={(r) => setEditor({ type: REC.POLICY, record: r })}
+          emptyText="No other policies recorded yet."
+          minWidth={1080}
+          columns={[
+            { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
+            { key: 'insuranceType', label: 'Insurance Type' },
+            { key: 'companyName', label: 'Company' },
+            { key: 'policyNumber', label: 'Policy No.' },
+            { key: 'premiumAmount', label: 'Premium', align: 'right', render: (r) => money(r.premiumAmount), sortValue: (r) => Number(r.premiumAmount) || 0 },
+            { key: 'dueDate', label: 'Next Due', render: (r) => d(r.dueDate) },
+          ]}
+        />
+      )}
+
+      {editor?.type === REC.RENEWAL && (
+        <RenewalModal record={editor.record} clients={clients} onClose={() => setEditor(null)} onSave={handleSaved} />
+      )}
+      {editor?.type === REC.CLAIM && (
+        <ClaimModal record={editor.record} clients={clients} onClose={() => setEditor(null)} onSave={handleSaved} />
+      )}
+      {editor?.type === REC.FD && (
+        <FixedDepositModal record={editor.record} clients={clients} onClose={() => setEditor(null)} onSave={handleSaved} />
+      )}
+      {editor?.type === REC.POLICY && (
+        <OtherPolicyModal record={editor.record} clients={clients} onClose={() => setEditor(null)} onSave={handleSaved} />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The original COBR list — unchanged behaviour, just lifted into its own
+// component so the tab bar can sit above it.
+// ---------------------------------------------------------------------------
+function CobrTab({ cobrTasks, onOpenCobr }) {
+  const [query, setQuery] = useState('');
+  const [stageFilter, setStageFilter] = useState('all');
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -55,27 +283,8 @@ export default function CobrView({ isViewer, tasksChangeCounter, onNewCobr, onOp
     return c;
   }, [cobrTasks]);
 
-  const mayCreate = !isViewer && canDo('cobr', 'create');
-
   return (
-    <div className="space-y-5 animate-fade-in">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 flex items-center justify-center">
-            <ArrowLeftRight size={20} />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Change of Broker (COBR)</h2>
-            <p className="text-xs text-slate-400">Broker-change requests — tracked as tasks, with a per-scheme checklist.</p>
-          </div>
-        </div>
-        {mayCreate && (
-          <button onClick={onNewCobr} className={btnPrimary + ' text-xs'}>
-            <Plus size={14} /> New COBR
-          </button>
-        )}
-      </div>
-
+    <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[220px] max-w-sm">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />

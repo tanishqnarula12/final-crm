@@ -49,6 +49,7 @@ import LeaveView from './components/LeaveView';
 import CobrView from './components/CobrView';
 import CobrFormModal from './components/CobrFormModal';
 import CobrTaskModal from './components/CobrTaskModal';
+import { COBR_WORKSPACE_TYPES, isOpenStage } from './utils/cobrModules';
 import DocumentsView from './components/DocumentsView';
 import ProspectsView, { ProspectModal } from './components/BusinessProspects';
 import ReviewWorkspace from './components/ReviewWorkspace';
@@ -694,6 +695,16 @@ export default function App() {
     setTasksChangeCounter(prev => prev + 1);
   };
 
+  // The COBR workspace's other registers (Renewals / Claims / Fixed Deposits /
+  // Other Insurance Policies) keep their editors inside CobrView; they only
+  // need the same Task-row save the rest of the workspace uses.
+  const handleSaveWorkspaceRecord = (rec) => {
+    const allTasks = loadTasks();
+    const exists = allTasks.some(t => t.id === rec.id);
+    saveTasks(exists ? allTasks.map(t => (t.id === rec.id ? rec : t)) : [rec, ...allTasks]);
+    setTasksChangeCounter(prev => prev + 1);
+  };
+
   const handleOpenProspect = (prospect) => {
     setEditingProspect(prospect);
     setShowProspectForm(true);
@@ -830,9 +841,14 @@ export default function App() {
     const recompute = () => {
       const tasks = loadTasks();
       setModuleBadges({
-        // COBR rows are tasks too — split them out so each badge counts its own.
-        tasks: tasks.filter(t => t.relatedTo !== 'COBR' && !TASK_DONE.has(t.stage || 'Open')).length,
-        cobr: tasks.filter(t => t.relatedTo === 'COBR' && (t.stage || 'Open') !== 'Completed').length,
+        // Every COBR-workspace register (COBR, Renewals, Claims, FDs, Policies)
+        // is a Task row too — split them out so each badge counts its own.
+        tasks: tasks.filter(t => !COBR_WORKSPACE_TYPES.includes(t.relatedTo) && !TASK_DONE.has(t.stage || 'Open')).length,
+        cobr: tasks.filter(t => (
+          t.relatedTo === 'COBR'
+            ? (t.stage || 'Open') !== 'Completed'
+            : COBR_WORKSPACE_TYPES.includes(t.relatedTo) && isOpenStage(t.relatedTo, t.stage)
+        )).length,
         meetings: loadMeetings().filter(m => (m.status || 'Scheduled') === 'Scheduled').length,
         prospects: loadProspects().filter(p => !PROSPECT_DONE.has(p.stage)).length,
         queries: loadQueries().filter(q => !QUERY_DONE.has(q.stage || 'Open')).length,
@@ -1726,9 +1742,11 @@ export default function App() {
           <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
             <CobrView
               isViewer={isViewer}
+              clients={clients}
               tasksChangeCounter={tasksChangeCounter}
               onNewCobr={handleNewCobr}
               onOpenCobr={handleOpenCobr}
+              onSaveRecord={handleSaveWorkspaceRecord}
               activeCobrId={activeCobrId}
               setActiveCobrId={setActiveCobrId}
             />

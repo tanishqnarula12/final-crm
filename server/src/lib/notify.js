@@ -49,6 +49,9 @@ const pick = (rec, keys) => {
 };
 
 const taskLabel = (rec) => pick(rec, ['taskName', 'title', 'name']) || 'Untitled task';
+// The `cobr` module covers five registers — name the right one in the title.
+const COBR_KIND = { COBR: 'COBR task', RENEWAL: 'renewal', CLAIM: 'claim', FD: 'fixed deposit', POLICY: 'policy' };
+const cobrKind = (rec) => COBR_KIND[rec?.relatedTo] || 'COBR task';
 const leadLabel = (rec) => {
   const name = pick(rec, ['name', 'firstName']);
   const mobile = pick(rec, ['mobile', 'phone']);
@@ -179,7 +182,7 @@ export async function notifyFromEvents(prisma, events) {
       if (rec.assignedTo && rec.assignedTo !== ev.actorId) {
         items.push({
           userId: rec.assignedTo, type: NOTIF.TASK_ASSIGNED,
-          title: ev.module === 'cobr' ? 'New COBR task assigned to you' : 'New task assigned to you',
+          title: ev.module === 'cobr' ? `New ${cobrKind(rec)} assigned to you` : 'New task assigned to you',
           body: taskLabel(rec),
           link: { view: ev.module === 'cobr' ? 'cobr' : 'tasks', id: rec.id },
         });

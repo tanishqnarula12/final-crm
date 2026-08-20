@@ -26,7 +26,12 @@ const bulkSchema = z.object({ tasks: z.array(taskSchema) });
 // `relatedTo` isn't a promoted column, so it's read from either shape
 // syncBulk hands this: the incoming payload directly (create) or the stored
 // Prisma row, where it only exists nested under `.payload` (update/delete).
-const taskModuleFor = (r) => ((r?.relatedTo ?? r?.payload?.relatedTo) === 'COBR' ? 'cobr' : 'tasks');
+// The COBR workspace owns five registers — Change of Broker itself plus
+// Renewals, Claims, Fixed Deposits and Other Insurance Policies. All five are
+// Task rows and all five are governed by the single existing `cobr`
+// permission-matrix column, so adding them needed no new matrix rows.
+const COBR_WORKSPACE = new Set(['COBR', 'RENEWAL', 'CLAIM', 'FD', 'POLICY']);
+const taskModuleFor = (r) => (COBR_WORKSPACE.has(r?.relatedTo ?? r?.payload?.relatedTo) ? 'cobr' : 'tasks');
 
 // Tasks are private to the two people on them (assigner + assignee) — Admin
 // sees everything; everyone else only sees tasks where they're involved.
