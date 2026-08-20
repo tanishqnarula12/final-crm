@@ -28,6 +28,8 @@ export const isClaim = (t) => t?.relatedTo === REC.CLAIM;
 export const isFd = (t) => t?.relatedTo === REC.FD;
 export const isPolicy = (t) => t?.relatedTo === REC.POLICY;
 
+// Other Insurance Policies keeps the original list — only Renewal/Claim's
+// Insurance Type was asked to change (see RENEWAL_CLAIM_INSURANCE_TYPES).
 export const INSURANCE_TYPES = [
   'Term Life',
   'Health / Medical',
@@ -40,6 +42,29 @@ export const INSURANCE_TYPES = [
   'ULIP',
   'Other',
 ];
+
+// Renewal + Claim's Insurance Type list — Endowment/Savings and ULIP dropped,
+// Top Up / Marine / Indemnity / Fire added.
+export const RENEWAL_CLAIM_INSURANCE_TYPES = [
+  'Term Life',
+  'Health / Medical',
+  'Top Up',
+  'Personal Accident',
+  'Critical Illness',
+  'Motor',
+  'Home',
+  'Fire',
+  'Marine',
+  'Travel',
+  'Indemnity',
+  'Other',
+];
+
+// Motor's cascading Sub Type: pick the vehicle first, then — once that's
+// chosen — the coverage. The second dropdown only renders once the first has
+// a value.
+export const MOTOR_VEHICLE_TYPES = ['Car', 'Bike'];
+export const MOTOR_COVERAGE_TYPES = ['First Party', 'Third Party'];
 
 export const CLAIM_TYPES = ['Death', 'Health / Hospitalisation', 'Accident', 'Critical Illness', 'Maturity', 'Motor', 'Other'];
 
@@ -89,6 +114,22 @@ export function renewalAttachmentsUnlocked(stage) {
 }
 
 export const RENEWAL_TERMINAL = new Set(['Policy Document Shared', 'Close Lost']);
+
+// stage -> the ONLY stages reachable from it — enforces the renewal funnel as
+// a strictly sequential flow (each stage becomes available only once the one
+// before it is complete) instead of a free jump-to-anything picker. Close
+// Lost stays reachable from every working stage (the deal can fall through
+// at any point before the policy is actually done), but drops away once the
+// renewal is genuinely finished (Policy Document Shared) or already lost.
+export const RENEWAL_ACTIONS = {
+  Qualified: ['WhatsApp Link Sent', 'Close Lost'],
+  'WhatsApp Link Sent': ['Call Done', 'Close Lost'],
+  'Call Done': ['Payment Done', 'Close Lost'],
+  'Payment Done': ['Policy Document Upload', 'Close Lost'],
+  'Policy Document Upload': ['Policy Document Shared', 'Close Lost'],
+  'Policy Document Shared': [],
+  'Close Lost': [],
+};
 
 // Up Sell / Cross Sell ride alongside the stage rather than replacing it — an
 // upsell is something that happens DURING a renewal, so a record can sit at

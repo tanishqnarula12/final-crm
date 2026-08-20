@@ -135,19 +135,19 @@ export default function RecordTable({
                     that mismatch is what made the header row look misaligned
                     against the data rows. */}
                 <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800">
-                  <th className="px-4 py-3 w-12 whitespace-nowrap">S.No.</th>
+                  <th className="px-4 py-3 w-12 whitespace-nowrap align-middle">S.No.</th>
                   {columns.map((c) => (
                     <th
                       key={c.key}
                       onClick={() => toggleSort(c.key)}
-                      className={`px-4 py-3 cursor-pointer select-none whitespace-nowrap hover:text-slate-600 dark:hover:text-slate-300 transition-colors ${c.align === 'right' ? 'text-right' : ''}`}
+                      className={`px-4 py-3 cursor-pointer select-none whitespace-nowrap align-middle hover:text-slate-600 dark:hover:text-slate-300 transition-colors ${c.align === 'right' ? 'text-right' : ''}`}
                     >
                       {c.label}<SortIcon colKey={c.key} />
                     </th>
                   ))}
                   <th
                     onClick={() => toggleSort('stage')}
-                    className="px-4 py-3 cursor-pointer select-none whitespace-nowrap hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                    className="px-4 py-3 cursor-pointer select-none whitespace-nowrap align-middle hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                   >
                     Status<SortIcon colKey="stage" />
                   </th>
@@ -160,14 +160,19 @@ export default function RecordTable({
                     onClick={() => onOpen && onOpen(r)}
                     className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors cursor-pointer"
                   >
-                    <td className="px-4 py-3 text-xs text-slate-400 tabular-nums whitespace-nowrap">{i + 1}</td>
+                    <td className="px-4 py-3 text-xs text-slate-400 tabular-nums whitespace-nowrap align-middle">{i + 1}</td>
                     {columns.map((c) => (
-                      <td key={c.key} className={`px-4 py-3 text-xs whitespace-nowrap ${c.align === 'right' ? 'text-right tabular-nums' : ''} ${c.cls || 'text-slate-600 dark:text-slate-300'}`}>
+                      <td key={c.key} className={`px-4 py-3 text-xs whitespace-nowrap align-middle ${c.align === 'right' ? 'text-right tabular-nums' : ''} ${c.cls || 'text-slate-600 dark:text-slate-300'}`}>
                         {c.render ? c.render(r) : (r[c.key] || '—')}
                       </td>
                     ))}
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ring-1 rounded-full ${stageBadgeCls(type, r.stage)}`}>
+                    {/* leading-none on the badge removes its own inherited line-height
+                        from the height calculation — without it, the pill's line box
+                        can end up taller than the plain-text cells beside it, which
+                        visually reads as the badge sitting a couple pixels lower even
+                        though the <td> itself is vertically centered like the rest. */}
+                    <td className="px-4 py-3 whitespace-nowrap align-middle">
+                      <span className={`inline-flex items-center leading-none px-2 py-1 text-[10px] font-bold uppercase tracking-wider ring-1 rounded-full ${stageBadgeCls(type, r.stage)}`}>
                         {r.stage || '—'}
                       </span>
                     </td>

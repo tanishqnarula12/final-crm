@@ -315,16 +315,16 @@ function CobrTab({ cobrTasks, onOpenCobr }) {
             <table className="w-full text-left min-w-[980px]">
               <thead>
                 <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800">
-                  <th className="px-4 py-3 whitespace-nowrap">Group Leader</th>
-                  <th className="px-4 py-3 whitespace-nowrap">Applicant</th>
-                  <th className="px-4 py-3 whitespace-nowrap">PAN</th>
-                  <th className="px-4 py-3 whitespace-nowrap">Type</th>
-                  <th className="px-4 py-3 whitespace-nowrap">Assigned To</th>
-                  <th className="px-4 py-3 whitespace-nowrap">Stage</th>
-                  <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
-                  <th className="px-4 py-3 text-right text-emerald-500 whitespace-nowrap">Done</th>
-                  <th className="px-4 py-3 text-right text-rose-500 whitespace-nowrap">Rejected</th>
-                  <th className="px-4 py-3 text-right text-slate-400 whitespace-nowrap">Pending</th>
+                  <th className="px-4 py-3 whitespace-nowrap align-middle">Group Leader</th>
+                  <th className="px-4 py-3 whitespace-nowrap align-middle">Applicant</th>
+                  <th className="px-4 py-3 whitespace-nowrap align-middle">PAN</th>
+                  <th className="px-4 py-3 whitespace-nowrap align-middle">Type</th>
+                  <th className="px-4 py-3 whitespace-nowrap align-middle">Assigned To</th>
+                  <th className="px-4 py-3 whitespace-nowrap align-middle">Stage</th>
+                  <th className="px-4 py-3 text-right whitespace-nowrap align-middle">Total</th>
+                  <th className="px-4 py-3 text-right text-emerald-500 whitespace-nowrap align-middle">Done</th>
+                  <th className="px-4 py-3 text-right text-rose-500 whitespace-nowrap align-middle">Rejected</th>
+                  <th className="px-4 py-3 text-right text-slate-400 whitespace-nowrap align-middle">Pending</th>
                 </tr>
               </thead>
               <tbody>
@@ -337,20 +337,20 @@ function CobrTab({ cobrTasks, onOpenCobr }) {
                       onClick={() => onOpenCobr(t, true)}
                       className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors cursor-pointer"
                     >
-                      <td className="px-4 py-3 text-xs font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">{t.groupLeader || '—'}</td>
-                      <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">{t.applicant || '—'}</td>
-                      <td className="px-4 py-3 text-xs font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap">{t.pan || '—'}</td>
-                      <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">{t.cobrType || '—'}</td>
-                      <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">{teamName(t.assignedTo) || '—'}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ring-1 rounded-full ${STAGE_THEME[t.stage] || 'bg-slate-100 text-slate-600 ring-slate-200/60 dark:bg-slate-800 dark:text-slate-400'}`}>
+                      <td className="px-4 py-3 text-xs font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap align-middle">{t.groupLeader || '—'}</td>
+                      <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap align-middle">{t.applicant || '—'}</td>
+                      <td className="px-4 py-3 text-xs font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap align-middle">{t.pan || '—'}</td>
+                      <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap align-middle">{t.cobrType || '—'}</td>
+                      <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap align-middle">{teamName(t.assignedTo) || '—'}</td>
+                      <td className="px-4 py-3 whitespace-nowrap align-middle">
+                        <span className={`inline-flex items-center leading-none px-2 py-1 text-[10px] font-bold uppercase tracking-wider ring-1 rounded-full ${STAGE_THEME[t.stage] || 'bg-slate-100 text-slate-600 ring-slate-200/60 dark:bg-slate-800 dark:text-slate-400'}`}>
                           {t.stage || 'Open'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs font-bold text-slate-800 dark:text-slate-200 tabular-nums text-right">{fmtINR(totals.total)}</td>
-                      <td className="px-4 py-3 text-xs font-semibold tabular-nums text-right text-emerald-600 dark:text-emerald-400">{completed ? fmtINR(totals.done) : '—'}</td>
-                      <td className="px-4 py-3 text-xs font-semibold tabular-nums text-right text-rose-600 dark:text-rose-400">{completed ? fmtINR(totals.rejected) : '—'}</td>
-                      <td className="px-4 py-3 text-xs font-semibold tabular-nums text-right text-slate-500 dark:text-slate-400">{completed ? fmtINR(totals.pending) : '—'}</td>
+                      <td className="px-4 py-3 text-xs font-bold text-slate-800 dark:text-slate-200 tabular-nums text-right align-middle">{fmtINR(totals.total)}</td>
+                      <td className="px-4 py-3 text-xs font-semibold tabular-nums text-right text-emerald-600 dark:text-emerald-400 align-middle">{completed ? fmtINR(totals.done) : '—'}</td>
+                      <td className="px-4 py-3 text-xs font-semibold tabular-nums text-right text-rose-600 dark:text-rose-400 align-middle">{completed ? fmtINR(totals.rejected) : '—'}</td>
+                      <td className="px-4 py-3 text-xs font-semibold tabular-nums text-right text-slate-500 dark:text-slate-400 align-middle">{completed ? fmtINR(totals.pending) : '—'}</td>
                     </tr>
                   );
                 })}

@@ -14,7 +14,8 @@ import AttachmentField from './AttachmentField';
 import { RecordModal, AssignmentFields, LogTimeline, StageHistory } from './RecordShell';
 import { btnPrimary, btnGhost } from '../UI';
 import {
-  REC, CLAIM_STAGES, CLAIM_TYPES, INSURANCE_TYPES, claimActionsFor, claimIsClosed,
+  REC, CLAIM_STAGES, CLAIM_TYPES, RENEWAL_CLAIM_INSURANCE_TYPES,
+  MOTOR_VEHICLE_TYPES, MOTOR_COVERAGE_TYPES, claimActionsFor, claimIsClosed,
   claimSettledTotal, makeHistoryEntry, recordTaskName, stageBadgeCls, STAGE_BTN_TONE,
 } from '../../utils/cobrModules';
 import { getCurrentUser } from '../../utils/auth';
@@ -35,6 +36,8 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
     applicant: record?.applicant || '',
     pan: record?.pan || '',
     insuranceType: record?.insuranceType || '',
+    motorVehicleType: record?.motorVehicleType || '',
+    motorCoverageType: record?.motorCoverageType || '',
     policyName: record?.policyName || '',
     policyNumber: record?.policyNumber || '',
     sumAssured: record?.sumAssured || '',
@@ -102,6 +105,7 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
 
   const canSave = useMemo(() => {
     if (!f.groupLeader || !f.applicant || !f.insuranceType || !f.claimType || !f.claimAmount || !f.assignedTo) return false;
+    if (f.insuranceType === 'Motor' && (!f.motorVehicleType || !f.motorCoverageType)) return false;
     return true;
   }, [f]);
 
@@ -168,12 +172,45 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
 
         <Field label="Insurance Type *">
           <fieldset disabled={!canEditDetails} className="contents">
-            <CoolSelect value={f.insuranceType} onChange={(e) => set({ insuranceType: e.target.value })} className={selectCls}>
+            <CoolSelect
+              value={f.insuranceType}
+              onChange={(e) => {
+                const next = e.target.value;
+                set(next === 'Motor' ? { insuranceType: next } : { insuranceType: next, motorVehicleType: '', motorCoverageType: '' });
+              }}
+              className={selectCls}
+            >
               <option value="">Select…</option>
-              {INSURANCE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              {RENEWAL_CLAIM_INSURANCE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
             </CoolSelect>
           </fieldset>
         </Field>
+
+        {f.insuranceType === 'Motor' && (
+          <Field label="Sub Type *" hint="Vehicle">
+            <fieldset disabled={!canEditDetails} className="contents">
+              <CoolSelect
+                value={f.motorVehicleType}
+                onChange={(e) => set({ motorVehicleType: e.target.value, motorCoverageType: '' })}
+                className={selectCls}
+              >
+                <option value="">Select…</option>
+                {MOTOR_VEHICLE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </CoolSelect>
+            </fieldset>
+          </Field>
+        )}
+
+        {f.insuranceType === 'Motor' && f.motorVehicleType && (
+          <Field label="Sub Type *" hint="Coverage">
+            <fieldset disabled={!canEditDetails} className="contents">
+              <CoolSelect value={f.motorCoverageType} onChange={(e) => set({ motorCoverageType: e.target.value })} className={selectCls}>
+                <option value="">Select…</option>
+                {MOTOR_COVERAGE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </CoolSelect>
+            </fieldset>
+          </Field>
+        )}
 
         <Field label="Policy Name">
           <fieldset disabled={!canEditDetails} className="contents">

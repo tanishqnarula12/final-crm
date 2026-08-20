@@ -114,9 +114,15 @@ export function AssignmentFields({ assignedTo, subPersons = [], dueDate, dueLabe
 // vocabulary with no branching, so every other stage is clickable directly —
 // this replaces what used to be a plain dropdown, not the underlying rule
 // that any stage can be picked.
-export function StagePicker({ type, stage, onSelect, disabled = false }) {
+// `actions`, when given, is a { stage: [reachableStage, ...] } map — the
+// picker then only offers what's reachable from the CURRENT stage, enforcing
+// a sequential, no-skipping flow (Renewal's funnel). Without it, every other
+// stage in the vocabulary stays clickable (FD/Policy — simple or status-like
+// vocabularies where any-to-any doesn't need gating).
+export function StagePicker({ type, stage, onSelect, disabled = false, actions }) {
   const stages = STAGE_SETS[type]?.stages || [];
-  const options = stages.filter((s) => s !== stage);
+  const options = actions ? (actions[stage] || []) : stages.filter((s) => s !== stage);
+  const sequential = !!actions;
 
   return (
     <div>
@@ -130,10 +136,10 @@ export function StagePicker({ type, stage, onSelect, disabled = false }) {
       {disabled ? (
         <p className="text-[11px] text-slate-400 italic">You do not have permission to change the stage.</p>
       ) : options.length === 0 ? (
-        <p className="text-[11px] text-slate-400 italic">No other stages available.</p>
+        <p className="text-[11px] text-slate-400 italic">{sequential ? 'This stage is final — nothing further to advance.' : 'No other stages available.'}</p>
       ) : (
         <>
-          <p className="text-[11px] text-slate-400 mb-2">Update stage</p>
+          <p className="text-[11px] text-slate-400 mb-2">{sequential ? "What's next?" : 'Update stage'}</p>
           <div className="flex flex-wrap gap-2">
             {options.map((s) => {
               const tone = STAGE_SETS[type]?.tone?.[s] || 'slate';
