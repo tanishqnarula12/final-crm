@@ -697,11 +697,18 @@ export default function App() {
 
   // The COBR workspace's other registers (Renewals / Claims / Fixed Deposits /
   // Other Insurance Policies) keep their editors inside CobrView; they only
-  // need the same Task-row save the rest of the workspace uses.
-  const handleSaveWorkspaceRecord = (rec) => {
-    const allTasks = loadTasks();
-    const exists = allTasks.some(t => t.id === rec.id);
-    saveTasks(exists ? allTasks.map(t => (t.id === rec.id ? rec : t)) : [rec, ...allTasks]);
+  // need the same Task-row save the rest of the workspace uses. Usually a
+  // single record — but Other Insurance Policies passes an array when a
+  // "Policy Continued" outcome also spawns a follow-up Task, so both land in
+  // one saveTasks() call instead of two racing network round-trips.
+  const handleSaveWorkspaceRecord = (recOrRecs) => {
+    const recs = Array.isArray(recOrRecs) ? recOrRecs : [recOrRecs];
+    let allTasks = loadTasks();
+    recs.forEach((rec) => {
+      const exists = allTasks.some(t => t.id === rec.id);
+      allTasks = exists ? allTasks.map(t => (t.id === rec.id ? rec : t)) : [rec, ...allTasks];
+    });
+    saveTasks(allTasks);
     setTasksChangeCounter(prev => prev + 1);
   };
 

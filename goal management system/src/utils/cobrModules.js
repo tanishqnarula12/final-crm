@@ -262,21 +262,66 @@ export const FD_TERMINAL = new Set(['FD Renewed by Client', 'Invested With Us'])
 
 // ---------------------------------------------------------------------------
 // OTHER INSURANCE POLICIES — a register of policies held outside the
-// renewal/claim flows.
+// renewal/claim flows. Same action-button + transition-map architecture as
+// Claims: the working stages progress one after another, then "Waiting For
+// Update" branches into whichever of the three outcomes actually happened.
 // ---------------------------------------------------------------------------
-export const POLICY_STAGES = ['Qualified', 'Active', 'Due for Renewal', 'Lapsed', 'Matured', 'Surrendered', 'Closed'];
+export const POLICY_STAGES = [
+  'Qualified',
+  'Policy Working Done',
+  'Shared With Client',
+  'Waiting For Update',
+  'Policy Surrendered',
+  'Policy Matured',
+  'Policy Continued',
+];
 
 export const POLICY_STAGE_TONE = {
   Qualified: 'slate',
-  Active: 'emerald',
-  'Due for Renewal': 'amber',
-  Lapsed: 'rose',
-  Matured: 'blue',
-  Surrendered: 'violet',
-  Closed: 'slate',
+  'Policy Working Done': 'blue',
+  'Shared With Client': 'blue',
+  'Waiting For Update': 'amber',
+  'Policy Surrendered': 'rose',
+  'Policy Matured': 'violet',
+  'Policy Continued': 'emerald',
 };
 
-export const POLICY_TERMINAL = new Set(['Matured', 'Surrendered', 'Closed']);
+export const POLICY_TERMINAL = new Set(['Policy Surrendered', 'Policy Matured', 'Policy Continued']);
+export const policyIsClosed = (stage) => POLICY_TERMINAL.has(stage);
+
+// stage -> the actions available from it. The three outcomes off "Waiting For
+// Update" each capture something different:
+//  - `outcomeFlow`: asks "Amount Received?" (Yes/No) first, THEN reveals
+//    either an Amount field (Yes) or a Reason field (No) — Policy Surrendered
+//    and Policy Matured both work this way, since either can come with or
+//    without money changing hands.
+//  - `reminderFlow`: asks for a Next Reminder Date instead — Policy Continued
+//    means there's nothing to settle, just a future check-in to schedule
+//    (which auto-creates a follow-up Task on confirm — see OtherPolicyModal).
+// The plain forward hops (Qualified -> ... -> Waiting For Update) need no
+// mandatory reason, unlike Renewal's every-step convention — there's nothing
+// decision-worthy to record until an actual outcome happens.
+export const POLICY_ACTIONS = {
+  Qualified: [
+    { key: 'working', label: 'Policy Working Done', to: 'Policy Working Done', tone: 'blue' },
+  ],
+  'Policy Working Done': [
+    { key: 'shared', label: 'Shared With Client', to: 'Shared With Client', tone: 'blue' },
+  ],
+  'Shared With Client': [
+    { key: 'waiting', label: 'Waiting For Update', to: 'Waiting For Update', tone: 'amber' },
+  ],
+  'Waiting For Update': [
+    { key: 'surrendered', label: 'Policy Surrendered', to: 'Policy Surrendered', tone: 'rose', outcomeFlow: true, closes: true },
+    { key: 'matured', label: 'Policy Matured', to: 'Policy Matured', tone: 'violet', outcomeFlow: true, closes: true },
+    { key: 'continued', label: 'Policy Continued', to: 'Policy Continued', tone: 'emerald', reminderFlow: true, closes: true },
+  ],
+  'Policy Surrendered': [],
+  'Policy Matured': [],
+  'Policy Continued': [],
+};
+
+export const policyActionsFor = (stage) => POLICY_ACTIONS[stage] || [];
 
 // ---------------------------------------------------------------------------
 // Shared helpers

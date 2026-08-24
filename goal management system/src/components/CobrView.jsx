@@ -269,15 +269,31 @@ export default function CobrView({
           dateField={{ key: 'dueDate', label: 'Next due' }}
           onOpen={(r) => setEditor({ type: REC.POLICY, record: r })}
           emptyText="No other policies recorded yet."
-          minWidth={1200}
+          minWidth={1360}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
             { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
             { key: 'insuranceType', label: 'Insurance Type' },
-            { key: 'companyName', label: 'Company' },
-            { key: 'policyNumber', label: 'Policy No.' },
-            { key: 'premiumAmount', label: 'Premium', align: 'right', render: (r) => money(r.premiumAmount), sortValue: (r) => Number(r.premiumAmount) || 0 },
-            { key: 'dueDate', label: 'Next Due', render: (r) => d(r.dueDate) },
+            { key: 'premiumAmount', label: 'Premium Amount', align: 'right', render: (r) => money(r.premiumAmount), sortValue: (r) => Number(r.premiumAmount) || 0 },
+            { key: 'dueDate', label: 'Due Date', render: (r) => d(r.dueDate) },
+            {
+              key: 'outcome',
+              label: 'Outcome',
+              render: (r) => {
+                if (!r.outcome) return '—';
+                const cls = r.outcome === 'Amount Received' ? 'text-emerald-600 dark:text-emerald-400'
+                  : r.outcome === 'Amount Not Received' ? 'text-rose-600 dark:text-rose-400'
+                    : 'text-blue-600 dark:text-blue-400';
+                return <span className={`font-bold ${cls}`}>{r.outcome}</span>;
+              },
+            },
+            {
+              key: 'amountReceived',
+              label: 'Amount Received',
+              align: 'right',
+              render: (r) => (r.outcome === 'Amount Received' ? <span className="font-bold text-emerald-600 dark:text-emerald-400">{money(r.amountReceived)}</span> : '—'),
+              sortValue: (r) => (r.outcome === 'Amount Received' ? Number(r.amountReceived) || 0 : 0),
+            },
           ]}
         />
       )}
