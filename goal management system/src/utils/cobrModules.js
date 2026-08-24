@@ -10,7 +10,11 @@
 //
 // Only the per-type payload fields and the dedicated UI differ.
 
+import { useState } from 'react';
 import { uid } from './calc';
+import { loadTasks } from './tasks';
+import { canDo } from './permissions';
+import { getCurrentUser } from './auth';
 
 export const REC = {
   COBR: 'COBR',
@@ -66,7 +70,7 @@ export const RENEWAL_CLAIM_INSURANCE_TYPES = [
 export const MOTOR_VEHICLE_TYPES = ['Car', 'Bike'];
 export const MOTOR_COVERAGE_TYPES = ['First Party', 'Third Party'];
 
-export const CLAIM_TYPES = ['Death', 'Health / Hospitalisation', 'Accident', 'Critical Illness', 'Maturity', 'Motor', 'Other'];
+export const CLAIM_TYPES = ['Reimbursement', 'Day Care', 'OPD', 'Cashless', 'Hospitalization', 'Health Checkup', 'Travel', 'Marine', 'Motor', 'Fire'];
 
 // ---------------------------------------------------------------------------
 // Stage tones — one shared vocabulary so a badge looks the same everywhere.
@@ -195,9 +199,15 @@ export const CLAIM_ACTIONS = {
   'Additional Document Required': [
     { key: 'docs-submitted', label: 'Documents Submitted', to: 'Documents Submitted', tone: 'blue', requiresAttachment: true },
   ],
+  // Settlement Type. Full Settlement needs no typed amount — it's always the
+  // exact amount still owed (claimAmount minus whatever's already been
+  // settled by an earlier partial round), computed and shown read-only
+  // rather than asking the user to retype a number that's already known.
+  // Partial keeps the manual amount entry, since only the person processing
+  // it knows what was actually received.
   'Claim Approved': [
-    { key: 'full', label: 'Full Settlement', to: 'Claim Settled', tone: 'emerald', requiresAmount: true, amountLabel: 'Settlement amount received', closes: true },
-    { key: 'partial', label: 'Partial Settlement', to: 'Claim Submitted', tone: 'amber', requiresAmount: true, amountLabel: 'Amount received in this part-settlement' },
+    { key: 'full', label: 'Full Settlement', to: 'Claim Settled', tone: 'emerald', autoAmount: true, amountLabel: 'Settlement Amount', closes: true },
+    { key: 'partial', label: 'Partial Settlement', to: 'Claim Submitted', tone: 'amber', requiresAmount: true, amountLabel: 'Partial Settlement Amount' },
   ],
   'Claim Denied': [
     { key: 'escalate', label: 'Escalate to Ombudsman', to: 'Escalate to Ombudsman', tone: 'violet' },
@@ -220,6 +230,20 @@ export const claimActionsFor = (stage) => CLAIM_ACTIONS[stage] || [];
 // Cumulative amount actually received across every (part-)settlement logged.
 export function claimSettledTotal(history = []) {
   return (history || []).reduce((sum, h) => sum + (Number(h.settlementAmount) || 0), 0);
+}
+
+// The settlement column's display: green once the claim is genuinely fully
+// settled (Claim Settled and the running total covers the claim amount),
+// orange once SOME money has come in but it's still in progress, or nothing
+// if no settlement has happened yet. Shared by the Claim table column and
+// the in-modal settlement display so both agree on what "full" vs "partial"
+// means, rather than each guessing independently.
+export function claimSettlementDisplay(claim) {
+  const settled = claimSettledTotal(claim?.stageHistory);
+  const claimAmount = Number(claim?.claimAmount) || 0;
+  if (settled <= 0) return { amount: 0, kind: 'none' };
+  if (claim?.stage === 'Claim Settled' && settled >= claimAmount) return { amount: settled, kind: 'full' };
+  return { amount: settled, kind: 'partial' };
 }
 
 // ---------------------------------------------------------------------------
@@ -303,3 +327,98 @@ export const recordTaskName = (type, applicant, extra) => {
   const label = { [REC.RENEWAL]: 'Renewal', [REC.CLAIM]: 'Claim', [REC.FD]: 'Fixed Deposit', [REC.POLICY]: 'Policy' }[type] || 'Record';
   return [label, applicant || 'Unknown', extra].filter(Boolean).join(' - ');
 };
+
+// ---------------------------------------------------------------------------
+// Documents module integration — every attachment uploaded inside a Renewal /
+// Claim / FD / Other-Policy record surfaces in the client's Documents tab and
+// the app-wide Documents module as an ordinary "Documents"-type entry, same
+// as anything uploaded there directly. The record stays the single source of
+// truth (no copy is written anywhere) — this only READS it into the shape
+// DocumentsView.jsx / ClientProfile.jsx already expect (`type: 'custom'`, the
+// same bucket a manually-uploaded document lands in).
+const COBR_RECORD_LABEL = {
+  [REC.RENEWAL]: (r) => `Renewal — ${r.insuranceType || 'Insurance'}${r.policyNumber ? ` (${r.policyNumber})` : ''}`,
+  [REC.CLAIM]: (r) => `Claim — ${r.claimType || r.insuranceType || 'Insurance'}${r.policyNumber ? ` (${r.policyNumber})` : ''}`,
+  [REC.FD]: (r) => `Fixed Deposit — ${r.bankName || 'Bank'}`,
+  [REC.POLICY]: (r) => `Policy — ${r.insuranceType || 'Insurance'}${r.companyName ? ` (${r.companyName})` : ''}`,
+};
+export function cobrWorkspaceDocuments(clients) {
+  const workspaceTasks = loadTasks().filter((t) => isRenewal(t) || isClaim(t) || isFd(t) || isPolicy(t));
+  const docs = [];
+  workspaceTasks.forEach((r) => {
+    const client = clients.find((c) => c.id === r.groupLeaderId) || clients.find((c) => c.name === r.groupLeader);
+    if (!client) return;
+    const recordLabel = (COBR_RECORD_LABEL[r.relatedTo] || (() => 'Record'))(r);
+    (r.attachments || []).forEach((item) => {
+      docs.push({
+        id: `cobr-${r.id}-${item.id}`,
+        type: 'custom',
+        client,
+        title: item.name || item.fileName || 'Untitled Document',
+        date: item.date || r.updatedAt || '',
+        isLegacy: false,
+        attachment: item,
+        sourceLabel: `${recordLabel} · ${r.applicant || ''}`.trim(),
+        // Lives on the Renewal/Claim/FD/Policy record, not clientDetails
+        // .attachments — deleting/renaming it belongs to that record's own
+        // editor, not the Documents view.
+        deletable: false,
+      });
+    });
+  });
+  return docs;
+}
+
+// ---------------------------------------------------------------------------
+// Shared edit-gate + change-logging helpers for every record editor in the
+// COBR workspace (Renewal/Claim/FD/Policy — COBR itself is unchanged).
+// ---------------------------------------------------------------------------
+
+// Every record opens read-only ("View Mode") once it exists — only the
+// assigner (Assigned By) may unlock full editing (the "Edit" button);
+// Assigned By/Assigned To may change the Stage regardless, since that's a
+// separate right from editing the record's other fields.
+export function useEditGate(module, record, isEdit) {
+  const [isEditingMode, setIsEditingMode] = useState(!isEdit);
+  const canEditThis = !isEdit || canDo(module, 'editDetails', record);
+  const canChangeStageThis = !isEdit || canDo(module, 'changeStage', record);
+  const fieldsUnlocked = isEditingMode && canEditThis;
+  return { isEditingMode, setIsEditingMode, canEditThis, canChangeStageThis, fieldsUnlocked };
+}
+
+// Diffs `original` (the record as loaded) against `updated` (local form
+// state) over a curated set of fields, producing one human-readable
+// "Changed X: old -> new" line per changed field — e.g. "Changed Premium
+// Amount: ₹50,000 -> ₹55,000". `fieldDefs` is [{ key, label, format? }];
+// `format` defaults to showing the raw value (or "—" for empty).
+export function buildFieldChangeLog(original, updated, fieldDefs) {
+  const lines = [];
+  for (const { key, label, format } of fieldDefs) {
+    const oldV = original?.[key];
+    const newV = updated?.[key];
+    const oldNorm = oldV == null ? '' : oldV;
+    const newNorm = newV == null ? '' : newV;
+    if (String(oldNorm) === String(newNorm)) continue;
+    const fmt = format || ((v) => (v === '' || v == null ? '—' : String(v)));
+    lines.push(`Changed ${label}: ${fmt(oldNorm)} → ${fmt(newNorm)}`);
+  }
+  return lines;
+}
+
+// Attachments are an array, not a scalar — diffed separately by id so an
+// add/remove reads as its own log line instead of a raw array dump.
+export function diffAttachmentLog(original = [], updated = []) {
+  const before = new Map((original || []).map((a) => [a.id, a]));
+  const after = new Map((updated || []).map((a) => [a.id, a]));
+  const lines = [];
+  for (const [id, a] of after) if (!before.has(id)) lines.push(`Attachment added: ${a.fileName || a.name || 'file'}`);
+  for (const [id, a] of before) if (!after.has(id)) lines.push(`Attachment removed: ${a.fileName || a.name || 'file'}`);
+  return lines;
+}
+
+// Turns a list of change-log lines into ready-to-append comment entries.
+export function toLogComments(lines) {
+  const now = new Date().toISOString();
+  const by = getCurrentUser()?.name || 'System';
+  return lines.map((text) => ({ at: now, by, text }));
+}

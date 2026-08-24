@@ -150,12 +150,15 @@ export function can(module, action, record = null, ctx = {}) {
   const scope = maxScope(roles, module, action);
   if (scope === 'NONE') return false;
 
-  if (['tasks', 'cobr', 'queries'].includes(module) && ['editDetails', 'changeStage', 'editLog'].includes(action) && record) {
-    // Queries: this two-party rule is a hard confidentiality requirement, even
-    // for a role matrix-configured to ALL — only the raiser edits, only the
-    // recipient moves the stage. Tasks/COBR keep the ALL-bypass (Internal
-    // Manager's oversight exception). Mirrors the server engine exactly.
-    if (scope === 'ALL' && module !== 'queries') return true;
+  // Mirrors server/src/lib/permissions.js's TASK_SHAPED/STRICT_TWO_PARTY split.
+  const TASK_SHAPED = ['tasks', 'cobr', 'queries', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies'];
+  const STRICT_TWO_PARTY = ['queries', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies'];
+  if (TASK_SHAPED.includes(module) && ['editDetails', 'changeStage', 'editLog'].includes(action) && record) {
+    // Queries + the four other COBR-workspace registers: a hard requirement,
+    // even for a role matrix-configured to ALL — only the assigner edits,
+    // only the assigner/assignee move the stage, no carve-out. Tasks/COBR
+    // keep the ALL-bypass (Internal Manager's oversight exception).
+    if (scope === 'ALL' && !STRICT_TWO_PARTY.includes(module)) return true;
     const isAssigner = record.departmentOwner === user.id;
     const isAssignee = record.assignedTo === user.id;
     const isSubPerson = taskSubPersons(record).includes(user.id);

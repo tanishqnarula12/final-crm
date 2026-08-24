@@ -29,6 +29,12 @@ import { logActivity, diffFields } from './activityLog.js';
 const TASK_LOG_KEYS = new Set(['comments', 'stageRemark', 'cobrEntries', 'remarks']);
 const TASK_STAGE_KEYS = new Set(['stage']);
 
+// Modules whose changes get split into details/stage/log (see the UPDATE
+// branch below) instead of a single flat edit permission. The COBR
+// workspace's Renewals/Claims/Fixed Deposits/Other Insurance Policies use
+// the identical assigner/assignee shape as Tasks/COBR/Queries.
+const TASK_SHAPED_MODULES = new Set(['tasks', 'cobr', 'queries', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies']);
+
 // Keys excluded from the UPDATE field-diff (owner/audit noise + big arrays that
 // have their own in-payload logs). Assignment/stage get their own log entries.
 const NOISE_KEYS = new Set([
@@ -135,7 +141,7 @@ export async function syncBulk(prisma, spec) {
 
       const mod = moduleFor(existing);
       let allowed;
-      if (mod === 'tasks' || mod === 'cobr' || mod === 'queries') {
+      if (TASK_SHAPED_MODULES.has(mod)) {
         // Split the change into details / stage / log and require the matching
         // permission for each part (assigner edits details; assignee may change
         // stage forward + add log). COBR rows are Tasks (relatedTo: 'COBR')

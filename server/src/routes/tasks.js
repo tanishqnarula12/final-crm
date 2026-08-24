@@ -30,8 +30,16 @@ const bulkSchema = z.object({ tasks: z.array(taskSchema) });
 // Renewals, Claims, Fixed Deposits and Other Insurance Policies. All five are
 // Task rows and all five are governed by the single existing `cobr`
 // permission-matrix column, so adding them needed no new matrix rows.
-const COBR_WORKSPACE = new Set(['COBR', 'RENEWAL', 'CLAIM', 'FD', 'POLICY']);
-const taskModuleFor = (r) => (COBR_WORKSPACE.has(r?.relatedTo ?? r?.payload?.relatedTo) ? 'cobr' : 'tasks');
+// The COBR workspace's other four registers each got their own matrix column
+// (2026-08-21) — only COBR itself still shares the single 'cobr' column.
+const COBR_WORKSPACE_MODULE = {
+  COBR: 'cobr',
+  RENEWAL: 'renewals',
+  CLAIM: 'claims',
+  FD: 'fixedDeposits',
+  POLICY: 'otherInsurancePolicies',
+};
+const taskModuleFor = (r) => COBR_WORKSPACE_MODULE[r?.relatedTo ?? r?.payload?.relatedTo] || 'tasks';
 
 // Tasks are private to the two people on them (assigner + assignee) — Admin
 // sees everything; everyone else only sees tasks where they're involved.

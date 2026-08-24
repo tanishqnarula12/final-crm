@@ -5,27 +5,52 @@
 // strictly sequential (RENEWAL_ACTIONS) — the picker only ever offers the
 // next stage (+ Close Lost), so a stage becomes available only once the one
 // before it is done. Each transition captures its own reason and is appended
-// immediately to an immutable stageHistory (mirroring Claim's pending/confirm
-// pattern) — collapsing several clicks into one end-of-session diff would
-// silently discard every intermediate step's reason.
+// immediately to comments (mirroring Claim's pending/confirm pattern) —
+// collapsing several clicks into one end-of-session diff would silently
+// discard every intermediate step's reason.
+//
+// Opens in View Mode once created — only the assigner (Assigned By) can
+// unlock full editing via the Edit button; Assigned By/Assigned To may still
+// change the Stage regardless (a separate right). Every edited field is
+// auto-logged into Comments & Logs as "Changed X: old -> new" on Save.
 import React, { useState, useMemo } from 'react';
 import { TrendingUp, Repeat, Check } from 'lucide-react';
 import { inputCls, selectCls, Field, CoolSelect, btnPrimary, btnGhost } from '../UI';
 import ClientApplicantFields from './ClientApplicantFields';
 import AttachmentField from './AttachmentField';
-import { RecordModal, AssignmentFields, LogTimeline, StageHistory, StagePicker } from './RecordShell';
+import { RecordModal, AssignmentFields, LogTimeline, StagePicker, ViewEditFooter } from './RecordShell';
 import {
   REC, RENEWAL_STAGES, RENEWAL_ACTIONS, RENEWAL_CLAIM_INSURANCE_TYPES,
   MOTOR_VEHICLE_TYPES, MOTOR_COVERAGE_TYPES, renewalAttachmentsUnlocked,
-  makeHistoryEntry, recordTaskName, stageBadgeCls,
+  makeHistoryEntry, recordTaskName,
+  useEditGate, buildFieldChangeLog, diffAttachmentLog, toLogComments,
 } from '../../utils/cobrModules';
 import { getCurrentUser } from '../../utils/auth';
-import { uid } from '../../utils/calc';
-import { canDo } from '../../utils/permissions';
+import { uid, fmtINR } from '../../utils/calc';
+import { teamName } from '../../services/team';
+
+const FIELD_DEFS = [
+  { key: 'insuranceType', label: 'Insurance Type' },
+  { key: 'motorVehicleType', label: 'Sub Type (Vehicle)' },
+  { key: 'motorCoverageType', label: 'Sub Type (Coverage)' },
+  { key: 'policyName', label: 'Policy Name' },
+  { key: 'policyNumber', label: 'Policy Number' },
+  { key: 'sumAssured', label: 'Sum Assured', format: (v) => (v ? fmtINR(Number(v) || 0) : '—') },
+  { key: 'premiumAmount', label: 'Premium Amount', format: (v) => (v ? fmtINR(Number(v) || 0) : '—') },
+  { key: 'dueDate', label: 'Due Date' },
+  { key: 'assignedTo', label: 'Assigned To', format: (v) => teamName(v) || '—' },
+  { key: 'upSell', label: 'Up Sell', format: (v) => (v === 'true' || v === true ? 'Yes' : 'No') },
+  { key: 'upSellAmount', label: 'Up Sell Amount', format: (v) => (v ? fmtINR(Number(v) || 0) : '—') },
+  { key: 'crossSell', label: 'Cross Sell', format: (v) => (v === 'true' || v === true ? 'Yes' : 'No') },
+  { key: 'crossSellCompany', label: 'Cross Sell Company' },
+  { key: 'crossSellPolicy', label: 'Cross Sell Policy' },
+  { key: 'crossSellAmount', label: 'Cross Sell Amount', format: (v) => (v ? fmtINR(Number(v) || 0) : '—') },
+];
 
 export default function RenewalModal({ record, clients = [], onClose, onSave }) {
   const isEdit = !!record;
   const me = getCurrentUser();
+  const { isEditingMode, setIsEditingMode, canEditThis, canChangeStageThis, fieldsUnlocked } = useEditGate('renewals', record, isEdit);
 
   const [f, setF] = useState(() => ({
     groupLeaderId: record?.groupLeaderId || '',
@@ -48,6 +73,7 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
     crossSell: record?.crossSell || false,
     crossSellCompany: record?.crossSellCompany || '',
     crossSellPolicy: record?.crossSellPolicy || '',
+    crossSellAmount: record?.crossSellAmount || '',
   }));
 
   const [stage, setStage] = useState(record?.stage || RENEWAL_STAGES[0]);
@@ -63,8 +89,6 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
 
   const set = (patch) => setF((p) => ({ ...p, ...patch }));
 
-  const canEditDetails = !isEdit || canDo('cobr', 'editDetails', record);
-  const canChangeStage = !isEdit || canDo('cobr', 'changeStage', record);
   const attachUnlocked = renewalAttachmentsUnlocked(stage);
 
   const requestStageChange = (next) => {
@@ -87,7 +111,7 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
     if (!f.groupLeader || !f.applicant || !f.insuranceType || !f.premiumAmount || !f.dueDate || !f.assignedTo) return false;
     if (f.insuranceType === 'Motor' && (!f.motorVehicleType || !f.motorCoverageType)) return false;
     if (f.upSell && !f.upSellAmount) return false;
-    if (f.crossSell && (!f.crossSellCompany || !f.crossSellPolicy)) return false;
+    if (f.crossSell && (!f.crossSellCompany || !f.crossSellPolicy || !f.crossSellAmount)) return false;
     return true;
   }, [f]);
 
@@ -101,6 +125,12 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
     if (!isEdit) {
       cmts = [...cmts, { at: now, by, text: `Renewal record created at stage "${stage}".` }];
       hist = [...hist, makeHistoryEntry({ stage, action: stage, note: 'Record created', by })];
+    } else if (isEditingMode) {
+      const changeLines = [
+        ...buildFieldChangeLog(record, f, FIELD_DEFS),
+        ...diffAttachmentLog(record?.attachments, f.attachments),
+      ];
+      if (changeLines.length) cmts = [...cmts, ...toLogComments(changeLines)];
     }
 
     onSave({
@@ -119,25 +149,36 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
     });
   };
 
+  const handleCancelEdit = () => {
+    if (!isEdit) { onClose(); return; }
+    setF({
+      groupLeaderId: record.groupLeaderId || '', groupLeader: record.groupLeader || '', applicant: record.applicant || '', pan: record.pan || '',
+      insuranceType: record.insuranceType || '', motorVehicleType: record.motorVehicleType || '', motorCoverageType: record.motorCoverageType || '',
+      policyName: record.policyName || '', policyNumber: record.policyNumber || '', sumAssured: record.sumAssured || '', premiumAmount: record.premiumAmount || '',
+      dueDate: record.dueDate || '', assignedTo: record.assignedTo || '', subPersons: record.subPersons || [], attachments: record.attachments || [],
+      upSell: record.upSell || false, upSellAmount: record.upSellAmount || '', crossSell: record.crossSell || false,
+      crossSellCompany: record.crossSellCompany || '', crossSellPolicy: record.crossSellPolicy || '', crossSellAmount: record.crossSellAmount || '',
+    });
+    setIsEditingMode(false);
+  };
+
   return (
     <RecordModal
       title={isEdit ? `Renewal — ${f.applicant || 'Record'}` : 'New Renewal'}
       subtitle={isEdit ? `${f.policyNumber || 'No policy no.'} · ${f.pan || '—'}` : 'Track a policy renewal through to completion'}
       onClose={onClose}
       footer={(
-        <>
-          <span />
-          <div className="flex gap-2 ml-auto">
-            <button onClick={onClose} className={btnGhost}>Close</button>
-            <button
-              onClick={handleSave}
-              disabled={!canSave}
-              className={btnPrimary + (!canSave ? ' opacity-50 cursor-not-allowed' : '')}
-            >
-              {isEdit ? 'Save Changes' : 'Create Renewal'}
-            </button>
-          </div>
-        </>
+        <ViewEditFooter
+          isEditingMode={isEditingMode}
+          canEditThis={canEditThis}
+          canSave={canSave}
+          stageDirty={isEdit && stage !== record.stage}
+          onEdit={() => setIsEditingMode(true)}
+          onCancel={handleCancelEdit}
+          onSave={handleSave}
+          onClose={onClose}
+          saveLabel={isEdit ? 'Save Changes' : 'Create Renewal'}
+        />
       )}
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -152,7 +193,7 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
         />
 
         <Field label="Insurance Type *">
-          <fieldset disabled={!canEditDetails} className="contents">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
             <CoolSelect
               value={f.insuranceType}
               onChange={(e) => {
@@ -172,7 +213,7 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
 
         {f.insuranceType === 'Motor' && (
           <Field label="Sub Type *" hint="Vehicle">
-            <fieldset disabled={!canEditDetails} className="contents">
+            <fieldset disabled={!fieldsUnlocked} className="contents">
               <CoolSelect
                 value={f.motorVehicleType}
                 onChange={(e) => set({ motorVehicleType: e.target.value, motorCoverageType: '' })}
@@ -187,7 +228,7 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
 
         {f.insuranceType === 'Motor' && f.motorVehicleType && (
           <Field label="Sub Type *" hint="Coverage">
-            <fieldset disabled={!canEditDetails} className="contents">
+            <fieldset disabled={!fieldsUnlocked} className="contents">
               <CoolSelect value={f.motorCoverageType} onChange={(e) => set({ motorCoverageType: e.target.value })} className={selectCls}>
                 <option value="">Select…</option>
                 {MOTOR_COVERAGE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -197,25 +238,25 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
         )}
 
         <Field label="Policy Name">
-          <fieldset disabled={!canEditDetails} className="contents">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
             <input value={f.policyName} onChange={(e) => set({ policyName: e.target.value })} placeholder="e.g. HDFC Click 2 Protect" className={inputCls} />
           </fieldset>
         </Field>
 
         <Field label="Policy Number">
-          <fieldset disabled={!canEditDetails} className="contents">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
             <input value={f.policyNumber} onChange={(e) => set({ policyNumber: e.target.value })} className={inputCls} />
           </fieldset>
         </Field>
 
         <Field label="Sum Assured">
-          <fieldset disabled={!canEditDetails} className="contents">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
             <input type="number" min="0" value={f.sumAssured} onChange={(e) => set({ sumAssured: e.target.value })} className={inputCls} />
           </fieldset>
         </Field>
 
         <Field label="Premium Amount *">
-          <fieldset disabled={!canEditDetails} className="contents">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
             <input type="number" min="0" value={f.premiumAmount} onChange={(e) => set({ premiumAmount: e.target.value })} className={inputCls} />
           </fieldset>
         </Field>
@@ -226,13 +267,13 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
           dueDate={f.dueDate}
           dueLabel="Due Date *"
           onChange={set}
-          disabled={!canEditDetails}
+          disabled={!fieldsUnlocked}
         />
       </div>
 
       {/* Stage */}
       <div className="rounded-2xl border border-slate-200/60 dark:border-slate-800/80 bg-slate-50/60 dark:bg-slate-950/30 p-4 space-y-3">
-        <StagePicker type={REC.RENEWAL} stage={stage} onSelect={requestStageChange} disabled={!canChangeStage} actions={RENEWAL_ACTIONS} />
+        <StagePicker type={REC.RENEWAL} stage={stage} onSelect={requestStageChange} disabled={!canChangeStageThis} actions={RENEWAL_ACTIONS} />
 
         {pendingStage && (
           <div className="rounded-xl border-2 border-blue-300 dark:border-blue-900/60 bg-white dark:bg-slate-900 p-3 space-y-2">
@@ -264,8 +305,8 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
           label="Attachment"
           files={f.attachments}
           onChange={(files) => set({ attachments: files })}
-          disabled={!attachUnlocked || !canEditDetails}
-          lockedHint={`Attachments unlock once the stage reaches "Payment Done".`}
+          disabled={!attachUnlocked || !fieldsUnlocked}
+          lockedHint={!attachUnlocked ? 'Attachments unlock once the stage reaches "Payment Done".' : 'Click Edit to add an attachment.'}
         />
       </div>
 
@@ -275,7 +316,7 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            disabled={!canEditDetails}
+            disabled={!fieldsUnlocked}
             onClick={() => set({ upSell: !f.upSell })}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
               f.upSell
@@ -287,7 +328,7 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
           </button>
           <button
             type="button"
-            disabled={!canEditDetails}
+            disabled={!fieldsUnlocked}
             onClick={() => set({ crossSell: !f.crossSell })}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
               f.crossSell
@@ -303,7 +344,7 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
             {f.upSell && (
               <Field label="Up Sell Amount *">
-                <fieldset disabled={!canEditDetails} className="contents">
+                <fieldset disabled={!fieldsUnlocked} className="contents">
                   <input type="number" min="0" value={f.upSellAmount} onChange={(e) => set({ upSellAmount: e.target.value })} className={inputCls} />
                 </fieldset>
               </Field>
@@ -311,13 +352,18 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
             {f.crossSell && (
               <>
                 <Field label="Cross Sell — Company Name *">
-                  <fieldset disabled={!canEditDetails} className="contents">
+                  <fieldset disabled={!fieldsUnlocked} className="contents">
                     <input value={f.crossSellCompany} onChange={(e) => set({ crossSellCompany: e.target.value })} className={inputCls} />
                   </fieldset>
                 </Field>
                 <Field label="Cross Sell — Policy Name *">
-                  <fieldset disabled={!canEditDetails} className="contents">
+                  <fieldset disabled={!fieldsUnlocked} className="contents">
                     <input value={f.crossSellPolicy} onChange={(e) => set({ crossSellPolicy: e.target.value })} className={inputCls} />
+                  </fieldset>
+                </Field>
+                <Field label="Cross Sell — Amount *">
+                  <fieldset disabled={!fieldsUnlocked} className="contents">
+                    <input type="number" min="0" value={f.crossSellAmount} onChange={(e) => set({ crossSellAmount: e.target.value })} className={inputCls} />
                   </fieldset>
                 </Field>
               </>
@@ -326,12 +372,7 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
         )}
       </div>
 
-      {isEdit && (
-        <>
-          <StageHistory history={stageHistory} badgeCls={(s) => stageBadgeCls(REC.RENEWAL, s)} />
-          <LogTimeline comments={comments} />
-        </>
-      )}
+      {isEdit && <LogTimeline comments={comments} />}
     </RecordModal>
   );
 }

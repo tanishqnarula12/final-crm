@@ -49,7 +49,12 @@ const pick = (rec, keys) => {
 };
 
 const taskLabel = (rec) => pick(rec, ['taskName', 'title', 'name']) || 'Untitled task';
-// The `cobr` module covers five registers — name the right one in the title.
+// The COBR workspace's five registers each have their own matrix module now
+// (cobr/renewals/claims/fixedDeposits/otherInsurancePolicies) — this set is
+// "any of them", so the CREATE/STAGE_CHANGE branches below don't need five
+// near-identical conditions. The sidebar has one workspace view for all
+// five, so every one of them still deep-links to `view: 'cobr'`.
+const COBR_WORKSPACE_MODULES = new Set(['cobr', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies']);
 const COBR_KIND = { COBR: 'COBR task', RENEWAL: 'renewal', CLAIM: 'claim', FD: 'fixed deposit', POLICY: 'policy' };
 const cobrKind = (rec) => COBR_KIND[rec?.relatedTo] || 'COBR task';
 const leadLabel = (rec) => {
@@ -178,24 +183,27 @@ export async function notifyFromEvents(prisma, events) {
 
   for (const ev of events) {
     const rec = ev.record || {};
-    if (ev.type === 'CREATE' && (ev.module === 'tasks' || ev.module === 'cobr')) {
+    if (ev.type === 'CREATE' && (ev.module === 'tasks' || COBR_WORKSPACE_MODULES.has(ev.module))) {
       if (rec.assignedTo && rec.assignedTo !== ev.actorId) {
         items.push({
           userId: rec.assignedTo, type: NOTIF.TASK_ASSIGNED,
-          title: ev.module === 'cobr' ? `New ${cobrKind(rec)} assigned to you` : 'New task assigned to you',
+          title: COBR_WORKSPACE_MODULES.has(ev.module) ? `New ${cobrKind(rec)} assigned to you` : 'New task assigned to you',
           body: taskLabel(rec),
-          link: { view: ev.module === 'cobr' ? 'cobr' : 'tasks', id: rec.id },
+          link: { view: COBR_WORKSPACE_MODULES.has(ev.module) ? 'cobr' : 'tasks', id: rec.id },
         });
       }
-    } else if (ev.type === 'STAGE_CHANGE' && (ev.module === 'tasks' || ev.module === 'cobr') && ev.to === 'Completed') {
+    } else if (ev.type === 'STAGE_CHANGE' && (ev.module === 'tasks' || COBR_WORKSPACE_MODULES.has(ev.module)) && ev.to === 'Completed') {
       // Tell whoever assigned it (departmentOwner) that the assignee marked
-      // it done, unless the assigner completed it themself.
+      // it done, unless the assigner completed it themself. The other four
+      // registers use their own terminal-stage names (not "Completed"), so
+      // this simply never fires for them today — no completion notification
+      // requested for those, matching current behavior.
       if (rec.departmentOwner && rec.departmentOwner !== ev.actorId) {
         items.push({
           userId: rec.departmentOwner, type: NOTIF.TASK_COMPLETED,
-          title: ev.module === 'cobr' ? 'COBR task completed' : 'Task completed',
+          title: COBR_WORKSPACE_MODULES.has(ev.module) ? 'COBR task completed' : 'Task completed',
           body: taskLabel(rec),
-          link: { view: ev.module === 'cobr' ? 'cobr' : 'tasks', id: rec.id },
+          link: { view: COBR_WORKSPACE_MODULES.has(ev.module) ? 'cobr' : 'tasks', id: rec.id },
         });
       }
     } else if (ev.type === 'CREATE' && ev.module === 'leads') {

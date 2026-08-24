@@ -1770,7 +1770,7 @@ export default function App() {
 
         {view === 'documents' && (
           <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
-            <DocumentsView clients={clients} />
+            <DocumentsView clients={clients} tasksChangeCounter={tasksChangeCounter} />
           </main>
         )}
 

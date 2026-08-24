@@ -20,6 +20,7 @@ import ClientActivityLog from './ClientActivityLog';
 import { uid, calcGoal, fmtINR, fmtFull, fmtSip, goalEmoji, monthLabel, fmtDate } from '../utils/calc';
 import { hasAllocation, allocationTotals, filledItems } from '../utils/assets';
 import { cobrTotals } from '../utils/cobr';
+import { cobrWorkspaceDocuments } from '../utils/cobrModules';
 import { printHtmlDocument, printSafeDataUrl, wrapStandaloneHtml } from '../utils/documents';
 import { buildMomHtml } from '../utils/momHtml';
 
@@ -338,8 +339,12 @@ export default function ClientProfileView({
       });
     }
 
+    // Renewal / Claim / FD / Other Policy attachments — same "Documents"
+    // bucket as anything uploaded here directly (see cobrWorkspaceDocuments).
+    list.push(...cobrWorkspaceDocuments([client]));
+
     return list;
-  }, [client, details]);
+  }, [client, details, tasksChangeCounter]);
 
   const ATTACHMENT_TABS = [
     { id: 'custom', label: 'Documents', icon: FolderOpen },

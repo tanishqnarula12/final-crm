@@ -6,29 +6,49 @@
 // rather than a fixed linear stage list. Nothing is ever overwritten — every
 // transition appends an immutable stageHistory entry carrying its own note,
 // attachments and settlement amount.
+//
+// Opens in View Mode once created — only the assigner (Assigned By) can
+// unlock full editing via the Edit button; Assigned By/Assigned To may still
+// drive the workflow (stage) regardless — a separate right. Every edited
+// field is auto-logged into Comments & Logs as "Changed X: old -> new" on
+// Save; workflow transitions log themselves immediately on Confirm.
 import React, { useState, useMemo } from 'react';
 import { AlertTriangle, ArrowRight, CheckCircle2, Lock } from 'lucide-react';
-import { inputCls, selectCls, Field, CoolSelect } from '../UI';
+import { inputCls, selectCls, Field, CoolSelect, btnPrimary, btnGhost } from '../UI';
 import ClientApplicantFields from './ClientApplicantFields';
 import AttachmentField from './AttachmentField';
-import { RecordModal, AssignmentFields, LogTimeline, StageHistory } from './RecordShell';
-import { btnPrimary, btnGhost } from '../UI';
+import { RecordModal, AssignmentFields, LogTimeline, ViewEditFooter } from './RecordShell';
 import {
   REC, CLAIM_STAGES, CLAIM_TYPES, RENEWAL_CLAIM_INSURANCE_TYPES,
   MOTOR_VEHICLE_TYPES, MOTOR_COVERAGE_TYPES, claimActionsFor, claimIsClosed,
   claimSettledTotal, makeHistoryEntry, recordTaskName, stageBadgeCls, STAGE_BTN_TONE,
+  useEditGate, buildFieldChangeLog, diffAttachmentLog, toLogComments,
 } from '../../utils/cobrModules';
 import { getCurrentUser } from '../../utils/auth';
 import { uid, fmtINR } from '../../utils/calc';
-import { canDo } from '../../utils/permissions';
+import { teamName } from '../../services/team';
 
 // Shared with Renewal/FD/Policy's StagePicker (RecordShell.jsx) so every
 // register's stage control uses the exact same button styling.
 const TONE_BTN = STAGE_BTN_TONE;
 
+const FIELD_DEFS = [
+  { key: 'insuranceType', label: 'Insurance Type' },
+  { key: 'motorVehicleType', label: 'Sub Type (Vehicle)' },
+  { key: 'motorCoverageType', label: 'Sub Type (Coverage)' },
+  { key: 'policyName', label: 'Policy Name' },
+  { key: 'policyNumber', label: 'Policy Number' },
+  { key: 'sumAssured', label: 'Sum Assured', format: (v) => (v ? fmtINR(Number(v) || 0) : '—') },
+  { key: 'claimType', label: 'Claim Type' },
+  { key: 'claimAmount', label: 'Claim Amount', format: (v) => (v ? fmtINR(Number(v) || 0) : '—') },
+  { key: 'dueDate', label: 'Target Date' },
+  { key: 'assignedTo', label: 'Assigned To', format: (v) => teamName(v) || '—' },
+];
+
 export default function ClaimModal({ record, clients = [], onClose, onSave }) {
   const isEdit = !!record;
   const me = getCurrentUser();
+  const { isEditingMode, setIsEditingMode, canEditThis, canChangeStageThis, fieldsUnlocked } = useEditGate('claims', record, isEdit);
 
   const [f, setF] = useState(() => ({
     groupLeaderId: record?.groupLeaderId || '',
@@ -61,20 +81,25 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
 
   const set = (patch) => setF((p) => ({ ...p, ...patch }));
 
-  const canEditDetails = !isEdit || canDo('cobr', 'editDetails', record);
-  const canAdvance = !isEdit || canDo('cobr', 'changeStage', record);
   const closed = claimIsClosed(stage);
-  const actions = canAdvance && !closed ? claimActionsFor(stage) : [];
+  const actions = canChangeStageThis && !closed ? claimActionsFor(stage) : [];
   const settled = claimSettledTotal(history);
+  const remaining = Math.max(0, (Number(f.claimAmount) || 0) - settled);
   const dirty = isEdit && (stage !== (record?.stage || '') || history.length !== (record?.stageHistory || []).length);
 
-  const startAction = (a) => { setPending(a); setNote(''); setAmount(''); setFiles([]); };
+  const startAction = (a) => {
+    setPending(a);
+    setNote('');
+    setAmount(a.autoAmount ? String(remaining) : '');
+    setFiles([]);
+  };
   const cancelAction = () => { setPending(null); setNote(''); setAmount(''); setFiles([]); };
 
   const pendingReady = useMemo(() => {
     if (!pending) return false;
     if (pending.requiresNote && !note.trim()) return false;
     if (pending.requiresAmount && !(Number(amount) > 0)) return false;
+    if (pending.autoAmount && !(Number(amount) > 0)) return false;
     if (pending.requiresAttachment && files.length === 0) return false;
     return true;
   }, [pending, note, amount, files]);
@@ -82,19 +107,20 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
   const confirmAction = () => {
     if (!pending || !pendingReady) return;
     const by = me?.name || 'System';
+    const usesAmount = pending.requiresAmount || pending.autoAmount;
     const entry = makeHistoryEntry({
       stage: pending.to,
       action: pending.label,
       note: note.trim(),
       attachments: files,
-      settlementAmount: pending.requiresAmount ? amount : undefined,
+      settlementAmount: usesAmount ? amount : undefined,
       by,
     });
     setHistory((h) => [...h, entry]);
     setComments((c) => [...c, {
       at: new Date().toISOString(),
       by,
-      text: `${pending.label}${stage !== pending.to ? ` — stage moved from ${stage} to ${pending.to}` : ' — recorded (stage unchanged)'}${note.trim() ? ` | ${note.trim()}` : ''}${pending.requiresAmount ? ` | ${fmtINR(Number(amount) || 0)} received` : ''}`,
+      text: `${pending.label}${stage !== pending.to ? ` — stage moved from ${stage} to ${pending.to}` : ' — recorded (stage unchanged)'}${note.trim() ? ` | ${note.trim()}` : ''}${usesAmount ? ` | ${fmtINR(Number(amount) || 0)} ${pending.key === 'full' ? 'settled in full' : 'received'}` : ''}`,
     }]);
     // Files captured for a transition also join the record's own attachment set
     // so the claim carries every document ever supplied against it.
@@ -119,6 +145,12 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
     if (!isEdit) {
       cmts = [...cmts, { at: now, by, text: `Claim created at stage "${stage}".` }];
       hist = [...hist, makeHistoryEntry({ stage, action: stage, note: 'Claim record created', attachments: f.attachments, by })];
+    } else if (isEditingMode) {
+      const changeLines = [
+        ...buildFieldChangeLog(record, f, FIELD_DEFS),
+        ...diffAttachmentLog(record?.attachments, f.attachments),
+      ];
+      if (changeLines.length) cmts = [...cmts, ...toLogComments(changeLines)];
     }
 
     onSave({
@@ -138,25 +170,40 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
     });
   };
 
+  const handleCancelEdit = () => {
+    if (!isEdit) { onClose(); return; }
+    setF({
+      groupLeaderId: record.groupLeaderId || '', groupLeader: record.groupLeader || '', applicant: record.applicant || '', pan: record.pan || '',
+      insuranceType: record.insuranceType || '', motorVehicleType: record.motorVehicleType || '', motorCoverageType: record.motorCoverageType || '',
+      policyName: record.policyName || '', policyNumber: record.policyNumber || '', sumAssured: record.sumAssured || '',
+      claimType: record.claimType || '', claimAmount: record.claimAmount || '', dueDate: record.dueDate || '',
+      assignedTo: record.assignedTo || '', subPersons: record.subPersons || [], attachments: record.attachments || [],
+    });
+    setIsEditingMode(false);
+  };
+
   return (
     <RecordModal
       title={isEdit ? `Claim — ${f.applicant || 'Record'}` : 'New Claim'}
       subtitle={isEdit ? `${f.claimType || '—'} · ${f.policyNumber || 'No policy no.'}` : 'Register a claim and track it through settlement'}
       onClose={onClose}
       footer={(
-        <>
-          {dirty ? (
+        <ViewEditFooter
+          isEditingMode={isEditingMode}
+          canEditThis={canEditThis}
+          canSave={canSave}
+          stageDirty={dirty}
+          onEdit={() => setIsEditingMode(true)}
+          onCancel={handleCancelEdit}
+          onSave={handleSave}
+          onClose={onClose}
+          saveLabel={isEdit ? 'Save Changes' : 'Create Claim'}
+          extra={dirty ? (
             <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
               <AlertTriangle size={12} /> Workflow updated — Save to confirm.
             </span>
-          ) : <span />}
-          <div className="flex gap-2 ml-auto">
-            <button onClick={onClose} className={btnGhost}>Close</button>
-            <button onClick={handleSave} disabled={!canSave} className={btnPrimary + (!canSave ? ' opacity-50 cursor-not-allowed' : '')}>
-              {isEdit ? 'Save Changes' : 'Create Claim'}
-            </button>
-          </div>
-        </>
+          ) : null}
+        />
       )}
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -171,7 +218,7 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
         />
 
         <Field label="Insurance Type *">
-          <fieldset disabled={!canEditDetails} className="contents">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
             <CoolSelect
               value={f.insuranceType}
               onChange={(e) => {
@@ -188,7 +235,7 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
 
         {f.insuranceType === 'Motor' && (
           <Field label="Sub Type *" hint="Vehicle">
-            <fieldset disabled={!canEditDetails} className="contents">
+            <fieldset disabled={!fieldsUnlocked} className="contents">
               <CoolSelect
                 value={f.motorVehicleType}
                 onChange={(e) => set({ motorVehicleType: e.target.value, motorCoverageType: '' })}
@@ -203,7 +250,7 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
 
         {f.insuranceType === 'Motor' && f.motorVehicleType && (
           <Field label="Sub Type *" hint="Coverage">
-            <fieldset disabled={!canEditDetails} className="contents">
+            <fieldset disabled={!fieldsUnlocked} className="contents">
               <CoolSelect value={f.motorCoverageType} onChange={(e) => set({ motorCoverageType: e.target.value })} className={selectCls}>
                 <option value="">Select…</option>
                 {MOTOR_COVERAGE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -213,25 +260,25 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
         )}
 
         <Field label="Policy Name">
-          <fieldset disabled={!canEditDetails} className="contents">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
             <input value={f.policyName} onChange={(e) => set({ policyName: e.target.value })} className={inputCls} />
           </fieldset>
         </Field>
 
         <Field label="Policy Number">
-          <fieldset disabled={!canEditDetails} className="contents">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
             <input value={f.policyNumber} onChange={(e) => set({ policyNumber: e.target.value })} className={inputCls} />
           </fieldset>
         </Field>
 
         <Field label="Sum Assured">
-          <fieldset disabled={!canEditDetails} className="contents">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
             <input type="number" min="0" value={f.sumAssured} onChange={(e) => set({ sumAssured: e.target.value })} className={inputCls} />
           </fieldset>
         </Field>
 
         <Field label="Claim Type *">
-          <fieldset disabled={!canEditDetails} className="contents">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
             <CoolSelect value={f.claimType} onChange={(e) => set({ claimType: e.target.value })} className={selectCls}>
               <option value="">Select…</option>
               {CLAIM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -240,13 +287,19 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
         </Field>
 
         <Field label="Claim Amount *">
-          <fieldset disabled={!canEditDetails} className="contents">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
             <input type="number" min="0" value={f.claimAmount} onChange={(e) => set({ claimAmount: e.target.value })} className={inputCls} />
           </fieldset>
         </Field>
 
         <Field label="Settlement Amount" hint="Total received across all settlements">
-          <div className="w-full px-3.5 py-2.5 text-sm border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-bold tabular-nums">
+          <div className={`w-full px-3.5 py-2.5 text-sm border rounded-xl font-bold tabular-nums ${
+            stage === 'Claim Settled' && settled >= (Number(f.claimAmount) || 0) && settled > 0
+              ? 'border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400'
+              : settled > 0
+                ? 'border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400'
+                : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300'
+          }`}>
             {fmtINR(settled)}
           </div>
         </Field>
@@ -257,7 +310,7 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
           dueDate={f.dueDate}
           dueLabel="Target Date"
           onChange={set}
-          disabled={!canEditDetails}
+          disabled={!fieldsUnlocked}
         />
       </div>
 
@@ -285,7 +338,7 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
           <p className="text-[11px] text-slate-400 italic">
             This claim reached a final outcome. Its full history is preserved below.
           </p>
-        ) : !canAdvance ? (
+        ) : !canChangeStageThis ? (
           <p className="text-[11px] text-slate-400 italic">You do not have permission to move this claim forward.</p>
         ) : (
           <>
@@ -329,6 +382,18 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
                   placeholder="Required — this is saved permanently in the claim history."
                   className={inputCls + ' text-xs py-2 resize-y'}
                 />
+              </div>
+            )}
+
+            {pending.autoAmount && (
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block mb-1.5">{pending.amountLabel}</label>
+                <div className="w-full px-3.5 py-2.5 text-sm border border-emerald-200 dark:border-emerald-900/50 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold tabular-nums">
+                  {fmtINR(Number(amount) || 0)}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Claim Amount {fmtINR(Number(f.claimAmount) || 0)}{settled > 0 ? ` minus ${fmtINR(settled)} already settled` : ''} — no manual entry needed.
+                </p>
               </div>
             )}
 
@@ -394,7 +459,6 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
         />
       )}
 
-      <StageHistory history={history} badgeCls={(s) => stageBadgeCls(REC.CLAIM, s)} />
       {isEdit && <LogTimeline comments={comments} />}
     </RecordModal>
   );

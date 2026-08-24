@@ -1,13 +1,59 @@
 // Modal chrome + the parts every COBR-workspace record editor repeats:
-// assignment fields, the stage picker, and the comments/logs timeline.
+// assignment fields, the stage picker, and the comments timeline. The
+// view/edit-mode gate and change-log helpers live in utils/cobrModules.js
+// (they're plain functions/hooks, not components — react-refresh requires a
+// component-only file to keep hot reload working).
 import React from 'react';
-import { X, MessageSquare, Paperclip, ArrowRight } from 'lucide-react';
-import { Avatar, inputCls, selectCls, Field, CoolSelect } from '../UI';
+import { X, MessageSquare, ArrowRight, Pencil } from 'lucide-react';
+import { Avatar, inputCls, selectCls, Field, CoolSelect, btnPrimary, btnGhost } from '../UI';
 import { fmtTaskStamp } from '../../utils/tasks';
 import { loadTeam, teamName } from '../../services/team';
-import { fmtINR } from '../../utils/calc';
-import { AttachmentChips } from './AttachmentField';
 import { stageBadgeCls, STAGE_BTN_TONE, STAGE_SETS } from '../../utils/cobrModules';
+
+// View Mode -> Close / Edit(if allowed); Edit Mode -> Cancel / Save. Mirrors
+// the Tasks module's TaskFormModal footer pattern so every editor in the app
+// behaves the same way.
+//
+// `stageDirty` covers a case View Mode alone can't: the assignee (who has
+// stage rights but not edit rights) confirms a stage transition via the
+// always-live StagePicker WITHOUT ever entering Edit Mode — with no dirty
+// flag, "Save Changes" would never appear and that confirmed transition
+// would be silently lost on Close. When dirty, Save shows in View Mode too
+// (alongside Edit, if the account also holds edit rights), so a stage-only
+// change can be persisted without needing details-edit permission at all.
+export function ViewEditFooter({ isEditingMode, canEditThis, canSave, stageDirty, onEdit, onCancel, onSave, onClose, saveLabel = 'Save Changes', extra }) {
+  if (isEditingMode) {
+    return (
+      <>
+        {extra || <span />}
+        <div className="flex gap-2 ml-auto">
+          <button onClick={onCancel} className={btnGhost}>Cancel</button>
+          <button onClick={onSave} disabled={!canSave} className={btnPrimary + (!canSave ? ' opacity-50 cursor-not-allowed' : '')}>
+            {saveLabel}
+          </button>
+        </div>
+      </>
+    );
+  }
+  return (
+    <>
+      {extra || <span />}
+      <div className="flex gap-2 ml-auto">
+        <button onClick={onClose} className={btnGhost}>{stageDirty ? 'Discard' : 'Close'}</button>
+        {canEditThis && (
+          <button onClick={onEdit} className={stageDirty ? btnGhost : btnPrimary}>
+            <Pencil size={13} /> Edit
+          </button>
+        )}
+        {stageDirty && (
+          <button onClick={onSave} disabled={!canSave} className={btnPrimary + (!canSave ? ' opacity-50 cursor-not-allowed' : '')}>
+            {saveLabel}
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
 
 export function RecordModal({ title, subtitle, onClose, children, footer, maxWidth = 'max-w-3xl' }) {
   return (
@@ -187,48 +233,4 @@ export function LogTimeline({ comments = [] }) {
   );
 }
 
-// Full, append-only audit of every stage transition — the Claims tab depends
-// on this (its workflow loops, so the stage alone can never tell the story),
-// but it renders for any record that keeps a `stageHistory`.
-export function StageHistory({ history = [], badgeCls }) {
-  return (
-    <div className="space-y-2">
-      <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Stage History</h4>
-      {history.length === 0 ? (
-        <p className="text-xs text-slate-400 italic">No transitions recorded yet.</p>
-      ) : (
-        <ol className="space-y-2.5">
-          {history.map((h, i) => (
-            <li key={h.id || i} className="relative pl-5 border-l-2 border-slate-200 dark:border-slate-800">
-              <span className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-slate-900" />
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ring-1 rounded-full ${badgeCls ? badgeCls(h.stage) : ''}`}>
-                  {h.action || h.stage}
-                </span>
-                {h.settlementAmount != null && (
-                  <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                    {fmtINR(h.settlementAmount)} received
-                  </span>
-                )}
-              </div>
-              {h.note && <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">{h.note}</p>}
-              {(h.attachments || []).length > 0 && (
-                <div className="mt-1.5">
-                  <p className="text-[10px] text-slate-400 mb-1 flex items-center gap-1">
-                    <Paperclip size={9} /> {h.attachments.length} file{h.attachments.length > 1 ? 's' : ''} attached
-                  </p>
-                  <AttachmentChips files={h.attachments} compact />
-                </div>
-              )}
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
-                {fmtTaskStamp(h.at)}
-                {h.by && <span className="text-blue-500 dark:text-blue-400 font-semibold ml-1.5">• {h.by}</span>}
-              </p>
-            </li>
-          ))}
-        </ol>
-      )}
-    </div>
-  );
-}
 

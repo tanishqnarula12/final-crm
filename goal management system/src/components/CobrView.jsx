@@ -15,7 +15,7 @@ import { loadTasks } from '../utils/tasks';
 import { COBR_STAGES, cobrTotals, isCobrTask } from '../utils/cobr';
 import {
   REC, RENEWAL_STAGES, CLAIM_STAGES, FD_STAGES, POLICY_STAGES,
-  isRenewal, isClaim, isFd, isPolicy, isOpenStage,
+  isRenewal, isClaim, isFd, isPolicy, isOpenStage, claimSettlementDisplay,
 } from '../utils/cobrModules';
 import { teamName } from '../services/team';
 import { fmtINR } from '../utils/calc';
@@ -71,15 +71,29 @@ export default function CobrView({
 
   const cobrTasks = useMemo(() => tasks.filter(isCobrTask), [tasks]);
 
-  // Deep-link from a notification click — open the specific COBR request once
-  // its row is available, then reset so it doesn't re-trigger on re-render.
+  // Deep-link from a notification click — open the specific record (any of
+  // the five registers, since they all deep-link to this one workspace view)
+  // once its row is available, switching to its tab first, then reset so it
+  // doesn't re-trigger on re-render.
   useEffect(() => {
-    if (activeCobrId) {
-      const found = cobrTasks.find((t) => t.id === activeCobrId);
-      if (found) { setTab(REC.COBR); onOpenCobr(found, true); }
+    if (!activeCobrId) return;
+    const foundCobr = cobrTasks.find((t) => t.id === activeCobrId);
+    if (foundCobr) {
+      setTab(REC.COBR);
+      onOpenCobr(foundCobr, true);
       if (setActiveCobrId) setActiveCobrId(null);
+      return;
     }
-  }, [activeCobrId, cobrTasks, setActiveCobrId, onOpenCobr]);
+    for (const type of [REC.RENEWAL, REC.CLAIM, REC.FD, REC.POLICY]) {
+      const found = (rowsFor[type] || []).find((t) => t.id === activeCobrId);
+      if (found) {
+        setTab(type);
+        setEditor({ type, record: found });
+        if (setActiveCobrId) setActiveCobrId(null);
+        return;
+      }
+    }
+  }, [activeCobrId, cobrTasks, rowsFor, setActiveCobrId, onOpenCobr]);
 
   const openCount = (type) => (rowsFor[type] || []).filter((r) => isOpenStage(type, r.stage)).length;
 
@@ -168,13 +182,24 @@ export default function CobrView({
           dateField={{ key: 'dueDate', label: 'Due date' }}
           onOpen={(r) => setEditor({ type: REC.RENEWAL, record: r })}
           emptyText="No renewals tracked yet."
-          minWidth={1080}
+          minWidth={1260}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
             { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
             { key: 'insuranceType', label: 'Insurance Type' },
             { key: 'premiumAmount', label: 'Premium Amount', align: 'right', render: (r) => money(r.premiumAmount), sortValue: (r) => Number(r.premiumAmount) || 0 },
             { key: 'dueDate', label: 'Due Date', render: (r) => d(r.dueDate) },
+            {
+              key: 'crossUpSell',
+              label: 'Cross / Up Sell',
+              render: (r) => {
+                const parts = [];
+                if (r.upSell && r.upSellAmount) parts.push(<div key="u" className="text-indigo-600 dark:text-indigo-400 font-bold whitespace-nowrap">Up Sell: {money(r.upSellAmount)}</div>);
+                if (r.crossSell && r.crossSellAmount) parts.push(<div key="c" className="text-indigo-600 dark:text-indigo-400 font-bold whitespace-nowrap">Cross Sell: {money(r.crossSellAmount)}</div>);
+                return parts.length ? <div className="space-y-0.5">{parts}</div> : '—';
+              },
+              sortValue: (r) => (Number(r.upSellAmount) || 0) + (Number(r.crossSellAmount) || 0),
+            },
           ]}
         />
       )}
@@ -189,13 +214,25 @@ export default function CobrView({
           dateField={{ key: 'dueDate', label: 'Target date' }}
           onOpen={(r) => setEditor({ type: REC.CLAIM, record: r })}
           emptyText="No claims registered yet."
-          minWidth={1160}
+          minWidth={1340}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
             { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
             { key: 'insuranceType', label: 'Insurance Type' },
             { key: 'claimType', label: 'Claim Type' },
             { key: 'claimAmount', label: 'Claim Amount', align: 'right', render: (r) => money(r.claimAmount), sortValue: (r) => Number(r.claimAmount) || 0 },
+            {
+              key: 'settlementAmount',
+              label: 'Settlement Amount',
+              align: 'right',
+              render: (r) => {
+                const { amount, kind } = claimSettlementDisplay(r);
+                if (kind === 'none') return '—';
+                const cls = kind === 'full' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400';
+                return <span className={`font-bold ${cls}`}>{money(amount)}</span>;
+              },
+              sortValue: (r) => claimSettlementDisplay(r).amount,
+            },
           ]}
         />
       )}

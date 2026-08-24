@@ -41,6 +41,13 @@ export const MODULES = [
   { key: 'policyReview', label: 'Policy Review', actions: ['view', 'edit'] },
   { key: 'tasks', label: 'Tasks', actions: ['create', 'view', 'editDetails', 'changeStage', 'editLog', 'delete'] },
   { key: 'cobr', label: 'Change of Broker (COBR)', actions: ['create', 'view', 'editDetails', 'changeStage', 'editLog', 'delete'] },
+  // The COBR workspace's other four registers each get their own matrix
+  // column (unlike COBR itself, which stays a single shared column) — same
+  // action set, same task-shaped assigner/assignee overlay.
+  { key: 'renewals', label: 'Renewals', actions: ['create', 'view', 'editDetails', 'changeStage', 'editLog', 'delete'] },
+  { key: 'claims', label: 'Claims', actions: ['create', 'view', 'editDetails', 'changeStage', 'editLog', 'delete'] },
+  { key: 'fixedDeposits', label: 'Fixed Deposits', actions: ['create', 'view', 'editDetails', 'changeStage', 'editLog', 'delete'] },
+  { key: 'otherInsurancePolicies', label: 'Other Insurance Policies', actions: ['create', 'view', 'editDetails', 'changeStage', 'editLog', 'delete'] },
   { key: 'investmentProspects', label: 'Investment Prospects', actions: ['create', 'view', 'editDetails', 'changeStage'] },
   { key: 'insuranceProspects', label: 'Insurance Prospects', actions: ['create', 'view', 'editDetails', 'changeStage'] },
   { key: 'documents', label: 'Documents', actions: ['upload', 'view', 'delete'] },
@@ -70,6 +77,7 @@ export const ACTION_LABELS = {
 //   client  — ownership flows from the parent client's RM / createdBy
 export const OWNERSHIP = {
   leads: 'self', clients: 'self', tasks: 'task', cobr: 'task', queries: 'task', mom: 'self', meetings: 'meeting',
+  renewals: 'task', claims: 'task', fixedDeposits: 'task', otherInsurancePolicies: 'task',
   goals: 'client', assetAllocation: 'client', investmentProposal: 'client', insuranceProposal: 'client',
   portfolioReview: 'client', policyReview: 'client', investmentProspects: 'client', insuranceProspects: 'client',
   documents: 'client', leave: 'creator',
@@ -114,6 +122,17 @@ const DEF = {
   // mirror Tasks' own defaults exactly (no behavior change until an admin
   // customizes this row).
   cobr: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, changeStage: { _: S, INTERNAL_MANAGER: A }, editLog: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
+  // Renewals / Claims / Fixed Deposits / Other Insurance Policies — each its
+  // own admin-configurable column, defaults mirroring COBR's exactly. The
+  // assigner/assignee split itself (only the assigner edits details, only the
+  // assigner+assignee change stage) is a fixed overlay rule enforced in
+  // permissions.js, not something these default scopes control — a role
+  // matrix-configured to ALL still can't bypass that two-party rule (COBR's
+  // ALL-bypass only applies to Internal Manager's oversight exception).
+  renewals: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, changeStage: { _: S, INTERNAL_MANAGER: A }, editLog: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
+  claims: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, changeStage: { _: S, INTERNAL_MANAGER: A }, editLog: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
+  fixedDeposits: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, changeStage: { _: S, INTERNAL_MANAGER: A }, editLog: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
+  otherInsurancePolicies: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, changeStage: { _: S, INTERNAL_MANAGER: A }, editLog: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
   // Prospects have no separate "create" step in the original spec — a prospect
   // is created as a side effect of building the proposal that spawns it. We
   // still give it its own explicit, independently-editable matrix cell

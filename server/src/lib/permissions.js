@@ -183,17 +183,20 @@ export function can(user, module, action, record = null, ctx = {}) {
   // Task-shaped overlay (fixed business rule): only the assigner edits
   // details; the assignee may change stage / add log, but not move it
   // backward. COBR records ARE Task rows (relatedTo: 'COBR') under their own
-  // matrix column, so the same mechanics apply; Queries have the identical
-  // two-party shape (raisedBy = departmentOwner, raisedTo = assignedTo), just
-  // its own stage vocabulary (see STAGE_ORDER below).
-  if (['tasks', 'cobr', 'queries'].includes(module) && ['editDetails', 'changeStage', 'editLog'].includes(action) && record) {
-    // For Queries specifically, this two-party rule is a hard confidentiality
-    // requirement — even a role matrix-configured to ALL (e.g. an oversight
-    // role, or an admin having broadened everyone's scope) must NOT bypass
-    // it: only the raiser edits, only the recipient moves the stage, anyone
-    // else may view but never touch. Tasks/COBR keep the ALL-bypass
-    // (Internal Manager's deliberate "close to Admin" oversight exception).
-    if (scope === 'ALL' && module !== 'queries') return true;
+  // matrix column, so the same mechanics apply; Queries and the four other
+  // COBR-workspace registers (Renewals/Claims/Fixed Deposits/Other Insurance
+  // Policies) have the identical two-party shape, just their own stage
+  // vocabularies (see STAGE_ORDER below, where applicable).
+  const TASK_SHAPED = ['tasks', 'cobr', 'queries', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies'];
+  // Modules where the two-party rule is a HARD requirement — no ALL-bypass,
+  // not even for an oversight role like Internal Manager: "only Assigned By
+  // edits, only Assigned By/Assigned To change stage, no other user" was
+  // stated with no carve-out. Tasks/COBR keep the ALL-bypass (their
+  // deliberate "close to Admin" oversight exception); Queries already worked
+  // this way for confidentiality.
+  const STRICT_TWO_PARTY = ['queries', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies'];
+  if (TASK_SHAPED.includes(module) && ['editDetails', 'changeStage', 'editLog'].includes(action) && record) {
+    if (scope === 'ALL' && !STRICT_TWO_PARTY.includes(module)) return true;
     const isAssigner = record.departmentOwner === user.id;
     const isAssignee = record.assignedTo === user.id;
     const isSubPerson = taskSubPersons(record).includes(user.id);

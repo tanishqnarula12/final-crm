@@ -10,6 +10,7 @@ import { updateClient, deleteMom } from '../services/db';
 import { getCurrentUser } from '../utils/auth';
 import { printHtmlDocument, printSafeDataUrl, wrapStandaloneHtml } from '../utils/documents';
 import { buildMomHtml } from '../utils/momHtml';
+import { cobrWorkspaceDocuments } from '../utils/cobrModules';
 
 // ---------------------------------------------------------------------------
 // Build a unified, DB-driven list of generated documents from the clients data.
@@ -34,7 +35,7 @@ const TYPE_META = {
   portfolio: { label: 'Portfolio Review Report', icon: FileBarChart, badge: 'bg-rose-50 text-rose-700 ring-rose-200/60 dark:bg-rose-955/30 dark:text-rose-400 dark:ring-rose-900/40', chip: 'from-rose-500 to-pink-600' },
 };
 
-export default function DocumentsView({ clients = [] }) {
+export default function DocumentsView({ clients = [], tasksChangeCounter }) {
   const [typeFilter, setTypeFilter] = useState('custom');
   const [query, setQuery] = useState('');
   const [preview, setPreview] = useState(null);
@@ -60,7 +61,7 @@ export default function DocumentsView({ clients = [] }) {
   }, [clients, selectedGroupLeaderId]);
 
   const documents = useMemo(() => {
-    const docs = [];
+    const docs = [...cobrWorkspaceDocuments(clients)];
     clients.forEach(c => {
       // 1. Custom Uploaded Documents
       const details = c.clientDetails || {};
@@ -160,7 +161,7 @@ export default function DocumentsView({ clients = [] }) {
       }
     });
     return docs;
-  }, [clients]);
+  }, [clients, tasksChangeCounter]);
 
   const counts = useMemo(() => {
     const c = { custom: 0, mom: 0, goal: 0, asset: 0, policy: 0, portfolio: 0 };
@@ -267,6 +268,7 @@ export default function DocumentsView({ clients = [] }) {
     if (!window.confirm(`Are you sure you want to delete "${doc.title}"?`)) return;
 
     try {
+      if (doc.deletable === false) return;
       if (doc.type === 'custom') {
         const client = doc.client;
         const details = client.clientDetails || {};
@@ -381,6 +383,9 @@ export default function DocumentsView({ clients = [] }) {
                   </span>
                 </div>
                 <h3 className="mt-3.5 text-sm font-bold text-slate-900 dark:text-white leading-snug group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{doc.title}</h3>
+                {doc.sourceLabel && (
+                  <p className="mt-0.5 text-[10px] text-slate-450 dark:text-slate-500 truncate">{doc.sourceLabel}</p>
+                )}
                 <div className="mt-3 flex items-center gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
                   <Avatar name={doc.client.name} size="sm" />
                   <div className="min-w-0 flex-1">
@@ -390,7 +395,7 @@ export default function DocumentsView({ clients = [] }) {
                     </div>
                   </div>
                   <div className="ml-auto flex items-center gap-2 shrink-0">
-                    {(doc.type === 'custom' || doc.type === 'mom') && (
+                    {doc.deletable !== false && (doc.type === 'custom' || doc.type === 'mom') && (
                       <button
                         onClick={(e) => handleDeleteDoc(e, doc)}
                         className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-455 hover:bg-rose-50 dark:hover:bg-rose-955/20 rounded-xl transition-all cursor-pointer opacity-0 group-hover:opacity-100 shrink-0"
