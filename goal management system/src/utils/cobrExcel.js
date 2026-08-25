@@ -8,10 +8,11 @@
 // Sell's conditional amounts). Download and Upload use the exact same
 // column set (the field labels), so the two formats can never drift apart.
 //
-// `groupLeader`/`applicant` (every module's client-identity pair) and
-// `assignedTo` (every module's team-member field) are special-cased here
-// rather than per module, since all four modals share the same
-// ClientApplicantFields/AssignmentFields components.
+// `pan` (every module's actual unique client/applicant identifier —
+// `groupLeader`/`applicant` are just display names, which aren't guaranteed
+// unique) and `assignedTo` (every module's team-member field) are
+// special-cased here rather than per module, since all four modals share
+// the same ClientApplicantFields/AssignmentFields components.
 import * as XLSX from 'xlsx';
 import { loadTeam, teamName } from '../services/team';
 import { parseFlexibleDate } from './calc';
@@ -115,37 +116,39 @@ export function parseExcelFile(file, { fields, clients = [], dedupeKeyFor, exist
           const errors = [];
           const resolved = {};
 
-          const clientCell = keyFor.groupLeader ? String(raw[keyFor.groupLeader] ?? '').trim() : '';
-          const applicantCell = keyFor.applicant ? String(raw[keyFor.applicant] ?? '').trim() : '';
+          // PAN is the actual unique identifier — a client name (or a family
+          // member's name) is not guaranteed unique across the client base,
+          // so it can't be trusted to find the right record on its own. Every
+          // applicant (the client themself or a named family member) carries
+          // its own PAN, so one PAN cell is enough to resolve both who the
+          // client is AND which of their family members this row is for —
+          // the Client/Applicant name columns become informational only,
+          // auto-filled from whichever PAN actually matched.
+          const panCell = keyFor.pan ? String(raw[keyFor.pan] ?? '').trim().toUpperCase() : '';
+          if (!panCell) errors.push('Applicant PAN is required');
           let matchedClient = null;
-          if (!clientCell) errors.push('Client / Group Leader is required');
-          else {
-            matchedClient = clients.find((c) => (c.name || '').trim().toLowerCase() === clientCell.toLowerCase());
-            if (!matchedClient) errors.push(`Client "${clientCell}" not found`);
+          let matchedApplicant = null;
+          if (panCell) {
+            for (const c of clients) {
+              if ((c.pan || '').trim().toUpperCase() === panCell) { matchedClient = c; matchedApplicant = { name: c.name, pan: c.pan }; break; }
+              const fam = (c.clientDetails?.familyDetails || []).find((f) => (f.pan || '').trim().toUpperCase() === panCell);
+              if (fam) { matchedClient = c; matchedApplicant = fam; break; }
+            }
+            if (!matchedClient) errors.push(`PAN "${panCell}" was not found under any client`);
           }
-          if (!applicantCell) errors.push('Applicant is required');
           resolved.groupLeaderId = matchedClient?.id || '';
-          resolved.groupLeader = matchedClient?.name || clientCell;
-          resolved.applicant = applicantCell;
-          resolved.pan = '';
-          if (matchedClient && applicantCell) {
-            const opts = [
-              { name: matchedClient.name, pan: matchedClient.pan || '' },
-              ...(matchedClient.clientDetails?.familyDetails || []).map((fam) => ({ name: fam.name, pan: fam.pan || '' })),
-            ];
-            const hit = opts.find((o) => o.name.trim().toLowerCase() === applicantCell.toLowerCase());
-            if (hit) resolved.pan = hit.pan;
-            else errors.push(`Applicant "${applicantCell}" not found under "${matchedClient.name}"`);
-          }
+          resolved.groupLeader = matchedClient?.name || '';
+          resolved.applicant = matchedApplicant?.name || '';
+          resolved.pan = matchedApplicant?.pan || panCell;
 
           fields.forEach((f) => {
-            if (f.key === 'groupLeader' || f.key === 'applicant') return;
+            if (f.key === 'groupLeader' || f.key === 'applicant' || f.key === 'pan') return;
             const cellKey = keyFor[f.key];
             resolved[f.key] = coerceCell(f, cellKey ? raw[cellKey] : '', team, errors);
           });
 
           fields.forEach((f) => {
-            if (f.key === 'groupLeader' || f.key === 'applicant') return;
+            if (f.key === 'groupLeader' || f.key === 'applicant' || f.key === 'pan') return;
             const isRequired = typeof f.required === 'function' ? f.required(resolved) : !!f.required;
             if (!isRequired) return;
             const v = resolved[f.key];

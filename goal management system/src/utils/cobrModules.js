@@ -352,15 +352,19 @@ export const policyActionsFor = (stage) => POLICY_ACTIONS[stage] || [];
 // ---------------------------------------------------------------------------
 // Excel import/export field specs — one entry per Sub-Form field, in the
 // exact order/labels used for BOTH Download and Upload (utils/cobrExcel.js),
-// so the two formats can never drift apart. `groupLeader`/`applicant` (every
-// module's client-identity pair, via ClientApplicantFields) and
-// `assignedTo` (every module's team-member field, via AssignmentFields) are
-// resolved specially by the Excel engine rather than needing a per-module
-// 'client'/'team' type here.
+// so the two formats can never drift apart.
+//
+// `pan` is the actual unique identifier — a client's (or family member's)
+// NAME is not guaranteed unique, so PAN alone drives the upload match;
+// `groupLeader`/`applicant` stay in the sheet purely as human-readable
+// labels, auto-filled from whichever PAN matched (not required, not used
+// for matching). `assignedTo` (every module's team-member field, via
+// AssignmentFields) is likewise resolved specially by the Excel engine.
 // ---------------------------------------------------------------------------
 export const RENEWAL_EXCEL_FIELDS = [
-  { key: 'groupLeader', label: 'Client / Group Leader', type: 'text', required: true },
-  { key: 'applicant', label: 'Applicant', type: 'text', required: true },
+  { key: 'groupLeader', label: 'Client / Group Leader', type: 'text' },
+  { key: 'applicant', label: 'Applicant', type: 'text' },
+  { key: 'pan', label: 'Applicant PAN', type: 'text', required: true },
   { key: 'insuranceType', label: 'Insurance Type', type: 'select', options: RENEWAL_CLAIM_INSURANCE_TYPES, required: true },
   { key: 'motorVehicleType', label: 'Sub Type (Vehicle)', type: 'select', options: MOTOR_VEHICLE_TYPES, required: (r) => r.insuranceType === 'Motor' },
   { key: 'motorCoverageType', label: 'Sub Type (Coverage)', type: 'select', options: MOTOR_COVERAGE_TYPES, required: (r) => r.insuranceType === 'Motor' },
@@ -380,8 +384,9 @@ export const RENEWAL_EXCEL_FIELDS = [
 export const renewalDedupeKey = (r) => (r.groupLeaderId && r.applicant ? `${r.groupLeaderId}|${r.applicant}|${(r.policyNumber || '').toLowerCase()}` : '');
 
 export const CLAIM_EXCEL_FIELDS = [
-  { key: 'groupLeader', label: 'Client / Group Leader', type: 'text', required: true },
-  { key: 'applicant', label: 'Applicant', type: 'text', required: true },
+  { key: 'groupLeader', label: 'Client / Group Leader', type: 'text' },
+  { key: 'applicant', label: 'Applicant', type: 'text' },
+  { key: 'pan', label: 'Applicant PAN', type: 'text', required: true },
   { key: 'insuranceType', label: 'Insurance Type', type: 'select', options: RENEWAL_CLAIM_INSURANCE_TYPES, required: true },
   { key: 'motorVehicleType', label: 'Sub Type (Vehicle)', type: 'select', options: MOTOR_VEHICLE_TYPES, required: (r) => r.insuranceType === 'Motor' },
   { key: 'motorCoverageType', label: 'Sub Type (Coverage)', type: 'select', options: MOTOR_COVERAGE_TYPES, required: (r) => r.insuranceType === 'Motor' },
@@ -396,8 +401,9 @@ export const CLAIM_EXCEL_FIELDS = [
 export const claimDedupeKey = (r) => (r.groupLeaderId && r.applicant ? `${r.groupLeaderId}|${r.applicant}|${(r.policyNumber || '').toLowerCase()}|${(r.claimType || '').toLowerCase()}` : '');
 
 export const FD_EXCEL_FIELDS = [
-  { key: 'groupLeader', label: 'Client / Group Leader', type: 'text', required: true },
-  { key: 'applicant', label: 'Applicant', type: 'text', required: true },
+  { key: 'groupLeader', label: 'Client / Group Leader', type: 'text' },
+  { key: 'applicant', label: 'Applicant', type: 'text' },
+  { key: 'pan', label: 'Applicant PAN', type: 'text', required: true },
   { key: 'bankName', label: 'Bank Name', type: 'text', required: true },
   { key: 'startingDate', label: 'Starting Date', type: 'date' },
   { key: 'maturityDate', label: 'Maturity Date', type: 'date', required: true },
@@ -407,8 +413,9 @@ export const FD_EXCEL_FIELDS = [
 export const fdDedupeKey = (r) => (r.groupLeaderId && r.applicant ? `${r.groupLeaderId}|${r.applicant}|${(r.bankName || '').toLowerCase()}|${r.startingDate || ''}` : '');
 
 export const POLICY_EXCEL_FIELDS = [
-  { key: 'groupLeader', label: 'Client / Group Leader', type: 'text', required: true },
-  { key: 'applicant', label: 'Applicant', type: 'text', required: true },
+  { key: 'groupLeader', label: 'Client / Group Leader', type: 'text' },
+  { key: 'applicant', label: 'Applicant', type: 'text' },
+  { key: 'pan', label: 'Applicant PAN', type: 'text', required: true },
   { key: 'insuranceType', label: 'Insurance Type', type: 'select', options: INSURANCE_TYPES, required: true },
   { key: 'companyName', label: 'Company Name', type: 'text' },
   { key: 'policyName', label: 'Policy Name', type: 'text' },
