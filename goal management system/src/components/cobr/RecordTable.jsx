@@ -5,7 +5,7 @@
 // S. No. / status-badge behaviour is implemented once here so all five tabs
 // stay consistent.
 import React, { useMemo, useState } from 'react';
-import { Search, ArrowUp, ArrowDown, X } from 'lucide-react';
+import { Search, ArrowUp, ArrowDown, X, Trash2 } from 'lucide-react';
 import { Card, selectCls, inputCls, CoolSelect } from '../UI';
 import { stageBadgeCls } from '../../utils/cobrModules';
 import { ExcelToolbar } from './ExcelTools';
@@ -25,6 +25,8 @@ export default function RecordTable({
   clients = [],
   onImportRecords = null,
   canImportExcel = false,
+  onDelete = null, // (record) => void — omit to hide the delete column entirely
+  canDelete = null, // (record) => boolean
 }) {
   const [query, setQuery] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
@@ -169,6 +171,7 @@ export default function RecordTable({
                   >
                     Status<SortIcon colKey="stage" />
                   </th>
+                  {onDelete && <th className="px-4 py-3 w-10 whitespace-nowrap align-middle" />}
                 </tr>
               </thead>
               <tbody>
@@ -176,7 +179,7 @@ export default function RecordTable({
                   <tr
                     key={r.id}
                     onClick={() => onOpen && onOpen(r)}
-                    className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors cursor-pointer"
+                    className="group border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors cursor-pointer"
                   >
                     <td className="px-4 py-3 text-xs text-slate-400 tabular-nums whitespace-nowrap align-middle">{i + 1}</td>
                     {columns.map((c) => (
@@ -194,6 +197,19 @@ export default function RecordTable({
                         {r.stage || '—'}
                       </span>
                     </td>
+                    {onDelete && (
+                      <td className="px-4 py-3 whitespace-nowrap align-middle">
+                        {(!canDelete || canDelete(r)) && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onDelete(r); }}
+                            className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+                            title="Delete"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

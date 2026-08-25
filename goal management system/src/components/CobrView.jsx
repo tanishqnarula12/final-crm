@@ -11,7 +11,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Search, ArrowLeftRight, RefreshCw, ShieldAlert, Landmark, FileCheck2 } from 'lucide-react';
 import { Card, btnPrimary, selectCls, CoolSelect } from './UI';
-import { loadTasks } from '../utils/tasks';
+import { loadTasks, saveTasks } from '../utils/tasks';
 import { COBR_STAGES, cobrTotals, isCobrTask } from '../utils/cobr';
 import {
   REC, RENEWAL_STAGES, CLAIM_STAGES, FD_STAGES, POLICY_STAGES,
@@ -61,11 +61,22 @@ export default function CobrView({
   useEffect(() => { setTasks(loadTasks()); }, [tasksChangeCounter]);
 
   const mayCreate = !isViewer && canDo('cobr', 'create');
-  // Excel Upload rides each register's OWN create permission (the four were
-  // split into independent Permission Matrix columns already) rather than
-  // the single 'cobr' check the New-record button above still uses.
-  const EXCEL_MODULE = { [REC.RENEWAL]: 'renewals', [REC.CLAIM]: 'claims', [REC.FD]: 'fixedDeposits', [REC.POLICY]: 'otherInsurancePolicies' };
-  const canImportFor = (type) => !isViewer && canDo(EXCEL_MODULE[type], 'create');
+  // Excel Upload and Delete ride each register's OWN create/delete
+  // permission (the four were split into independent Permission Matrix
+  // columns already) rather than the single 'cobr' check the New-record
+  // button above still uses. Delete's default scope is NONE for every role
+  // except Admin, which bypasses the matrix entirely (services/permissions.js)
+  // — so this alone is enough to put a working Delete option in front of an
+  // admin account without any matrix change.
+  const PERMISSION_MODULE = { [REC.RENEWAL]: 'renewals', [REC.CLAIM]: 'claims', [REC.FD]: 'fixedDeposits', [REC.POLICY]: 'otherInsurancePolicies' };
+  const canImportFor = (type) => !isViewer && canDo(PERMISSION_MODULE[type], 'create');
+  const canDeleteFor = (type, record) => !isViewer && canDo(PERMISSION_MODULE[type], 'delete', record);
+
+  const handleDeleteRecord = (type, record) => {
+    const label = COBR_EXCEL_SPEC[type]?.label || 'record';
+    if (!window.confirm(`Delete this ${label}? This cannot be undone.`)) return;
+    saveTasks(loadTasks().filter((t) => t.id !== record.id));
+  };
 
   const rowsFor = useMemo(() => ({
     [REC.RENEWAL]: tasks.filter(isRenewal),
@@ -196,6 +207,8 @@ export default function CobrView({
           clients={clients}
           onImportRecords={handleImportRecords}
           canImportExcel={canImportFor(REC.RENEWAL)}
+          onDelete={(r) => handleDeleteRecord(REC.RENEWAL, r)}
+          canDelete={(r) => canDeleteFor(REC.RENEWAL, r)}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
             { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
@@ -232,6 +245,8 @@ export default function CobrView({
           clients={clients}
           onImportRecords={handleImportRecords}
           canImportExcel={canImportFor(REC.CLAIM)}
+          onDelete={(r) => handleDeleteRecord(REC.CLAIM, r)}
+          canDelete={(r) => canDeleteFor(REC.CLAIM, r)}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
             { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
@@ -269,6 +284,8 @@ export default function CobrView({
           clients={clients}
           onImportRecords={handleImportRecords}
           canImportExcel={canImportFor(REC.FD)}
+          onDelete={(r) => handleDeleteRecord(REC.FD, r)}
+          canDelete={(r) => canDeleteFor(REC.FD, r)}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
             { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
@@ -302,6 +319,8 @@ export default function CobrView({
           clients={clients}
           onImportRecords={handleImportRecords}
           canImportExcel={canImportFor(REC.POLICY)}
+          onDelete={(r) => handleDeleteRecord(REC.POLICY, r)}
+          canDelete={(r) => canDeleteFor(REC.POLICY, r)}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
             { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },

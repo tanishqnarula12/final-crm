@@ -5,13 +5,16 @@
 // can't drift apart) and shows a per-row validation summary before anything
 // is actually imported.
 import React, { useRef, useState } from 'react';
-import { Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2, X } from 'lucide-react';
+import { Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2, X, ChevronDown } from 'lucide-react';
 import { btnGhost, btnPrimary } from '../UI';
 import { RecordModal } from './RecordShell';
 import { exportRecordsToExcel, parseExcelFile } from '../../utils/cobrExcel';
 import { buildImportedRecord } from '../../utils/cobrModules';
 import { getCurrentUser } from '../../utils/auth';
 
+// One "Excel" button. When there's nothing to choose (no import rights) it
+// just downloads directly; otherwise hovering it reveals Download/Upload as
+// a small menu — no separate always-visible buttons competing for space.
 export function ExcelToolbar({ spec, rows, allRows, clients, onImport, canImport = false }) {
   const [showImport, setShowImport] = useState(false);
 
@@ -25,17 +28,41 @@ export function ExcelToolbar({ spec, rows, allRows, clients, onImport, canImport
     });
   };
 
+  if (!canImport) {
+    return (
+      <button type="button" onClick={handleDownload} className={btnGhost + ' py-2 text-xs'}>
+        <FileSpreadsheet size={13} /> Excel
+      </button>
+    );
+  }
+
   return (
     <>
-      <div className="flex items-end gap-2">
-        {canImport && (
-          <button type="button" onClick={() => setShowImport(true)} className={btnGhost + ' py-2 text-xs'}>
-            <Upload size={13} /> Upload Excel
-          </button>
-        )}
-        <button type="button" onClick={handleDownload} className={btnGhost + ' py-2 text-xs'}>
-          <Download size={13} /> Download Excel
+      <div className="relative inline-block group/excel">
+        <button type="button" className={btnGhost + ' py-2 text-xs'}>
+          <FileSpreadsheet size={13} /> Excel <ChevronDown size={11} className="opacity-60" />
         </button>
+        {/* pt-1 (not a margin on the panel) keeps the hover region unbroken
+            between the button and the panel — a gap here would drop the
+            hover state the instant the mouse crosses it. */}
+        <div className="hidden group-hover/excel:block group-focus-within/excel:block absolute right-0 top-full pt-1 z-20">
+          <div className="w-44 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl py-1.5 overflow-hidden animate-fade-in">
+            <button
+              type="button"
+              onClick={handleDownload}
+              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60 transition-colors cursor-pointer"
+            >
+              <Download size={13} className="shrink-0" /> Download Excel
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowImport(true)}
+              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60 transition-colors cursor-pointer"
+            >
+              <Upload size={13} className="shrink-0" /> Upload Excel
+            </button>
+          </div>
+        </div>
       </div>
 
       {showImport && (
