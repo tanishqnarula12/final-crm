@@ -1,16 +1,21 @@
 // Fixed Deposits — track a maturing FD through to one of two outcomes: the
-// client renews it themselves, or the money comes to us as an investment.
+// client renews it themselves (which schedules a follow-up reminder — see
+// reminderFlow below) or the money comes to us as an investment.
 //
 // Workflow: Qualified -> WhatsApp Link Sent -> Waiting for Update, then one
-// of two outcomes — FD Renewed (nothing further to capture) or Invested With
+// of two outcomes — FD Renewed (asks for a Next Reminder Date, which
+// auto-creates a follow-up Task, same as Policy Continued) or Invested With
 // Us (requires the Investment Amount, shown in the FD table). Same
 // action-button + transition-map architecture as Claims/Policies.
 //
 // Opens in View Mode once created — only the assigner (Assigned By) can
 // unlock full editing via the Edit button; Assigned By/Assigned To may still
-// drive the workflow (stage) regardless. Every edited field is auto-logged
-// into Comments & Logs as "Changed X: old -> new" on Save; workflow
-// transitions log themselves immediately on Confirm.
+// drive the workflow (stage) AND attach documents regardless — attachments
+// aren't gated behind full Edit Mode, same as every other COBR-workspace
+// register. Every edited field is auto-logged into Comments & Logs as
+// "Changed X: old -> new" on Save (this now runs on every save, not just
+// full Edit Mode, so an attachment added outside Edit Mode still gets
+// logged); workflow transitions log themselves immediately on Confirm.
 import React, { useState, useMemo } from 'react';
 import { AlertTriangle, ArrowRight, CheckCircle2, Lock } from 'lucide-react';
 import { inputCls, Field, btnPrimary, btnGhost } from '../UI';
@@ -56,6 +61,7 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
 
   const [stage, setStage] = useState(record?.stage || 'Qualified');
   const [investmentAmount, setInvestmentAmount] = useState(record?.investmentAmount || '');
+  const [nextReminderDate, setNextReminderDate] = useState(record?.nextReminderDate || '');
   const [history, setHistory] = useState(record?.stageHistory || []);
   const [comments, setComments] = useState(record?.comments || []);
 
@@ -63,21 +69,25 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
   const [pending, setPending] = useState(null);
   const [note, setNote] = useState('');
   const [amount, setAmount] = useState('');
+  const [reminderDate, setReminderDate] = useState('');
 
   const set = (patch) => setF((p) => ({ ...p, ...patch }));
 
   const closed = fdIsClosed(stage);
   const actions = canChangeStageThis && !closed ? fdActionsFor(stage) : [];
-  const dirty = isEdit && (stage !== (record?.stage || '') || history.length !== (record?.stageHistory || []).length);
+  const idsOf = (arr) => (arr || []).map((a) => a.id).sort().join(',');
+  const attachmentsChanged = isEdit && idsOf(f.attachments) !== idsOf(record?.attachments);
+  const dirty = isEdit && (stage !== (record?.stage || '') || history.length !== (record?.stageHistory || []).length || attachmentsChanged);
 
-  const startAction = (a) => { setPending(a); setNote(''); setAmount(''); };
-  const cancelAction = () => { setPending(null); setNote(''); setAmount(''); };
+  const startAction = (a) => { setPending(a); setNote(''); setAmount(''); setReminderDate(''); };
+  const cancelAction = () => { setPending(null); setNote(''); setAmount(''); setReminderDate(''); };
 
   const pendingReady = useMemo(() => {
     if (!pending) return false;
     if (pending.requiresAmount && !(Number(amount) > 0)) return false;
+    if (pending.reminderFlow && !reminderDate) return false;
     return true;
-  }, [pending, amount]);
+  }, [pending, amount, reminderDate]);
 
   const confirmAction = () => {
     if (!pending || !pendingReady) return;
@@ -93,10 +103,11 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
     setComments((c) => [...c, {
       at: new Date().toISOString(),
       by,
-      text: `${pending.label} — stage moved from ${stage} to ${pending.to}${pending.requiresAmount ? ` | ${fmtINR(Number(amount) || 0)} invested with us` : ''}${note.trim() ? ` | ${note.trim()}` : ''}`,
+      text: `${pending.label} — stage moved from ${stage} to ${pending.to}${pending.requiresAmount ? ` | ${fmtINR(Number(amount) || 0)} invested with us` : ''}${pending.reminderFlow ? ` | Next reminder: ${reminderDate}` : ''}${note.trim() ? ` | ${note.trim()}` : ''}`,
     }]);
     setStage(pending.to);
     if (pending.requiresAmount) setInvestmentAmount(amount);
+    if (pending.reminderFlow) setNextReminderDate(reminderDate);
     cancelAction();
   };
 
@@ -104,6 +115,32 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
     if (!f.groupLeader || !f.applicant || !f.bankName || !f.maturityDate || !f.maturityAmount || !f.assignedTo) return false;
     return true;
   }, [f]);
+
+  // FD Renewed means there's a future check-in to schedule — create it as an
+  // ordinary follow-up Task the moment that outcome is actually saved,
+  // guarded so re-saving the record afterwards (e.g. an unrelated field
+  // edit) doesn't spawn duplicates. Mirrors OtherPolicyModal's Policy
+  // Continued follow-up exactly.
+  const followUpTaskIfNeeded = (savedFd) => {
+    if (stage !== 'FD Renewed' || !nextReminderDate) return null;
+    if (record?.nextReminderDate === nextReminderDate && record?.stage === 'FD Renewed') return null;
+    const now = new Date().toISOString();
+    return {
+      id: uid(),
+      relatedTo: 'Others',
+      taskName: `Follow-up: ${f.applicant || 'Client'} — FD Renewed`,
+      groupLeaderId: f.groupLeaderId,
+      groupLeader: f.groupLeader,
+      applicant: f.applicant,
+      pan: f.pan,
+      dueDate: nextReminderDate,
+      assignedTo: f.assignedTo,
+      stage: 'Open',
+      comments: [{ at: now, by: me?.name || 'System', text: `Auto-created from Fixed Deposit "${savedFd.bankName || 'record'}" being renewed by the client.` }],
+      createdAt: now,
+      updatedAt: now,
+    };
+  };
 
   const handleSave = () => {
     if (!canSave) return;
@@ -115,7 +152,11 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
     if (!isEdit) {
       cmts = [...cmts, { at: now, by, text: `Fixed Deposit record created at stage "${stage}".` }];
       hist = [...hist, makeHistoryEntry({ stage, action: stage, note: 'Record created', by })];
-    } else if (isEditingMode) {
+    } else {
+      // Runs on every save, not just full Edit Mode — attachments (and any
+      // sub-form field) can now change outside Edit Mode too, and that
+      // change still needs to be logged. buildFieldChangeLog/diffAttachmentLog
+      // are no-ops when nothing in their field set actually differs.
       const changeLines = [
         ...buildFieldChangeLog(record, f, FIELD_DEFS),
         ...diffAttachmentLog(record?.attachments, f.attachments),
@@ -123,15 +164,16 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
       if (changeLines.length) cmts = [...cmts, ...toLogComments(changeLines)];
     }
 
-    onSave({
+    const saved = {
       ...(record || {}),
       id: record?.id || uid(),
       relatedTo: REC.FD,
       taskName: recordTaskName(REC.FD, f.applicant, f.bankName),
       ...f,
       stage,
-      // Only meaningful once the money actually came to us.
+      // Only meaningful once that specific outcome actually happened.
       investmentAmount: stage === 'Invested With Us' ? investmentAmount : '',
+      nextReminderDate: stage === 'FD Renewed' ? nextReminderDate : '',
       stageHistory: hist,
       comments: cmts,
       // The maturity date is what this record is really chasing.
@@ -140,7 +182,13 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
       assignedBy: record?.assignedBy || me?.id || '',
       createdAt: record?.createdAt || now,
       updatedAt: now,
-    });
+    };
+
+    const followUp = followUpTaskIfNeeded(saved);
+    // Both land in one persist (rather than two separate saveTasks() calls)
+    // to avoid a race between overlapping network round-trips — see
+    // App.jsx's handleSaveWorkspaceRecord, which already accepts an array.
+    onSave(followUp ? [saved, followUp] : saved);
   };
 
   const handleCancelEdit = () => {
@@ -244,9 +292,11 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
           </p>
         ) : closed ? (
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Investment Amount</p>
-            <p className={`text-xs font-bold tabular-nums ${stage === 'Invested With Us' ? 'text-violet-700 dark:text-violet-400' : 'text-slate-500'}`}>
-              {stage === 'Invested With Us' ? fmtINR(Number(investmentAmount) || 0) : 'Not applicable — FD renewed by client'}
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+              {stage === 'Invested With Us' ? 'Investment Amount' : 'Next Reminder'}
+            </p>
+            <p className={`text-xs font-bold tabular-nums ${stage === 'Invested With Us' ? 'text-violet-700 dark:text-violet-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
+              {stage === 'Invested With Us' ? fmtINR(Number(investmentAmount) || 0) : (nextReminderDate || 'No reminder set')}
             </p>
           </div>
         ) : !canChangeStageThis ? (
@@ -294,6 +344,22 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
               </div>
             )}
 
+            {pending.reminderFlow && (
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block mb-1.5">
+                  Next Reminder Date <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  autoFocus
+                  type="date"
+                  value={reminderDate}
+                  onChange={(e) => setReminderDate(e.target.value)}
+                  className={inputCls + ' text-xs py-2'}
+                />
+                <p className="text-[10px] text-slate-400 mt-1">A follow-up task will be created automatically for this date.</p>
+              </div>
+            )}
+
             <div>
               <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block mb-1.5">Note (optional)</label>
               <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Anything worth recording…" className={inputCls + ' text-xs py-2'} />
@@ -317,7 +383,8 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
           label="Attachments"
           files={f.attachments}
           onChange={(files) => set({ attachments: files })}
-          disabled={!fieldsUnlocked}
+          disabled={!canChangeStageThis}
+          lockedHint="You do not have permission to add attachments to this FD."
         />
       </div>
 

@@ -419,15 +419,15 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
               </div>
             )}
 
-            {pending.requiresAttachment && (
+            {(pending.requiresAttachment || pending.showAttachment) && (
               <div>
                 <AttachmentField
-                  label={pending.attachmentLabel || 'Upload the required documents *'}
+                  label={pending.attachmentLabel || (pending.requiresAttachment ? 'Upload the required documents *' : 'Upload document (optional)')}
                   files={files}
                   onChange={setFiles}
-                  hint="At least one file is required for this step."
+                  hint={pending.requiresAttachment ? 'At least one file is required for this step.' : 'Optional — attach now if you already have it.'}
                 />
-                {files.length === 0 && (
+                {pending.requiresAttachment && files.length === 0 && (
                   <p className="text-[10px] text-rose-500 dark:text-rose-400 font-semibold mt-1.5">
                     {pending.attachmentMissingMsg || 'Please upload at least one document before continuing.'}
                   </p>

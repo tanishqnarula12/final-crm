@@ -190,9 +190,8 @@ const INSURER_DECISION = [
 export const CLAIM_ACTIONS = {
   Qualified: [
     {
-      key: 'collect', label: 'Document Collected', to: 'Document Collected', tone: 'blue', requiresAttachment: true,
-      attachmentLabel: 'Upload Claim Document — Required',
-      attachmentMissingMsg: 'Please upload the required claim document before moving to Document Collected.',
+      key: 'collect', label: 'Document Collected', to: 'Document Collected', tone: 'blue', showAttachment: true,
+      attachmentLabel: 'Upload Claim Document (optional)',
     },
   ],
   'Document Collected': [
@@ -277,7 +276,10 @@ export const FD_ACTIONS = {
     { key: 'waiting', label: 'Waiting for Update', to: 'Waiting for Update', tone: 'amber' },
   ],
   'Waiting for Update': [
-    { key: 'renewed', label: 'FD Renewed', to: 'FD Renewed', tone: 'emerald', closes: true },
+    // FD Renewed means there's nothing to settle, just a future check-in to
+    // schedule — same reminderFlow as Policy Continued (asks for a Next
+    // Reminder Date, which auto-creates a follow-up Task on confirm).
+    { key: 'renewed', label: 'FD Renewed', to: 'FD Renewed', tone: 'emerald', reminderFlow: true, closes: true },
     { key: 'invested', label: 'Invested With Us', to: 'Invested With Us', tone: 'violet', requiresAmount: true, amountLabel: 'Investment Amount', closes: true },
   ],
   'FD Renewed': [],
