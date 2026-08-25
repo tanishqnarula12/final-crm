@@ -86,23 +86,51 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
   // StagePicker sets `stage` directly instead of routing through this.
   const [pendingStage, setPendingStage] = useState(null);
   const [stageRemark, setStageRemark] = useState('');
+  // Files captured specifically for the Payment Done -> Policy Document
+  // Upload transition, which requires its own attachment before it can be
+  // confirmed — separate from the general Attachment section below (which
+  // stays Edit-Mode-gated), since whoever is actually advancing the stage
+  // (often the assignee, not the assigner) needs to supply the document at
+  // that exact moment without needing full edit rights.
+  const [transitionFiles, setTransitionFiles] = useState([]);
 
   const set = (patch) => setF((p) => ({ ...p, ...patch }));
 
   const attachUnlocked = renewalAttachmentsUnlocked(stage);
+  const requiresDocForPending = pendingStage === 'Policy Document Upload';
+
+  // Up Sell / Cross Sell ride alongside whoever can move the stage forward
+  // (not the assigner-only "Edit" gate) — the point is to capture an
+  // opportunity the moment it comes up mid-workflow, without a detour
+  // through general edit mode.
+  const oppChanged = isEdit && (
+    !!f.upSell !== !!record.upSell
+    || String(f.upSellAmount || '') !== String(record.upSellAmount || '')
+    || !!f.crossSell !== !!record.crossSell
+    || String(f.crossSellCompany || '') !== String(record.crossSellCompany || '')
+    || String(f.crossSellPolicy || '') !== String(record.crossSellPolicy || '')
+    || String(f.crossSellAmount || '') !== String(record.crossSellAmount || '')
+  );
 
   const requestStageChange = (next) => {
     if (!isEdit) { setStage(next); return; }
     setPendingStage(next);
     setStageRemark('');
+    setTransitionFiles([]);
   };
-  const cancelStageChange = () => { setPendingStage(null); setStageRemark(''); };
+  const cancelStageChange = () => { setPendingStage(null); setStageRemark(''); setTransitionFiles([]); };
   const confirmStageChange = () => {
     if (!pendingStage || !stageRemark.trim()) return;
+    if (requiresDocForPending && transitionFiles.length === 0) return;
     const now = new Date().toISOString();
     const by = me?.name || 'System';
-    setComments((c) => [...c, { at: now, by, text: `Stage changed from ${stage} to ${pendingStage} — ${stageRemark.trim()}` }]);
-    setStageHistory((h) => [...h, makeHistoryEntry({ stage: pendingStage, action: pendingStage, note: stageRemark.trim(), attachments: f.attachments, by })]);
+    const mergedAttachments = transitionFiles.length ? [...(f.attachments || []), ...transitionFiles] : f.attachments;
+    setComments((c) => [...c, {
+      at: now, by,
+      text: `Stage changed from ${stage} to ${pendingStage} — ${stageRemark.trim()}${transitionFiles.length ? ` | Document(s) uploaded: ${transitionFiles.map((fl) => fl.fileName).join(', ')}` : ''}`,
+    }]);
+    setStageHistory((h) => [...h, makeHistoryEntry({ stage: pendingStage, action: pendingStage, note: stageRemark.trim(), attachments: mergedAttachments, by })]);
+    if (transitionFiles.length) set({ attachments: mergedAttachments });
     setStage(pendingStage);
     cancelStageChange();
   };
@@ -125,7 +153,12 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
     if (!isEdit) {
       cmts = [...cmts, { at: now, by, text: `Renewal record created at stage "${stage}".` }];
       hist = [...hist, makeHistoryEntry({ stage, action: stage, note: 'Record created', by })];
-    } else if (isEditingMode) {
+    } else {
+      // Runs on every save, not just full Edit Mode — Up Sell/Cross Sell can
+      // now be updated inline (gated on canChangeStageThis) without ever
+      // entering Edit Mode, and that change still needs to be logged.
+      // buildFieldChangeLog/diffAttachmentLog are no-ops when nothing in
+      // their field set actually differs, so this is safe to always run.
       const changeLines = [
         ...buildFieldChangeLog(record, f, FIELD_DEFS),
         ...diffAttachmentLog(record?.attachments, f.attachments),
@@ -172,7 +205,7 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
           isEditingMode={isEditingMode}
           canEditThis={canEditThis}
           canSave={canSave}
-          stageDirty={isEdit && stage !== record.stage}
+          stageDirty={isEdit && (stage !== record.stage || oppChanged)}
           onEdit={() => setIsEditingMode(true)}
           onCancel={handleCancelEdit}
           onSave={handleSave}
@@ -287,13 +320,30 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
               placeholder="Why is the stage changing? (required)"
               className={inputCls + ' text-xs py-2'}
             />
+
+            {requiresDocForPending && (
+              <div className="pt-1">
+                <AttachmentField
+                  label="Upload Policy Document — Required"
+                  files={transitionFiles}
+                  onChange={setTransitionFiles}
+                  hint="The policy document must be attached before this stage can be confirmed."
+                />
+                {transitionFiles.length === 0 && (
+                  <p className="text-[10px] text-rose-500 dark:text-rose-400 font-semibold mt-1.5">
+                    Please upload the policy document before moving to Policy Document Uploaded.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2 justify-end">
               <button type="button" onClick={cancelStageChange} className={btnGhost + ' py-1.5 px-3 text-[10px]'}>Cancel</button>
               <button
                 type="button"
                 onClick={confirmStageChange}
-                disabled={!stageRemark.trim()}
-                className={btnPrimary + ' py-1.5 px-3 text-[10px]' + (!stageRemark.trim() ? ' opacity-50 cursor-not-allowed' : '')}
+                disabled={!stageRemark.trim() || (requiresDocForPending && transitionFiles.length === 0)}
+                className={btnPrimary + ' py-1.5 px-3 text-[10px]' + (!stageRemark.trim() || (requiresDocForPending && transitionFiles.length === 0) ? ' opacity-50 cursor-not-allowed' : '')}
               >
                 Confirm
               </button>
@@ -310,13 +360,15 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
         />
       </div>
 
-      {/* Up Sell / Cross Sell */}
+      {/* Up Sell / Cross Sell — available to whoever can move the stage
+          forward (assigner or assignee), not just in full Edit Mode, so an
+          opportunity can be captured the moment it comes up. */}
       <div className="rounded-2xl border border-indigo-200/60 dark:border-indigo-900/40 bg-indigo-50/30 dark:bg-indigo-950/10 p-4 space-y-3">
         <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Opportunity</h4>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            disabled={!fieldsUnlocked}
+            disabled={!canChangeStageThis}
             onClick={() => set({ upSell: !f.upSell })}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
               f.upSell
@@ -328,7 +380,7 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
           </button>
           <button
             type="button"
-            disabled={!fieldsUnlocked}
+            disabled={!canChangeStageThis}
             onClick={() => set({ crossSell: !f.crossSell })}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
               f.crossSell
@@ -344,7 +396,7 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
             {f.upSell && (
               <Field label="Up Sell Amount *">
-                <fieldset disabled={!fieldsUnlocked} className="contents">
+                <fieldset disabled={!canChangeStageThis} className="contents">
                   <input type="number" min="0" value={f.upSellAmount} onChange={(e) => set({ upSellAmount: e.target.value })} className={inputCls} />
                 </fieldset>
               </Field>
@@ -352,17 +404,17 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
             {f.crossSell && (
               <>
                 <Field label="Cross Sell — Company Name *">
-                  <fieldset disabled={!fieldsUnlocked} className="contents">
+                  <fieldset disabled={!canChangeStageThis} className="contents">
                     <input value={f.crossSellCompany} onChange={(e) => set({ crossSellCompany: e.target.value })} className={inputCls} />
                   </fieldset>
                 </Field>
                 <Field label="Cross Sell — Policy Name *">
-                  <fieldset disabled={!fieldsUnlocked} className="contents">
+                  <fieldset disabled={!canChangeStageThis} className="contents">
                     <input value={f.crossSellPolicy} onChange={(e) => set({ crossSellPolicy: e.target.value })} className={inputCls} />
                   </fieldset>
                 </Field>
                 <Field label="Cross Sell — Amount *">
-                  <fieldset disabled={!fieldsUnlocked} className="contents">
+                  <fieldset disabled={!canChangeStageThis} className="contents">
                     <input type="number" min="0" value={f.crossSellAmount} onChange={(e) => set({ crossSellAmount: e.target.value })} className={inputCls} />
                   </fieldset>
                 </Field>

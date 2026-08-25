@@ -15,7 +15,7 @@ import { loadTasks } from '../utils/tasks';
 import { COBR_STAGES, cobrTotals, isCobrTask } from '../utils/cobr';
 import {
   REC, RENEWAL_STAGES, CLAIM_STAGES, FD_STAGES, POLICY_STAGES,
-  isRenewal, isClaim, isFd, isPolicy, isOpenStage, claimSettlementDisplay,
+  isRenewal, isClaim, isFd, isPolicy, isOpenStage, claimSettlementDisplay, COBR_EXCEL_SPEC,
 } from '../utils/cobrModules';
 import { teamName } from '../services/team';
 import { fmtINR } from '../utils/calc';
@@ -61,6 +61,11 @@ export default function CobrView({
   useEffect(() => { setTasks(loadTasks()); }, [tasksChangeCounter]);
 
   const mayCreate = !isViewer && canDo('cobr', 'create');
+  // Excel Upload rides each register's OWN create permission (the four were
+  // split into independent Permission Matrix columns already) rather than
+  // the single 'cobr' check the New-record button above still uses.
+  const EXCEL_MODULE = { [REC.RENEWAL]: 'renewals', [REC.CLAIM]: 'claims', [REC.FD]: 'fixedDeposits', [REC.POLICY]: 'otherInsurancePolicies' };
+  const canImportFor = (type) => !isViewer && canDo(EXCEL_MODULE[type], 'create');
 
   const rowsFor = useMemo(() => ({
     [REC.RENEWAL]: tasks.filter(isRenewal),
@@ -100,6 +105,10 @@ export default function CobrView({
   const handleSaved = (rec) => {
     onSaveRecord && onSaveRecord(rec);
     setEditor(null);
+  };
+
+  const handleImportRecords = (records) => {
+    onSaveRecord && onSaveRecord(records);
   };
 
   const active = TABS.find((t) => t.id === tab);
@@ -183,6 +192,10 @@ export default function CobrView({
           onOpen={(r) => setEditor({ type: REC.RENEWAL, record: r })}
           emptyText="No renewals tracked yet."
           minWidth={1260}
+          excelSpec={COBR_EXCEL_SPEC[REC.RENEWAL]}
+          clients={clients}
+          onImportRecords={handleImportRecords}
+          canImportExcel={canImportFor(REC.RENEWAL)}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
             { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
@@ -215,6 +228,10 @@ export default function CobrView({
           onOpen={(r) => setEditor({ type: REC.CLAIM, record: r })}
           emptyText="No claims registered yet."
           minWidth={1340}
+          excelSpec={COBR_EXCEL_SPEC[REC.CLAIM]}
+          clients={clients}
+          onImportRecords={handleImportRecords}
+          canImportExcel={canImportFor(REC.CLAIM)}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
             { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
@@ -248,6 +265,10 @@ export default function CobrView({
           onOpen={(r) => setEditor({ type: REC.FD, record: r })}
           emptyText="No fixed deposits tracked yet."
           minWidth={1260}
+          excelSpec={COBR_EXCEL_SPEC[REC.FD]}
+          clients={clients}
+          onImportRecords={handleImportRecords}
+          canImportExcel={canImportFor(REC.FD)}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
             { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
@@ -277,6 +298,10 @@ export default function CobrView({
           onOpen={(r) => setEditor({ type: REC.POLICY, record: r })}
           emptyText="No other policies recorded yet."
           minWidth={1360}
+          excelSpec={COBR_EXCEL_SPEC[REC.POLICY]}
+          clients={clients}
+          onImportRecords={handleImportRecords}
+          canImportExcel={canImportFor(REC.POLICY)}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
             { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },

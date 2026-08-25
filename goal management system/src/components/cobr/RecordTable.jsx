@@ -8,6 +8,7 @@ import React, { useMemo, useState } from 'react';
 import { Search, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { Card, selectCls, inputCls, CoolSelect } from '../UI';
 import { stageBadgeCls } from '../../utils/cobrModules';
+import { ExcelToolbar } from './ExcelTools';
 
 export default function RecordTable({
   type,
@@ -20,6 +21,10 @@ export default function RecordTable({
   onOpen,
   emptyText = 'Nothing here yet.',
   minWidth = 1000,
+  excelSpec = null,
+  clients = [],
+  onImportRecords = null,
+  canImportExcel = false,
 }) {
   const [query, setQuery] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
@@ -119,6 +124,19 @@ export default function RecordTable({
           >
             <X size={12} /> Clear
           </button>
+        )}
+
+        {excelSpec && (
+          <div className="ml-auto">
+            <ExcelToolbar
+              spec={excelSpec}
+              rows={filtered}
+              allRows={rows}
+              clients={clients}
+              onImport={onImportRecords}
+              canImport={canImportExcel}
+            />
+          </div>
         )}
       </div>
 

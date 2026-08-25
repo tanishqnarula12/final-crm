@@ -189,7 +189,11 @@ const INSURER_DECISION = [
 // history, stage unchanged) — which is exactly the Ombudsman re-denial.
 export const CLAIM_ACTIONS = {
   Qualified: [
-    { key: 'collect', label: 'Document Collected', to: 'Document Collected', tone: 'blue' },
+    {
+      key: 'collect', label: 'Document Collected', to: 'Document Collected', tone: 'blue', requiresAttachment: true,
+      attachmentLabel: 'Upload Claim Document — Required',
+      attachmentMissingMsg: 'Please upload the required claim document before moving to Document Collected.',
+    },
   ],
   'Document Collected': [
     { key: 'submit', label: 'Claim Submitted', to: 'Claim Submitted', tone: 'blue' },
@@ -344,6 +348,126 @@ export const POLICY_ACTIONS = {
 };
 
 export const policyActionsFor = (stage) => POLICY_ACTIONS[stage] || [];
+
+// ---------------------------------------------------------------------------
+// Excel import/export field specs — one entry per Sub-Form field, in the
+// exact order/labels used for BOTH Download and Upload (utils/cobrExcel.js),
+// so the two formats can never drift apart. `groupLeader`/`applicant` (every
+// module's client-identity pair, via ClientApplicantFields) and
+// `assignedTo` (every module's team-member field, via AssignmentFields) are
+// resolved specially by the Excel engine rather than needing a per-module
+// 'client'/'team' type here.
+// ---------------------------------------------------------------------------
+export const RENEWAL_EXCEL_FIELDS = [
+  { key: 'groupLeader', label: 'Client / Group Leader', type: 'text', required: true },
+  { key: 'applicant', label: 'Applicant', type: 'text', required: true },
+  { key: 'insuranceType', label: 'Insurance Type', type: 'select', options: RENEWAL_CLAIM_INSURANCE_TYPES, required: true },
+  { key: 'motorVehicleType', label: 'Sub Type (Vehicle)', type: 'select', options: MOTOR_VEHICLE_TYPES, required: (r) => r.insuranceType === 'Motor' },
+  { key: 'motorCoverageType', label: 'Sub Type (Coverage)', type: 'select', options: MOTOR_COVERAGE_TYPES, required: (r) => r.insuranceType === 'Motor' },
+  { key: 'policyName', label: 'Policy Name', type: 'text' },
+  { key: 'policyNumber', label: 'Policy Number', type: 'text' },
+  { key: 'sumAssured', label: 'Sum Assured', type: 'number' },
+  { key: 'premiumAmount', label: 'Premium Amount', type: 'number', required: true },
+  { key: 'dueDate', label: 'Due Date', type: 'date', required: true },
+  { key: 'assignedTo', label: 'Assigned To', type: 'text', required: true },
+  { key: 'upSell', label: 'Up Sell', type: 'boolean' },
+  { key: 'upSellAmount', label: 'Up Sell Amount', type: 'number', required: (r) => !!r.upSell },
+  { key: 'crossSell', label: 'Cross Sell', type: 'boolean' },
+  { key: 'crossSellCompany', label: 'Cross Sell Company', type: 'text', required: (r) => !!r.crossSell },
+  { key: 'crossSellPolicy', label: 'Cross Sell Policy Name', type: 'text', required: (r) => !!r.crossSell },
+  { key: 'crossSellAmount', label: 'Cross Sell Amount', type: 'number', required: (r) => !!r.crossSell },
+];
+export const renewalDedupeKey = (r) => (r.groupLeaderId && r.applicant ? `${r.groupLeaderId}|${r.applicant}|${(r.policyNumber || '').toLowerCase()}` : '');
+
+export const CLAIM_EXCEL_FIELDS = [
+  { key: 'groupLeader', label: 'Client / Group Leader', type: 'text', required: true },
+  { key: 'applicant', label: 'Applicant', type: 'text', required: true },
+  { key: 'insuranceType', label: 'Insurance Type', type: 'select', options: RENEWAL_CLAIM_INSURANCE_TYPES, required: true },
+  { key: 'motorVehicleType', label: 'Sub Type (Vehicle)', type: 'select', options: MOTOR_VEHICLE_TYPES, required: (r) => r.insuranceType === 'Motor' },
+  { key: 'motorCoverageType', label: 'Sub Type (Coverage)', type: 'select', options: MOTOR_COVERAGE_TYPES, required: (r) => r.insuranceType === 'Motor' },
+  { key: 'policyName', label: 'Policy Name', type: 'text' },
+  { key: 'policyNumber', label: 'Policy Number', type: 'text' },
+  { key: 'sumAssured', label: 'Sum Assured', type: 'number' },
+  { key: 'claimType', label: 'Claim Type', type: 'select', options: CLAIM_TYPES, required: true },
+  { key: 'claimAmount', label: 'Claim Amount', type: 'number', required: true },
+  { key: 'dueDate', label: 'Target Date', type: 'date' },
+  { key: 'assignedTo', label: 'Assigned To', type: 'text', required: true },
+];
+export const claimDedupeKey = (r) => (r.groupLeaderId && r.applicant ? `${r.groupLeaderId}|${r.applicant}|${(r.policyNumber || '').toLowerCase()}|${(r.claimType || '').toLowerCase()}` : '');
+
+export const FD_EXCEL_FIELDS = [
+  { key: 'groupLeader', label: 'Client / Group Leader', type: 'text', required: true },
+  { key: 'applicant', label: 'Applicant', type: 'text', required: true },
+  { key: 'bankName', label: 'Bank Name', type: 'text', required: true },
+  { key: 'startingDate', label: 'Starting Date', type: 'date' },
+  { key: 'maturityDate', label: 'Maturity Date', type: 'date', required: true },
+  { key: 'maturityAmount', label: 'Maturity Amount', type: 'number', required: true },
+  { key: 'assignedTo', label: 'Assigned To', type: 'text', required: true },
+];
+export const fdDedupeKey = (r) => (r.groupLeaderId && r.applicant ? `${r.groupLeaderId}|${r.applicant}|${(r.bankName || '').toLowerCase()}|${r.startingDate || ''}` : '');
+
+export const POLICY_EXCEL_FIELDS = [
+  { key: 'groupLeader', label: 'Client / Group Leader', type: 'text', required: true },
+  { key: 'applicant', label: 'Applicant', type: 'text', required: true },
+  { key: 'insuranceType', label: 'Insurance Type', type: 'select', options: INSURANCE_TYPES, required: true },
+  { key: 'companyName', label: 'Company Name', type: 'text' },
+  { key: 'policyName', label: 'Policy Name', type: 'text' },
+  { key: 'policyNumber', label: 'Policy Number', type: 'text' },
+  { key: 'sumAssured', label: 'Sum Assured', type: 'number' },
+  { key: 'premiumAmount', label: 'Premium Amount', type: 'number' },
+  { key: 'premiumPayingTerm', label: 'Premium Paying Term', type: 'number' },
+  { key: 'policyTerm', label: 'Policy Term', type: 'number' },
+  { key: 'startDate', label: 'Start Date', type: 'date' },
+  { key: 'dueDate', label: 'Next Due / Renewal Date', type: 'date' },
+  { key: 'assignedTo', label: 'Assigned To', type: 'text', required: true },
+];
+export const policyDedupeKey = (r) => (r.groupLeaderId && r.applicant ? `${r.groupLeaderId}|${r.applicant}|${(r.policyNumber || '').toLowerCase()}` : '');
+
+export const COBR_EXCEL_SPEC = {
+  [REC.RENEWAL]: { type: REC.RENEWAL, fields: RENEWAL_EXCEL_FIELDS, dedupeKey: renewalDedupeKey, sheetName: 'Renewals', label: 'Renewal' },
+  [REC.CLAIM]: { type: REC.CLAIM, fields: CLAIM_EXCEL_FIELDS, dedupeKey: claimDedupeKey, sheetName: 'Claims', label: 'Claim' },
+  [REC.FD]: { type: REC.FD, fields: FD_EXCEL_FIELDS, dedupeKey: fdDedupeKey, sheetName: 'Fixed Deposits', label: 'Fixed Deposit' },
+  [REC.POLICY]: { type: REC.POLICY, fields: POLICY_EXCEL_FIELDS, dedupeKey: policyDedupeKey, sheetName: 'Other Insurance Policies', label: 'Policy' },
+};
+
+const EXCEL_INITIAL_STAGE = {
+  [REC.RENEWAL]: RENEWAL_STAGES[0],
+  [REC.CLAIM]: CLAIM_STAGES[0],
+  [REC.FD]: FD_STAGES[0],
+  [REC.POLICY]: POLICY_STAGES[0],
+};
+
+// Turns one parsed-and-validated Excel row into a full Task-shaped record —
+// the same scaffolding every modal's handleSave already builds for a
+// brand-new record (initial stage, a creation history entry, a creation
+// comment — noting it came from an Excel import so that's visible in
+// Comments & Logs).
+export function buildImportedRecord(type, resolved, me) {
+  const now = new Date().toISOString();
+  const stage = EXCEL_INITIAL_STAGE[type];
+  const by = me?.name || 'System';
+  const extra = type === REC.RENEWAL || type === REC.POLICY ? resolved.policyName
+    : type === REC.CLAIM ? resolved.claimType
+      : resolved.bankName;
+  const record = {
+    id: uid(),
+    relatedTo: type,
+    taskName: recordTaskName(type, resolved.applicant, extra),
+    ...resolved,
+    stage,
+    stageHistory: [makeHistoryEntry({ stage, action: stage, note: 'Imported from Excel', by })],
+    comments: [{ at: now, by, text: `Record created via Excel import at stage "${stage}".` }],
+    subPersons: [],
+    subPerson: '',
+    attachments: [],
+    assignedBy: me?.id || '',
+    createdAt: now,
+    updatedAt: now,
+  };
+  // FD's due date is the maturity date itself, not its own sub-form column.
+  if (type === REC.FD) record.dueDate = resolved.maturityDate;
+  return record;
+}
 
 // ---------------------------------------------------------------------------
 // Shared helpers

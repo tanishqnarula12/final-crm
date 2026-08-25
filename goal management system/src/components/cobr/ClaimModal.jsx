@@ -120,7 +120,7 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
     setComments((c) => [...c, {
       at: new Date().toISOString(),
       by,
-      text: `${pending.label}${stage !== pending.to ? ` — stage moved from ${stage} to ${pending.to}` : ' — recorded (stage unchanged)'}${note.trim() ? ` | ${note.trim()}` : ''}${usesAmount ? ` | ${fmtINR(Number(amount) || 0)} ${pending.key === 'full' ? 'settled in full' : 'received'}` : ''}`,
+      text: `${pending.label}${stage !== pending.to ? ` — stage moved from ${stage} to ${pending.to}` : ' — recorded (stage unchanged)'}${note.trim() ? ` | ${note.trim()}` : ''}${usesAmount ? ` | ${fmtINR(Number(amount) || 0)} ${pending.key === 'full' ? 'settled in full' : 'received'}` : ''}${files.length ? ` | Document(s) uploaded: ${files.map((fl) => fl.fileName).join(', ')}` : ''}`,
     }]);
     // Files captured for a transition also join the record's own attachment set
     // so the claim carries every document ever supplied against it.
@@ -420,12 +420,19 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
             )}
 
             {pending.requiresAttachment && (
-              <AttachmentField
-                label="Upload the required documents *"
-                files={files}
-                onChange={setFiles}
-                hint="At least one file is required for this step."
-              />
+              <div>
+                <AttachmentField
+                  label={pending.attachmentLabel || 'Upload the required documents *'}
+                  files={files}
+                  onChange={setFiles}
+                  hint="At least one file is required for this step."
+                />
+                {files.length === 0 && (
+                  <p className="text-[10px] text-rose-500 dark:text-rose-400 font-semibold mt-1.5">
+                    {pending.attachmentMissingMsg || 'Please upload at least one document before continuing.'}
+                  </p>
+                )}
+              </div>
             )}
 
             {!pending.requiresNote && (
