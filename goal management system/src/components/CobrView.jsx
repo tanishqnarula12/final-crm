@@ -247,7 +247,7 @@ export default function CobrView({
           dateField={{ key: 'maturityDate', label: 'Maturity' }}
           onOpen={(r) => setEditor({ type: REC.FD, record: r })}
           emptyText="No fixed deposits tracked yet."
-          minWidth={1100}
+          minWidth={1260}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
             { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
@@ -255,6 +255,13 @@ export default function CobrView({
             { key: 'startingDate', label: 'Starting Date', render: (r) => d(r.startingDate) },
             { key: 'maturityDate', label: 'Maturity Date', render: (r) => d(r.maturityDate) },
             { key: 'maturityAmount', label: 'Maturity Amount', align: 'right', render: (r) => money(r.maturityAmount), sortValue: (r) => Number(r.maturityAmount) || 0 },
+            {
+              key: 'investmentAmount',
+              label: 'Investment Amount',
+              align: 'right',
+              render: (r) => (r.stage === 'Invested With Us' ? <span className="font-bold text-violet-600 dark:text-violet-400">{money(r.investmentAmount)}</span> : '—'),
+              sortValue: (r) => (r.stage === 'Invested With Us' ? Number(r.investmentAmount) || 0 : 0),
+            },
           ]}
         />
       )}

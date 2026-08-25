@@ -247,18 +247,40 @@ export function claimSettlementDisplay(claim) {
 }
 
 // ---------------------------------------------------------------------------
-// FIXED DEPOSITS
+// FIXED DEPOSITS — same action-button + transition-map architecture as
+// Claims/Policies: Qualified -> WhatsApp Link Sent -> Waiting for Update,
+// then one of two outcomes. FD Renewed needs nothing further; Invested With
+// Us requires the Investment Amount before it can be confirmed.
 // ---------------------------------------------------------------------------
-export const FD_STAGES = ['Qualified', 'WhatsApp Message Sent', 'FD Renewed by Client', 'Invested With Us'];
+export const FD_STAGES = ['Qualified', 'WhatsApp Link Sent', 'Waiting for Update', 'FD Renewed', 'Invested With Us'];
 
 export const FD_STAGE_TONE = {
   Qualified: 'slate',
-  'WhatsApp Message Sent': 'blue',
-  'FD Renewed by Client': 'blue',
-  'Invested With Us': 'emerald',
+  'WhatsApp Link Sent': 'blue',
+  'Waiting for Update': 'amber',
+  'FD Renewed': 'emerald',
+  'Invested With Us': 'violet',
 };
 
-export const FD_TERMINAL = new Set(['FD Renewed by Client', 'Invested With Us']);
+export const FD_TERMINAL = new Set(['FD Renewed', 'Invested With Us']);
+export const fdIsClosed = (stage) => FD_TERMINAL.has(stage);
+
+export const FD_ACTIONS = {
+  Qualified: [
+    { key: 'whatsapp', label: 'WhatsApp Link Sent', to: 'WhatsApp Link Sent', tone: 'blue' },
+  ],
+  'WhatsApp Link Sent': [
+    { key: 'waiting', label: 'Waiting for Update', to: 'Waiting for Update', tone: 'amber' },
+  ],
+  'Waiting for Update': [
+    { key: 'renewed', label: 'FD Renewed', to: 'FD Renewed', tone: 'emerald', closes: true },
+    { key: 'invested', label: 'Invested With Us', to: 'Invested With Us', tone: 'violet', requiresAmount: true, amountLabel: 'Investment Amount', closes: true },
+  ],
+  'FD Renewed': [],
+  'Invested With Us': [],
+};
+
+export const fdActionsFor = (stage) => FD_ACTIONS[stage] || [];
 
 // ---------------------------------------------------------------------------
 // OTHER INSURANCE POLICIES — a register of policies held outside the
