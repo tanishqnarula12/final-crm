@@ -3,7 +3,7 @@ import {
   TrendingUp, TrendingDown, PiggyBank, ArrowDownLeft, ArrowUpRight, Repeat,
   Shield, HeartPulse, Activity, FileBadge, Users, UserPlus, UserCheck, Skull, Clock,
   CalendarCheck, ListChecks, Briefcase, Landmark, Coins, Sparkles, PauseCircle,
-  Calendar, CheckSquare, ExternalLink, AlertCircle, Video
+  Calendar, CheckSquare, ExternalLink, AlertCircle, Video, Target
 } from 'lucide-react';
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip
@@ -14,6 +14,7 @@ import { loadProspects, ALL_STAGE_THEME } from '../utils/prospects';
 import { loadTasks, TASK_STAGES, STAGE_THEME } from '../utils/tasks';
 import { loadMeetings, MEETING_STATUSES } from '../utils/meetings';
 import { hasAllocation } from '../utils/assets';
+import { isPolicy } from '../utils/cobrModules';
 
 // Parse "₹ 50,000" / "50000" / numbers → number
 const num = (v) => Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
@@ -84,7 +85,7 @@ export default function DashboardView({
     const knownTypes = [...SIP_IN_TYPES, ...SIP_OUT_TYPES, ...LUMP_TYPES, ...REDEEM_TYPES];
     const other = items.filter(p => !knownTypes.includes(p.proposalType));
     const otherAmt = other.reduce((s, p) => s + num(p.amount), 0);
-    return { sipIn, sipOut, netSip: sipIn - sipOut, lump, redeem, netLump: lump - redeem, otherCount: other.length, otherAmt, count: items.length };
+    return { sipIn, sipOut, netSip: sipIn - sipOut, lump, redeem, netLump: lump - redeem, other, otherCount: other.length, otherAmt, count: items.length };
   }, [prospects]);
 
   // 2. Insurance calculations
@@ -96,6 +97,7 @@ export default function DashboardView({
     const medical = premiumOf('Medical Insurance');
     const accidental = premiumOf('Accidental Insurance');
     const issued = items.filter(p => p.stage === 'Policy Issued').length;
+    const rejectedAmt = items.filter(p => p.stage === 'Policy Rejected').reduce((s, p) => s + num(p.amount), 0);
     const types = [
       { label: 'Term', count: countOf('Term Insurance'), color: '#3b82f6' },
       { label: 'Medical', count: countOf('Medical Insurance'), color: '#10b981' },
@@ -103,7 +105,8 @@ export default function DashboardView({
     ];
     const stageMap = {};
     items.forEach(p => { const s = p.stage || 'Qualified'; stageMap[s] = (stageMap[s] || 0) + 1; });
-    return { term, medical, accidental, totalPremium: term + medical + accidental, issued, types, stages: stageMap, count: items.length };
+    const totalPremium = term + medical + accidental;
+    return { term, medical, accidental, totalPremium, netFlow: totalPremium - rejectedAmt, rejectedAmt, issued, types, stages: stageMap, count: items.length };
   }, [prospects]);
 
   // 3. Client metrics calculations
@@ -133,6 +136,33 @@ export default function DashboardView({
     return { aum, totalSip, withAlloc };
   }, [clients]);
 
+  // 4b. Managed Insurance — total premium value of policies under active service (Policy sub-form)
+  const managedInsurance = useMemo(() => {
+    return tasks.filter(isPolicy).reduce((s, t) => s + num(t.premiumAmount), 0);
+  }, [tasks]);
+
+  // 4c. Goal & Asset Tracking — funding progress across all client goals
+  const goalTrack = useMemo(() => {
+    let totalGoals = 0, totalTarget = 0;
+    const byType = {};
+    clients.forEach(c => {
+      (c.goals || []).forEach(g => {
+        totalGoals += 1;
+        const amt = num(g.amount);
+        totalTarget += amt;
+        const label = g.name || 'Others';
+        byType[label] = (byType[label] || 0) + amt;
+      });
+    });
+    const topTypes = Object.entries(byType)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, amount]) => ({ name, amount }));
+    const maxType = topTypes.length ? Math.max(...topTypes.map(t => t.amount)) || 1 : 1;
+    const fundedPct = totalTarget > 0 ? Math.min(100, Math.round((rev.aum / totalTarget) * 100)) : 0;
+    return { totalGoals, totalTarget, topTypes, maxType, fundedPct };
+  }, [clients, rev.aum]);
+
   // 5. Operations/Stages counts
   const ops = useMemo(() => {
     const taskStages = {};
@@ -143,30 +173,6 @@ export default function DashboardView({
     prospects.forEach(p => { const s = p.stage || 'Qualified'; prospStages[s] = (prospStages[s] || 0) + 1; });
     return { taskStages, taskTotal: tasks.length, meetStatus, meetTotal: meetings.length, prospStages, prospTotal: prospects.length };
   }, [tasks, meetings, prospects]);
-
-  // 6. Top Clients calculations (by total AUM)
-  const topClients = useMemo(() => {
-    return clients
-      .map(c => {
-        const clientAum = (c.goals || []).reduce((sum, g) => sum + num(g.currentInv), 0);
-        const clientSip = (c.goals || []).reduce((sum, g) => sum + num(g.currentSip), 0);
-        return {
-          id: c.id,
-          name: c.name,
-          aum: clientAum,
-          sip: clientSip
-        };
-      })
-      .filter(c => c.aum > 0)
-      .sort((a, b) => b.aum - a.aum)
-      .slice(0, 5);
-  }, [clients]);
-
-  // Max AUM for proportional leaderboard bar sizes
-  const maxAum = useMemo(() => {
-    if (topClients.length === 0) return 1;
-    return Math.max(...topClients.map(c => c.aum)) || 1;
-  }, [topClients]);
 
   // 7. Client status distribution donut chart data
   const statusData = useMemo(() => {
@@ -288,13 +294,25 @@ export default function DashboardView({
         {/* Left Side: Charts & Analytics (Spans 2 columns) */}
         <div className="xl:col-span-2 space-y-6">
           
-          {/* Headline KPIs */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <HeroKpi icon={Landmark} accent="indigo" label="Total AUM Managed" value={fmtINR(rev.aum)} hint={`${clients.length} client groups · ${rev.withAlloc} mapped`} />
-            <HeroKpi icon={PiggyBank} accent="emerald" label="Total SIP Book" value={fmtINR(rev.totalSip)} hint="Active monthly systematic volume" />
-            <HeroKpi icon={TrendingUp} accent="blue" label="Net New SIP Volume" value={fmtINR(inv.netSip)} hint="Monthly registrations − cancellations" signed={inv.netSip} />
-            <HeroKpi icon={Coins} accent="cyan" label="Net Lumpsum Flow" value={fmtINR(inv.netLump)} hint="Monthly lumpsum − redemptions" signed={inv.netLump} />
-          </div>
+          {/* Managed Portfolio */}
+          <section className="space-y-3.5">
+            <SectionHeader icon={Landmark} accent="indigo" title="Managed Portfolio" subtitle="Total assets, SIP book & insurance value under active service" />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <HeroKpi icon={Landmark} accent="indigo" label="Total AUM Managed" value={fmtINR(rev.aum)} hint={`${clients.length} client groups · ${rev.withAlloc} mapped`} />
+              <HeroKpi icon={PiggyBank} accent="emerald" label="Total SIP Book" value={fmtINR(rev.totalSip)} hint="Active monthly systematic volume" />
+              <HeroKpi icon={Shield} accent="blue" label="Managed Insurance" value={fmtINR(managedInsurance)} hint="Premium value of policies under service" />
+            </div>
+          </section>
+
+          {/* Business Overview */}
+          <section className="space-y-3.5">
+            <SectionHeader icon={TrendingUp} accent="cyan" title="Business Overview" subtitle="Net new business flow across SIP, lumpsum & insurance this month" />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <HeroKpi icon={TrendingUp} accent="blue" label="Net SIP Volume" value={fmtINR(inv.netSip)} hint="Monthly registrations − cancellations" signed={inv.netSip} />
+              <HeroKpi icon={Coins} accent="cyan" label="New Lumpsum Flow" value={fmtINR(inv.netLump)} hint="Monthly lumpsum − redemptions" signed={inv.netLump} />
+              <HeroKpi icon={HeartPulse} accent="emerald" label="Net Insurance Flow" value={fmtINR(ins.netFlow)} hint="Premium booked − rejected policies" signed={ins.netFlow} />
+            </div>
+          </section>
 
           {/* Investments Section */}
           <section className="space-y-3.5">
@@ -329,56 +347,109 @@ export default function DashboardView({
                 </div>
               </Card>
             </div>
+
+            {/* Other Proposal table */}
+            <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900">
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-850 dark:text-slate-200 uppercase tracking-wider">Other Proposal</h4>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Prospect activity outside SIP & Lumpsum flows</p>
+                </div>
+                <Repeat size={15} className="text-slate-400 dark:text-slate-500" />
+              </div>
+              {inv.other.length > 0 ? (
+                <div className="overflow-x-auto -mx-1">
+                  <table className="w-full text-xs border-collapse min-w-[560px]">
+                    <thead>
+                      <tr className="text-[10px] text-slate-450 dark:text-slate-500 uppercase tracking-wider font-extrabold">
+                        <th className="text-left font-extrabold pb-2 px-1">Type</th>
+                        <th className="text-left font-extrabold pb-2 px-1">Client</th>
+                        <th className="text-right font-extrabold pb-2 px-1">Amount</th>
+                        <th className="text-left font-extrabold pb-2 px-1">Status</th>
+                        <th className="text-left font-extrabold pb-2 px-1">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inv.other.slice(0, 8).map((p) => (
+                        <tr key={p.id} className="border-t border-slate-100 dark:border-slate-800/70">
+                          <td className="py-2 px-1 font-bold text-slate-700 dark:text-slate-250 truncate max-w-[160px]">{p.proposalType || 'Other'}</td>
+                          <td className="py-2 px-1 font-medium text-slate-600 dark:text-slate-350 truncate max-w-[160px]">{p.applicant || p.groupLeader || 'Client'}</td>
+                          <td className="py-2 px-1 text-right font-black text-slate-900 dark:text-white tabular-nums">{fmtINR(num(p.amount))}</td>
+                          <td className="py-2 px-1">
+                            <span className={`px-1.5 py-0.5 rounded-full text-[8.5px] font-black shrink-0 border border-current leading-none ${ALL_STAGE_THEME[p.stage || 'Qualified'] || 'bg-slate-100 text-slate-655'}`}>
+                              {p.stage || 'Qualified'}
+                            </span>
+                          </td>
+                          <td className="py-2 px-1 text-slate-450 dark:text-slate-500 font-medium whitespace-nowrap">{(p.closingDate || p.createdAt || '').slice(0, 10) || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="h-24 flex flex-col items-center justify-center text-center">
+                  <Repeat size={22} className="text-slate-300 dark:text-slate-700 mb-1" />
+                  <p className="text-xs text-slate-400 dark:text-slate-500 italic font-bold">No other proposal activity recorded yet.</p>
+                </div>
+              )}
+            </Card>
           </section>
 
-          {/* Leaderboard: Top Clients by AUM */}
-          <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
-              <div>
-                <h4 className="text-xs font-bold text-slate-850 dark:text-slate-200 uppercase tracking-wider">Top Clients by AUM</h4>
-                <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Top 5 client relationships ranked by current investment value</p>
+          {/* Goal & Asset Tracking */}
+          <section className="space-y-3.5">
+            <SectionHeader icon={Target} title="Goal & Asset Tracking" subtitle="Client goal funding progress & asset allocation coverage" />
+            <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900">
+              <div className="grid grid-cols-3 gap-3 text-center pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
+                <div>
+                  <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{goalTrack.totalGoals}</p>
+                  <p className="text-[9px] text-slate-450 font-bold uppercase tracking-wider mt-0.5">Goals Tracked</p>
+                </div>
+                <div>
+                  <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{fmtINR(goalTrack.totalTarget)}</p>
+                  <p className="text-[9px] text-slate-450 font-bold uppercase tracking-wider mt-0.5">Target Corpus</p>
+                </div>
+                <div>
+                  <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 tabular-nums">{goalTrack.fundedPct}%</p>
+                  <p className="text-[9px] text-slate-455 font-bold uppercase tracking-wider mt-0.5">Funded (AUM/Target)</p>
+                </div>
               </div>
-              <Landmark size={15} className="text-slate-400 dark:text-slate-500" />
-            </div>
-            
-            {topClients.length > 0 ? (
-              <div className="space-y-4 py-1">
-                {topClients.map((c, i) => (
-                  <div key={c.name} className="flex items-center gap-4 group">
-                    <span className="w-6 h-6 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200/50 dark:border-slate-700 text-slate-550 dark:text-slate-400 flex items-center justify-center text-xs font-bold shrink-0">
-                      {i + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-center text-xs font-bold mb-1">
-                        <span className="text-slate-700 dark:text-slate-205 truncate">{c.name}</span>
-                        <div className="flex items-center gap-3">
-                          <span className="text-[10px] text-slate-400 font-medium">SIP: <strong className="text-slate-550 dark:text-slate-450 tabular-nums">{fmtINR(c.sip)}</strong></span>
-                          <span className="text-slate-900 dark:text-white tabular-nums">{fmtINR(c.aum)}</span>
-                        </div>
+
+              {goalTrack.topTypes.length > 0 ? (
+                <div className="space-y-3.5 py-1">
+                  {goalTrack.topTypes.map((t) => (
+                    <div key={t.name} className="space-y-1">
+                      <div className="flex justify-between items-center text-xs font-bold">
+                        <span className="text-slate-700 dark:text-slate-205 truncate">{t.name}</span>
+                        <span className="text-slate-900 dark:text-white tabular-nums">{fmtINR(t.amount)}</span>
                       </div>
                       <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-blue-500 dark:bg-blue-600 transition-all duration-500" 
-                          style={{ width: `${(c.aum / maxAum) * 100}%` }} 
+                        <div
+                          className="h-full bg-indigo-500 dark:bg-indigo-600 transition-all duration-500"
+                          style={{ width: `${(t.amount / goalTrack.maxType) * 100}%` }}
                         />
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              ) : (
+                <div className="h-24 flex flex-col items-center justify-center text-center">
+                  <Target size={22} className="text-slate-300 dark:text-slate-700 mb-1" />
+                  <p className="text-xs text-slate-400 dark:text-slate-500 italic font-bold">No client goals recorded yet.</p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between mt-5 pt-3.5 border-t border-slate-100 dark:border-slate-800">
+                <span className="text-[10px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider">Asset Allocation Mapped</span>
+                <span className="text-xs font-black text-slate-900 dark:text-white tabular-nums">{rev.withAlloc} / {clients.length} clients</span>
               </div>
-            ) : (
-              <div className="h-36 flex flex-col items-center justify-center text-center">
-                <Landmark size={24} className="text-slate-300 dark:text-slate-700 mb-1" />
-                <p className="text-xs text-slate-400 dark:text-slate-500 italic font-bold">No active client investments recorded yet.</p>
-              </div>
-            )}
-          </Card>
+            </Card>
+          </section>
 
           {/* Clients & Distribution */}
           <section className="space-y-3.5">
             <SectionHeader icon={Users} title="Clients & Distribution" subtitle="Group structure, account tiers & active status mix" />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+
               {/* Client Tiers */}
               <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl md:col-span-1 flex flex-col justify-between bg-white dark:bg-slate-900">
                 <div>
@@ -456,6 +527,18 @@ export default function DashboardView({
                     </div>
                   </div>
                 ) : null}
+              </Card>
+
+              {/* New Group Leaders This Month */}
+              <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl md:col-span-1 flex flex-col justify-between bg-white dark:bg-slate-900">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider mb-4">New Group Leaders</h4>
+                  <div className="flex items-center gap-3">
+                    <span className="w-9.5 h-9.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0"><UserPlus size={17} /></span>
+                    <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">{cli.newLeads}</p>
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-450 dark:text-slate-500 font-bold mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800">Group Leaders Added This Month</p>
               </Card>
             </div>
           </section>
