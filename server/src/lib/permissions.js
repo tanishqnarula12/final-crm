@@ -227,13 +227,22 @@ const STAGE_ORDER = {
   tasks: ['Open', 'Waiting For Client', 'In Process', 'Completed', 'Lost'],
   cobr: ['Open', 'Waiting For Client', 'In Process', 'Completed', 'Lost'],
   queries: ['Open', 'In Progress', 'Resolved', 'Closed'],
+  // Mirrors utils/prospects.js's PROSPECT_STAGES / INSURANCE_PROSPECT_STAGES
+  // exactly — without this, a stale browser tab re-sending an old `stage`
+  // value alongside an unrelated edit (e.g. a remark) could silently walk a
+  // prospect backward out of Close Won, which both looked like "it came
+  // back on its own" and re-fired the "moved to Qualified" notification.
+  investmentProspects: ['Pre-Qualified', 'Qualified', 'Work Executed', 'Close Won', 'Close Lost'],
+  insuranceProspects: ['Qualified', 'Document Pending', 'Proposal Submitted', 'Payment Done', 'Waiting for Underwriter', 'Policy Issued', 'Policy Rejected'],
 };
 const TERMINAL_STAGES = {
   tasks: new Set(['Completed', 'Lost']),
   cobr: new Set(['Completed', 'Lost']),
   queries: new Set(['Resolved', 'Closed']),
+  investmentProspects: new Set(['Close Won', 'Close Lost']),
+  insuranceProspects: new Set(['Policy Issued', 'Policy Rejected']),
 };
-function isBackwardStage(module, from, to) {
+export function isBackwardStage(module, from, to) {
   if (!from || !to || from === to) return false;
   const stages = STAGE_ORDER[module] || [];
   const terminal = TERMINAL_STAGES[module] || new Set();

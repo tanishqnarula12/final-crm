@@ -17,7 +17,7 @@
 //
 // All writes + logs happen in one interactive transaction.
 
-import { can, canCreate, canEdit, canDelete, canChangeStage, isAdmin } from './permissions.js';
+import { can, canCreate, canEdit, canDelete, canChangeStage, isAdmin, isBackwardStage } from './permissions.js';
 import { logActivity, diffFields } from './activityLog.js';
 
 // Task change classification: a log/comment edit is NOT a details edit.
@@ -136,8 +136,8 @@ export async function syncBulk(prisma, spec) {
       if (assignmentRequested && mayAssign(assignOnEdit, actor, existing)) nextAssigned = wantAssigned;
 
       const from = stageField ? (existing[stageField] ?? null) : null;
-      const to = stageField ? (rec[stageField] ?? null) : null;
-      const stageChanged = stageField && from !== to;
+      let to = stageField ? (rec[stageField] ?? null) : null;
+      let stageChanged = stageField && from !== to;
 
       const mod = moduleFor(existing);
       let allowed;
@@ -154,15 +154,50 @@ export async function syncBulk(prisma, spec) {
         if (detailChanged) allowed = allowed && can(actor, mod, 'editDetails', existing);
         if (stageChanged) allowed = allowed && can(actor, mod, 'changeStage', existing, { fromStage: from, toStage: to });
         if (logChanged && !detailChanged && !stageChanged) allowed = allowed && can(actor, mod, 'editLog', existing);
+        if (!allowed && nextAssigned !== curAssigned) allowed = true;
+        if (!allowed) { stats.rejected++; continue; } // keep the stored version
       } else {
-        allowed = stageChanged
-          ? canChangeStage(actor, mod, existing, from, to)
-          : canEdit(actor, mod, existing);
-      }
-      // An allowed reassignment (e.g. Admin) is permitted even if plain edit isn't.
-      if (!allowed && nextAssigned !== curAssigned) allowed = true;
+        // Stage and non-stage changes need their OWN, independent permission
+        // check, and each must apply INDEPENDENTLY too — a save that bundles
+        // both (e.g. a Prospect's "Close Won" move saved together with an
+        // updated remark/amount) must not be all-or-nothing. The old
+        // either/or check rejected the WHOLE record whenever the actor
+        // lacked rights for EITHER aspect, discarding a stage move the actor
+        // WAS allowed to make just because it rode along with a detail edit
+        // they weren't (or vice versa) — which is exactly what made a
+        // "Close Won" move appear to revert on its own: the optimistic UI
+        // showed it, then the next reconciliation pulled back the server's
+        // real (unchanged) row. Now whichever aspect is disallowed is simply
+        // reverted to its stored value instead of voiding the whole update.
+        const changedKeys = Object.keys(diffFields(existing.payload, rec))
+          .filter((k) => k !== stageField && !NOISE_KEYS.has(k));
+        const detailAllowed = changedKeys.length === 0 || canEdit(actor, mod, existing);
+        // A stale browser tab re-sending an old `stage` value alongside an
+        // unrelated edit must not silently walk the record backward (e.g.
+        // out of a Prospect's Close Won) — same "no reopen without an
+        // explicit action" rule Tasks/COBR/Queries already enforce via
+        // isBackwardStage, extended here to every module with a STAGE_ORDER
+        // entry (currently the two Prospect modules; a no-op everywhere
+        // else, since isBackwardStage returns false for an unlisted module).
+        const stageAllowed = !stageChanged || (
+          canChangeStage(actor, mod, existing, from, to)
+          && (isAdmin(actor) || !isBackwardStage(mod, from, to))
+        );
+        allowed = detailAllowed || stageAllowed;
+        if (!allowed && nextAssigned !== curAssigned) allowed = true;
+        if (!allowed) { stats.rejected++; continue; } // keep the stored version
 
-      if (!allowed) { stats.rejected++; continue; } // keep the stored version
+        if (!detailAllowed) changedKeys.forEach((k) => { rec[k] = existing.payload[k]; });
+        if (!stageAllowed) rec[stageField] = existing[stageField];
+        // Re-derive after any partial revert above — the STAGE_CHANGE log/
+        // event further down must reflect what was actually applied, not
+        // what was originally requested.
+        to = stageField ? (rec[stageField] ?? null) : null;
+        stageChanged = stageField && from !== to;
+        // Everything disallowed got reverted back to the stored value —
+        // nothing left to actually write.
+        if (JSON.stringify(existing.payload) === JSON.stringify(rec)) { stats.kept++; continue; }
+      }
 
       const owner = {
         createdBy: existing.createdBy,               // immutable
