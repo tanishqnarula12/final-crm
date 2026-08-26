@@ -8,10 +8,14 @@ const NAV = [
   { id: 'leads', label: 'Leads', icon: UserPlus },
   { id: 'clients', label: 'Client', icon: Users },
   { id: 'tasks', label: 'Tasks', icon: ListChecks },
-  { id: 'cobr', label: 'COBR', icon: FileSpreadsheet },
   { id: 'meetings', label: 'Meetings', icon: Video },
   { id: 'documents', label: 'Docs', icon: FolderOpen },
   { id: 'prospects', label: 'Prospect', icon: UserCheck },
+  // "cobr" (the internal id/view key, unchanged elsewhere) now covers COBR,
+  // Renewals, Claims, Fixed Deposits and Other Insurance Policies — this is
+  // the post-sale client-servicing workspace, not just Change of Broker
+  // requests, so the label reflects the whole thing rather than one tab.
+  { id: 'cobr', label: 'Servicing', icon: FileSpreadsheet },
   { id: 'queries', label: 'Queries', icon: HelpCircle },
   { id: 'reports', label: 'Reports', icon: TrendingUp },
   { id: 'others', label: 'Others', icon: MoreHorizontal },
