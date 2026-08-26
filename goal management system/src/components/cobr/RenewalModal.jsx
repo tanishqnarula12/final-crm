@@ -21,7 +21,7 @@ import AttachmentField from './AttachmentField';
 import { RecordModal, AssignmentFields, LogTimeline, StagePicker, ViewEditFooter } from './RecordShell';
 import {
   REC, RENEWAL_STAGES, RENEWAL_ACTIONS, RENEWAL_CLAIM_INSURANCE_TYPES,
-  MOTOR_VEHICLE_TYPES, MOTOR_COVERAGE_TYPES, renewalAttachmentsUnlocked,
+  MOTOR_VEHICLE_TYPES, MOTOR_COVERAGE_TYPES, MODE_OF_PAYMENT_OPTIONS, renewalAttachmentsUnlocked,
   makeHistoryEntry, recordTaskName,
   useEditGate, buildFieldChangeLog, diffAttachmentLog, toLogComments,
 } from '../../utils/cobrModules';
@@ -33,10 +33,14 @@ const FIELD_DEFS = [
   { key: 'insuranceType', label: 'Insurance Type' },
   { key: 'motorVehicleType', label: 'Sub Type (Vehicle)' },
   { key: 'motorCoverageType', label: 'Sub Type (Coverage)' },
+  { key: 'companyName', label: 'Company Name' },
   { key: 'policyName', label: 'Policy Name' },
   { key: 'policyNumber', label: 'Policy Number' },
   { key: 'sumAssured', label: 'Sum Assured', format: (v) => (v ? fmtINR(Number(v) || 0) : '—') },
   { key: 'premiumAmount', label: 'Premium Amount', format: (v) => (v ? fmtINR(Number(v) || 0) : '—') },
+  { key: 'paymentLink', label: 'Payment Link' },
+  { key: 'modeOfPayment', label: 'Mode of Payment' },
+  { key: 'brokerCode', label: 'Broker Code' },
   { key: 'dueDate', label: 'Due Date' },
   { key: 'assignedTo', label: 'Assigned To', format: (v) => teamName(v) || '—' },
   { key: 'upSell', label: 'Up Sell', format: (v) => (v === 'true' || v === true ? 'Yes' : 'No') },
@@ -60,10 +64,14 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
     insuranceType: record?.insuranceType || '',
     motorVehicleType: record?.motorVehicleType || '',
     motorCoverageType: record?.motorCoverageType || '',
+    companyName: record?.companyName || '',
     policyName: record?.policyName || '',
     policyNumber: record?.policyNumber || '',
     sumAssured: record?.sumAssured || '',
     premiumAmount: record?.premiumAmount || '',
+    paymentLink: record?.paymentLink || '',
+    modeOfPayment: record?.modeOfPayment || '',
+    brokerCode: record?.brokerCode || '',
     dueDate: record?.dueDate || '',
     assignedTo: record?.assignedTo || '',
     subPersons: record?.subPersons || [],
@@ -187,7 +195,9 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
     setF({
       groupLeaderId: record.groupLeaderId || '', groupLeader: record.groupLeader || '', applicant: record.applicant || '', pan: record.pan || '',
       insuranceType: record.insuranceType || '', motorVehicleType: record.motorVehicleType || '', motorCoverageType: record.motorCoverageType || '',
+      companyName: record.companyName || '',
       policyName: record.policyName || '', policyNumber: record.policyNumber || '', sumAssured: record.sumAssured || '', premiumAmount: record.premiumAmount || '',
+      paymentLink: record.paymentLink || '', modeOfPayment: record.modeOfPayment || '', brokerCode: record.brokerCode || '',
       dueDate: record.dueDate || '', assignedTo: record.assignedTo || '', subPersons: record.subPersons || [], attachments: record.attachments || [],
       upSell: record.upSell || false, upSellAmount: record.upSellAmount || '', crossSell: record.crossSell || false,
       crossSellCompany: record.crossSellCompany || '', crossSellPolicy: record.crossSellPolicy || '', crossSellAmount: record.crossSellAmount || '',
@@ -270,6 +280,12 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
           </Field>
         )}
 
+        <Field label="Company Name">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
+            <input value={f.companyName} onChange={(e) => set({ companyName: e.target.value })} placeholder="e.g. HDFC Life" className={inputCls} />
+          </fieldset>
+        </Field>
+
         <Field label="Policy Name">
           <fieldset disabled={!fieldsUnlocked} className="contents">
             <input value={f.policyName} onChange={(e) => set({ policyName: e.target.value })} placeholder="e.g. HDFC Click 2 Protect" className={inputCls} />
@@ -291,6 +307,27 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
         <Field label="Premium Amount *">
           <fieldset disabled={!fieldsUnlocked} className="contents">
             <input type="number" min="0" value={f.premiumAmount} onChange={(e) => set({ premiumAmount: e.target.value })} className={inputCls} />
+          </fieldset>
+        </Field>
+
+        <Field label="Payment Link">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
+            <input value={f.paymentLink} onChange={(e) => set({ paymentLink: e.target.value })} placeholder="https://…" className={inputCls} />
+          </fieldset>
+        </Field>
+
+        <Field label="Mode of Payment">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
+            <CoolSelect value={f.modeOfPayment} onChange={(e) => set({ modeOfPayment: e.target.value })} className={selectCls}>
+              <option value="">Select…</option>
+              {MODE_OF_PAYMENT_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </CoolSelect>
+          </fieldset>
+        </Field>
+
+        <Field label="Broker Code">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
+            <input value={f.brokerCode} onChange={(e) => set({ brokerCode: e.target.value })} className={inputCls} />
           </fieldset>
         </Field>
 

@@ -22,7 +22,7 @@ import ClientApplicantFields from './ClientApplicantFields';
 import AttachmentField from './AttachmentField';
 import { RecordModal, AssignmentFields, LogTimeline, ViewEditFooter } from './RecordShell';
 import {
-  REC, INSURANCE_TYPES, policyActionsFor, policyIsClosed, makeHistoryEntry, recordTaskName,
+  REC, INSURANCE_TYPES, POLICY_STATUS_OPTIONS, PAYMENT_FREQUENCY_OPTIONS, policyActionsFor, policyIsClosed, makeHistoryEntry, recordTaskName,
   stageBadgeCls, STAGE_BTN_TONE, useEditGate, buildFieldChangeLog, diffAttachmentLog, toLogComments,
 } from '../../utils/cobrModules';
 import { getCurrentUser } from '../../utils/auth';
@@ -32,16 +32,23 @@ import { teamName } from '../../services/team';
 const TONE_BTN = STAGE_BTN_TONE;
 
 const FIELD_DEFS = [
+  { key: 'issuingDate', label: 'Issuing Date' },
   { key: 'insuranceType', label: 'Insurance Type' },
   { key: 'companyName', label: 'Company Name' },
   { key: 'policyName', label: 'Policy Name' },
   { key: 'policyNumber', label: 'Policy Number' },
+  { key: 'policyStatus', label: 'Policy Status' },
   { key: 'sumAssured', label: 'Sum Assured', format: (v) => (v ? fmtINR(Number(v) || 0) : '—') },
   { key: 'premiumAmount', label: 'Premium Amount', format: (v) => (v ? fmtINR(Number(v) || 0) : '—') },
+  { key: 'accidentalDeathBenefitAmount', label: 'Accidental Death Benefit Amount', format: (v) => (v ? fmtINR(Number(v) || 0) : '—') },
+  { key: 'currentValue', label: 'Current Value', format: (v) => (v ? fmtINR(Number(v) || 0) : '—') },
+  { key: 'paymentFrequency', label: 'Payment Frequency' },
   { key: 'premiumPayingTerm', label: 'Premium Paying Term', format: (v) => (v ? `${v} yrs` : '—') },
-  { key: 'policyTerm', label: 'Policy Term', format: (v) => (v ? `${v} yrs` : '—') },
+  { key: 'policyTerm', label: 'Term', format: (v) => (v ? `${v} yrs` : '—') },
+  { key: 'moneyBack', label: 'Money Back' },
   { key: 'startDate', label: 'Start Date' },
-  { key: 'dueDate', label: 'Next Due / Renewal Date' },
+  { key: 'maturityDate', label: 'Maturity Date' },
+  { key: 'dueDate', label: 'Renewal Date' },
   { key: 'assignedTo', label: 'Assigned To', format: (v) => teamName(v) || '—' },
 ];
 
@@ -55,15 +62,22 @@ export default function OtherPolicyModal({ record, clients = [], onClose, onSave
     groupLeader: record?.groupLeader || '',
     applicant: record?.applicant || '',
     pan: record?.pan || '',
+    issuingDate: record?.issuingDate || '',
     insuranceType: record?.insuranceType || '',
     companyName: record?.companyName || '',
     policyName: record?.policyName || '',
     policyNumber: record?.policyNumber || '',
+    policyStatus: record?.policyStatus || '',
     sumAssured: record?.sumAssured || '',
     premiumAmount: record?.premiumAmount || '',
+    accidentalDeathBenefitAmount: record?.accidentalDeathBenefitAmount || '',
+    currentValue: record?.currentValue || '',
+    paymentFrequency: record?.paymentFrequency || '',
     premiumPayingTerm: record?.premiumPayingTerm || '',
     policyTerm: record?.policyTerm || '',
+    moneyBack: record?.moneyBack || '',
     startDate: record?.startDate || '',
+    maturityDate: record?.maturityDate || '',
     dueDate: record?.dueDate || '',
     assignedTo: record?.assignedTo || '',
     subPersons: record?.subPersons || [],
@@ -227,9 +241,13 @@ export default function OtherPolicyModal({ record, clients = [], onClose, onSave
     if (!isEdit) { onClose(); return; }
     setF({
       groupLeaderId: record.groupLeaderId || '', groupLeader: record.groupLeader || '', applicant: record.applicant || '', pan: record.pan || '',
+      issuingDate: record.issuingDate || '',
       insuranceType: record.insuranceType || '', companyName: record.companyName || '', policyName: record.policyName || '', policyNumber: record.policyNumber || '',
+      policyStatus: record.policyStatus || '',
       sumAssured: record.sumAssured || '', premiumAmount: record.premiumAmount || '', premiumPayingTerm: record.premiumPayingTerm || '', policyTerm: record.policyTerm || '',
-      startDate: record.startDate || '', dueDate: record.dueDate || '',
+      accidentalDeathBenefitAmount: record.accidentalDeathBenefitAmount || '', currentValue: record.currentValue || '', paymentFrequency: record.paymentFrequency || '',
+      moneyBack: record.moneyBack || '',
+      startDate: record.startDate || '', maturityDate: record.maturityDate || '', dueDate: record.dueDate || '',
       assignedTo: record.assignedTo || '', subPersons: record.subPersons || [], attachments: record.attachments || [],
     });
     setIsEditingMode(false);
@@ -270,6 +288,12 @@ export default function OtherPolicyModal({ record, clients = [], onClose, onSave
           disabled={isEdit}
         />
 
+        <Field label="Issuing Date">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
+            <input type="date" value={f.issuingDate} onChange={(e) => set({ issuingDate: e.target.value })} className={inputCls} />
+          </fieldset>
+        </Field>
+
         <Field label="Insurance Type *">
           <fieldset disabled={!fieldsUnlocked} className="contents">
             <CoolSelect value={f.insuranceType} onChange={(e) => set({ insuranceType: e.target.value })} className={selectCls}>
@@ -297,9 +321,30 @@ export default function OtherPolicyModal({ record, clients = [], onClose, onSave
           </fieldset>
         </Field>
 
+        <Field label="Policy Status">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
+            <CoolSelect value={f.policyStatus} onChange={(e) => set({ policyStatus: e.target.value })} className={selectCls}>
+              <option value="">Select…</option>
+              {POLICY_STATUS_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </CoolSelect>
+          </fieldset>
+        </Field>
+
         <Field label="Sum Assured">
           <fieldset disabled={!fieldsUnlocked} className="contents">
             <input type="number" min="0" value={f.sumAssured} onChange={(e) => set({ sumAssured: e.target.value })} className={inputCls} />
+          </fieldset>
+        </Field>
+
+        <Field label="Accidental Death Benefit Amount">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
+            <input type="number" min="0" value={f.accidentalDeathBenefitAmount} onChange={(e) => set({ accidentalDeathBenefitAmount: e.target.value })} className={inputCls} />
+          </fieldset>
+        </Field>
+
+        <Field label="Current Value">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
+            <input type="number" min="0" value={f.currentValue} onChange={(e) => set({ currentValue: e.target.value })} className={inputCls} />
           </fieldset>
         </Field>
 
@@ -309,15 +354,30 @@ export default function OtherPolicyModal({ record, clients = [], onClose, onSave
           </fieldset>
         </Field>
 
+        <Field label="Payment Frequency">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
+            <CoolSelect value={f.paymentFrequency} onChange={(e) => set({ paymentFrequency: e.target.value })} className={selectCls}>
+              <option value="">Select…</option>
+              {PAYMENT_FREQUENCY_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </CoolSelect>
+          </fieldset>
+        </Field>
+
         <Field label="Premium Paying Term" hint="Years">
           <fieldset disabled={!fieldsUnlocked} className="contents">
             <input type="number" min="0" value={f.premiumPayingTerm} onChange={(e) => set({ premiumPayingTerm: e.target.value })} className={inputCls} />
           </fieldset>
         </Field>
 
-        <Field label="Policy Term" hint="Years">
+        <Field label="Term" hint="Years">
           <fieldset disabled={!fieldsUnlocked} className="contents">
             <input type="number" min="0" value={f.policyTerm} onChange={(e) => set({ policyTerm: e.target.value })} className={inputCls} />
+          </fieldset>
+        </Field>
+
+        <Field label="Money Back">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
+            <input value={f.moneyBack} onChange={(e) => set({ moneyBack: e.target.value })} className={inputCls} />
           </fieldset>
         </Field>
 
@@ -327,11 +387,17 @@ export default function OtherPolicyModal({ record, clients = [], onClose, onSave
           </fieldset>
         </Field>
 
+        <Field label="Maturity Date">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
+            <input type="date" value={f.maturityDate} onChange={(e) => set({ maturityDate: e.target.value })} className={inputCls} />
+          </fieldset>
+        </Field>
+
         <AssignmentFields
           assignedTo={f.assignedTo}
           subPersons={f.subPersons}
           dueDate={f.dueDate}
-          dueLabel="Next Due / Renewal Date"
+          dueLabel="Renewal Date"
           onChange={set}
           disabled={!fieldsUnlocked}
         />

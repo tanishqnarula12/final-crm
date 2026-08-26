@@ -87,6 +87,8 @@ export const TONE = {
 // ---------------------------------------------------------------------------
 // RENEWALS
 // ---------------------------------------------------------------------------
+export const MODE_OF_PAYMENT_OPTIONS = ['Online', 'Auto Debit'];
+
 export const RENEWAL_STAGES = [
   'Qualified',
   'WhatsApp Link Sent',
@@ -294,6 +296,11 @@ export const fdActionsFor = (stage) => FD_ACTIONS[stage] || [];
 // Claims: the working stages progress one after another, then "Waiting For
 // Update" branches into whichever of the three outcomes actually happened.
 // ---------------------------------------------------------------------------
+// Real-world status of the underlying policy itself — plain descriptive
+// metadata, independent of (and not read by) the CRM workflow stage above.
+export const POLICY_STATUS_OPTIONS = ['Active', 'Due for Renewal', 'Lapsed', 'Matured', 'Surrendered', 'Closed'];
+export const PAYMENT_FREQUENCY_OPTIONS = ['Monthly', 'Quarterly', 'Half-Yearly', 'Yearly', 'Single'];
+
 export const POLICY_STAGES = [
   'Qualified',
   'Policy Working Done',
@@ -367,21 +374,25 @@ export const RENEWAL_EXCEL_FIELDS = [
   { key: 'groupLeader', label: 'Client / Group Leader', type: 'text' },
   { key: 'applicant', label: 'Applicant', type: 'text' },
   { key: 'pan', label: 'Applicant PAN', type: 'text', required: true },
-  { key: 'insuranceType', label: 'Insurance Type', type: 'select', options: RENEWAL_CLAIM_INSURANCE_TYPES, required: true },
-  { key: 'motorVehicleType', label: 'Sub Type (Vehicle)', type: 'select', options: MOTOR_VEHICLE_TYPES, required: (r) => r.insuranceType === 'Motor' },
-  { key: 'motorCoverageType', label: 'Sub Type (Coverage)', type: 'select', options: MOTOR_COVERAGE_TYPES, required: (r) => r.insuranceType === 'Motor' },
+  { key: 'insuranceType', label: 'Insurance Type', type: 'select', options: RENEWAL_CLAIM_INSURANCE_TYPES },
+  { key: 'motorVehicleType', label: 'Sub Type (Vehicle)', type: 'select', options: MOTOR_VEHICLE_TYPES },
+  { key: 'motorCoverageType', label: 'Sub Type (Coverage)', type: 'select', options: MOTOR_COVERAGE_TYPES },
+  { key: 'companyName', label: 'Company Name', type: 'text' },
   { key: 'policyName', label: 'Policy Name', type: 'text' },
   { key: 'policyNumber', label: 'Policy Number', type: 'text' },
   { key: 'sumAssured', label: 'Sum Assured', type: 'number' },
-  { key: 'premiumAmount', label: 'Premium Amount', type: 'number', required: true },
-  { key: 'dueDate', label: 'Due Date', type: 'date', required: true },
-  { key: 'assignedTo', label: 'Assigned To', type: 'text', required: true },
+  { key: 'premiumAmount', label: 'Premium Amount', type: 'number' },
+  { key: 'paymentLink', label: 'Payment Link', type: 'text' },
+  { key: 'modeOfPayment', label: 'Mode of Payment', type: 'select', options: MODE_OF_PAYMENT_OPTIONS },
+  { key: 'brokerCode', label: 'Broker Code', type: 'text' },
+  { key: 'dueDate', label: 'Due Date', type: 'date' },
+  { key: 'assignedTo', label: 'Assigned To', type: 'text' },
   { key: 'upSell', label: 'Up Sell', type: 'boolean' },
-  { key: 'upSellAmount', label: 'Up Sell Amount', type: 'number', required: (r) => !!r.upSell },
+  { key: 'upSellAmount', label: 'Up Sell Amount', type: 'number' },
   { key: 'crossSell', label: 'Cross Sell', type: 'boolean' },
-  { key: 'crossSellCompany', label: 'Cross Sell Company', type: 'text', required: (r) => !!r.crossSell },
-  { key: 'crossSellPolicy', label: 'Cross Sell Policy Name', type: 'text', required: (r) => !!r.crossSell },
-  { key: 'crossSellAmount', label: 'Cross Sell Amount', type: 'number', required: (r) => !!r.crossSell },
+  { key: 'crossSellCompany', label: 'Cross Sell Company', type: 'text' },
+  { key: 'crossSellPolicy', label: 'Cross Sell Policy Name', type: 'text' },
+  { key: 'crossSellAmount', label: 'Cross Sell Amount', type: 'number' },
 ];
 export const renewalDedupeKey = (r) => (r.groupLeaderId && r.applicant ? `${r.groupLeaderId}|${r.applicant}|${(r.policyNumber || '').toLowerCase()}` : '');
 
@@ -389,16 +400,16 @@ export const CLAIM_EXCEL_FIELDS = [
   { key: 'groupLeader', label: 'Client / Group Leader', type: 'text' },
   { key: 'applicant', label: 'Applicant', type: 'text' },
   { key: 'pan', label: 'Applicant PAN', type: 'text', required: true },
-  { key: 'insuranceType', label: 'Insurance Type', type: 'select', options: RENEWAL_CLAIM_INSURANCE_TYPES, required: true },
-  { key: 'motorVehicleType', label: 'Sub Type (Vehicle)', type: 'select', options: MOTOR_VEHICLE_TYPES, required: (r) => r.insuranceType === 'Motor' },
-  { key: 'motorCoverageType', label: 'Sub Type (Coverage)', type: 'select', options: MOTOR_COVERAGE_TYPES, required: (r) => r.insuranceType === 'Motor' },
+  { key: 'insuranceType', label: 'Insurance Type', type: 'select', options: RENEWAL_CLAIM_INSURANCE_TYPES },
+  { key: 'motorVehicleType', label: 'Sub Type (Vehicle)', type: 'select', options: MOTOR_VEHICLE_TYPES },
+  { key: 'motorCoverageType', label: 'Sub Type (Coverage)', type: 'select', options: MOTOR_COVERAGE_TYPES },
   { key: 'policyName', label: 'Policy Name', type: 'text' },
   { key: 'policyNumber', label: 'Policy Number', type: 'text' },
   { key: 'sumAssured', label: 'Sum Assured', type: 'number' },
-  { key: 'claimType', label: 'Claim Type', type: 'select', options: CLAIM_TYPES, required: true },
-  { key: 'claimAmount', label: 'Claim Amount', type: 'number', required: true },
+  { key: 'claimType', label: 'Claim Type', type: 'select', options: CLAIM_TYPES },
+  { key: 'claimAmount', label: 'Claim Amount', type: 'number' },
   { key: 'dueDate', label: 'Target Date', type: 'date' },
-  { key: 'assignedTo', label: 'Assigned To', type: 'text', required: true },
+  { key: 'assignedTo', label: 'Assigned To', type: 'text' },
 ];
 export const claimDedupeKey = (r) => (r.groupLeaderId && r.applicant ? `${r.groupLeaderId}|${r.applicant}|${(r.policyNumber || '').toLowerCase()}|${(r.claimType || '').toLowerCase()}` : '');
 
@@ -406,11 +417,11 @@ export const FD_EXCEL_FIELDS = [
   { key: 'groupLeader', label: 'Client / Group Leader', type: 'text' },
   { key: 'applicant', label: 'Applicant', type: 'text' },
   { key: 'pan', label: 'Applicant PAN', type: 'text', required: true },
-  { key: 'bankName', label: 'Bank Name', type: 'text', required: true },
+  { key: 'bankName', label: 'Bank Name', type: 'text' },
   { key: 'startingDate', label: 'Starting Date', type: 'date' },
-  { key: 'maturityDate', label: 'Maturity Date', type: 'date', required: true },
-  { key: 'maturityAmount', label: 'Maturity Amount', type: 'number', required: true },
-  { key: 'assignedTo', label: 'Assigned To', type: 'text', required: true },
+  { key: 'maturityDate', label: 'Maturity Date', type: 'date' },
+  { key: 'maturityAmount', label: 'Maturity Amount', type: 'number' },
+  { key: 'assignedTo', label: 'Assigned To', type: 'text' },
 ];
 export const fdDedupeKey = (r) => (r.groupLeaderId && r.applicant ? `${r.groupLeaderId}|${r.applicant}|${(r.bankName || '').toLowerCase()}|${r.startingDate || ''}` : '');
 
@@ -418,17 +429,24 @@ export const POLICY_EXCEL_FIELDS = [
   { key: 'groupLeader', label: 'Client / Group Leader', type: 'text' },
   { key: 'applicant', label: 'Applicant', type: 'text' },
   { key: 'pan', label: 'Applicant PAN', type: 'text', required: true },
-  { key: 'insuranceType', label: 'Insurance Type', type: 'select', options: INSURANCE_TYPES, required: true },
+  { key: 'issuingDate', label: 'Issuing Date', type: 'date' },
+  { key: 'insuranceType', label: 'Insurance Type', type: 'select', options: INSURANCE_TYPES },
   { key: 'companyName', label: 'Company Name', type: 'text' },
   { key: 'policyName', label: 'Policy Name', type: 'text' },
   { key: 'policyNumber', label: 'Policy Number', type: 'text' },
+  { key: 'policyStatus', label: 'Policy Status', type: 'select', options: POLICY_STATUS_OPTIONS },
   { key: 'sumAssured', label: 'Sum Assured', type: 'number' },
   { key: 'premiumAmount', label: 'Premium Amount', type: 'number' },
+  { key: 'accidentalDeathBenefitAmount', label: 'Accidental Death Benefit Amount', type: 'number' },
+  { key: 'currentValue', label: 'Current Value', type: 'number' },
+  { key: 'paymentFrequency', label: 'Payment Frequency', type: 'select', options: PAYMENT_FREQUENCY_OPTIONS },
   { key: 'premiumPayingTerm', label: 'Premium Paying Term', type: 'number' },
-  { key: 'policyTerm', label: 'Policy Term', type: 'number' },
+  { key: 'policyTerm', label: 'Term', type: 'number' },
+  { key: 'moneyBack', label: 'Money Back', type: 'text' },
   { key: 'startDate', label: 'Start Date', type: 'date' },
-  { key: 'dueDate', label: 'Next Due / Renewal Date', type: 'date' },
-  { key: 'assignedTo', label: 'Assigned To', type: 'text', required: true },
+  { key: 'maturityDate', label: 'Maturity Date', type: 'date' },
+  { key: 'dueDate', label: 'Renewal Date', type: 'date' },
+  { key: 'assignedTo', label: 'Assigned To', type: 'text' },
 ];
 export const policyDedupeKey = (r) => (r.groupLeaderId && r.applicant ? `${r.groupLeaderId}|${r.applicant}|${(r.policyNumber || '').toLowerCase()}` : '');
 

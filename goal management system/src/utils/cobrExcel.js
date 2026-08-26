@@ -125,7 +125,7 @@ export function parseExcelFile(file, { fields, clients = [], dedupeKeyFor, exist
           // the Client/Applicant name columns become informational only,
           // auto-filled from whichever PAN actually matched.
           const panCell = keyFor.pan ? String(raw[keyFor.pan] ?? '').trim().toUpperCase() : '';
-          if (!panCell) errors.push('Applicant PAN is required');
+          if (!panCell) errors.push('PAN is missing');
           let matchedClient = null;
           let matchedApplicant = null;
           if (panCell) {
@@ -134,7 +134,7 @@ export function parseExcelFile(file, { fields, clients = [], dedupeKeyFor, exist
               const fam = (c.clientDetails?.familyDetails || []).find((f) => (f.pan || '').trim().toUpperCase() === panCell);
               if (fam) { matchedClient = c; matchedApplicant = fam; break; }
             }
-            if (!matchedClient) errors.push(`PAN "${panCell}" was not found under any client`);
+            if (!matchedClient) errors.push(`PAN "${panCell}" was not found under any client — Group Leader / Applicant cannot be resolved`);
           }
           resolved.groupLeaderId = matchedClient?.id || '';
           resolved.groupLeader = matchedClient?.name || '';
