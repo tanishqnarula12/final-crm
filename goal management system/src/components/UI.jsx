@@ -264,6 +264,16 @@ export function CoolSelect({
       }
     } else if (e.key === 'Escape') {
       setOpen(false);
+    } else if (e.key === 'Tab') {
+      // Tab moves focus to the next field on its own — the menu just needs
+      // to close instead of staying rendered (at its now-stale position)
+      // after focus has already moved on, which is what someone tabbing
+      // quickly through a form was left looking at. No preventDefault here:
+      // Tab's native focus-shifting behavior must keep working.
+      if (freeInput && query.trim() && (!selectedOpt || query.trim() !== selectedOpt.label)) {
+        if (onChange) onChange({ target: { value: query.trim() } });
+      }
+      setOpen(false);
     }
   };
 
@@ -377,6 +387,7 @@ export function CoolSelect({
               return (
                 <div
                   key={opt.value + '-' + i}
+                  title={opt.label}
                   onMouseDown={(e) => { e.preventDefault(); select(opt); }}
                   onMouseEnter={() => setHighlight(i)}
                   className={`px-3.5 py-2 text-sm cursor-pointer truncate ${i === highlight ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'}`}

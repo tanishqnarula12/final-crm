@@ -628,13 +628,26 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       const secContent = type === 'redemption'
         ? buildRedemptionPrintSec(tdS, thS)
         : buildNormalPrintSec(type, label, tdS, thS);
+      // A real <table> is the only reliably cross-browser way to make a
+      // header/footer repeat on every PRINTED page a section's content
+      // happens to overflow onto — <thead>/<tfoot> re-render automatically
+      // wherever the browser breaks the page, which a plain <div> never
+      // does. The section can be arbitrarily long (a big SIP table), so
+      // this can't be assumed to fit on one page.
       return `
         <div class='inv-page'>
-          ${pageHeader(type, cn, LOGO_DATA_URI)}
-          ${secContent}
-          <div class='inv-page-footer' style='margin-top:32px;font-size:11px;color:#94a3b8;text-align:center;border-top:1px solid #bfdbfe;padding-top:12px;'>
-            This document is confidential and prepared exclusively for ${cn}. For queries, please contact your advisor.
-          </div>
+          <table class='inv-page-table'>
+            <thead><tr><td>${runningHeader(LOGO_DATA_URI)}</td></tr></thead>
+            <tbody><tr><td>
+              ${pageHeader(type, cn)}
+              ${secContent}
+            </td></tr></tbody>
+            <tfoot><tr><td>
+              <div class='inv-page-footer' style='margin-top:32px;font-size:11px;color:#94a3b8;text-align:center;border-top:1px solid #bfdbfe;padding-top:12px;'>
+                This document is confidential and prepared exclusively for ${cn}. For queries, please contact your advisor.
+              </div>
+            </td></tr></tfoot>
+          </table>
         </div>
       `;
     }).join('');
@@ -773,9 +786,15 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     setSavingDoc(true);
     try {
       const docLabel = isOtherCode ? 'Other Code Proposal' : 'Investment Proposal';
+      // Pass the proposal's own print rules through — without this, a saved
+      // document printed later from the Documents tab lost the repeating
+      // header/footer and page-break behaviour entirely (this HTML is all a
+      // print dialog ever sees at that point; the live in-app styles don't
+      // apply there).
       const html = wrapStandaloneHtml(
         `<div class="inv-proposal-doc">${previewHtml}</div>`,
-        `${docLabel} — ${client.name}`
+        `${docLabel} — ${client.name}`,
+        INVESTMENT_PRINT_STYLES
       );
       const name = await saveGeneratedDocument(client, {
         kind: isOtherCode ? 'othercode' : 'investment',
@@ -810,17 +829,25 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     }
   };
 
-  const pageHeader = (type, cn, LOGO) => {
+  // Split in two: `runningHeader` is the compact branding banner that must
+  // repeat on every PHYSICAL printed page (see the .inv-page-table wrapper
+  // in pagesHtml below), while `pageHeader` is the one-time "cover" content
+  // for a section — the big date heading and intro blurb only make sense
+  // once, not repeated on every page a long table happens to overflow onto.
+  const runningHeader = (LOGO) => `
+    <div style='display:flex;justify-content:space-between;align-items:flex-start;'>
+      <div>
+        <div style='font-family:serif;font-size:22px;color:#0d2b5e;font-weight:bold;'>Team Fintness</div>
+        <div style='font-size:9px;color:#1a4a9c;letter-spacing:2px;text-transform:uppercase;font-weight:600;margin-top:2px;'>Investment Advisory</div>
+      </div>
+      <img src='${LOGO}' style='max-height:48px;max-width:120px;object-fit:contain;'/>
+    </div>
+    <div style='height:2px;background:linear-gradient(90deg,#0d2b5e 0%,#1558d6 60%,#0ea5e9 100%);margin:10px 0 18px;border-radius:2px;'></div>
+  `;
+
+  const pageHeader = (type, cn) => {
     const dStr = new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
     return `
-      <div style='display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;'>
-        <div>
-          <div style='font-family:serif;font-size:30px;color:#0d2b5e;font-weight:bold;'>Team Fintness</div>
-          <div style='font-size:11px;color:#1a4a9c;letter-spacing:2px;text-transform:uppercase;font-weight:600;margin-top:2px;'>Investment Advisory</div>
-        </div>
-        <img src='${LOGO}' style='max-height:72px;max-width:180px;object-fit:contain;'/>
-      </div>
-      <div style='height:3px;background:linear-gradient(90deg,#0d2b5e 0%,#1558d6 60%,#0ea5e9 100%);margin:16px 0 20px;border-radius:2px;'></div>
       <div style='font-size:36px;font-family:serif;color:#0d2b5e;margin-bottom:4px;font-weight:bold;'>${dStr}</div>
       <div style='font-size:13.5px;color:#64748b;margin-bottom:28px;'>Prepared for: <strong style='color:#0d2b5e;'>${cn}</strong></div>
       <div style='background:#eff6ff;border-left:4px solid #1a4a9c;padding:18px 22px;margin-bottom:34px;font-size:14px;line-height:1.85;color:#374151;border-radius:0 8px 8px 0;'>${getIntroText(type)}</div>
@@ -1083,6 +1110,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
         {acFiltered.map((item, idx) => (
           <div
             key={idx}
+            title={item}
             onMouseDown={() => selectAcOption(tab, index, key, item)}
             className={`px-3 py-2 text-xs font-semibold cursor-pointer truncate text-slate-800 dark:text-slate-200 transition-colors ${
               acActiveIdx === idx
@@ -1745,6 +1773,14 @@ const INVESTMENT_PRINT_STYLES = `
   }
   .inv-proposal-doc .inv-page { padding: 28px 36px; }
   .inv-proposal-doc .inv-page + .inv-page { border-top: 1px solid #e2e8f0; }
+  /* The branding header/footer live in a real <table>'s thead/tfoot (not
+     plain divs) purely so the browser's print engine repeats them on every
+     physical page a section overflows onto — table-header-group/footer-group
+     is the one cross-browser-reliable mechanism for that. */
+  .inv-proposal-doc .inv-page-table { width: 100%; border-collapse: collapse; }
+  .inv-proposal-doc .inv-page-table thead { display: table-header-group; }
+  .inv-proposal-doc .inv-page-table tfoot { display: table-footer-group; }
+  .inv-proposal-doc .inv-page-table td { padding: 0; }
 
   @media print {
     @page { size: A4; margin: 0; }
@@ -1791,21 +1827,18 @@ const INVESTMENT_PRINT_STYLES = `
       print-color-adjust: exact !important;
     }
     .inv-proposal-doc .inv-page {
-      padding: 40px 48px 80px !important;
+      padding: 40px 48px 24px !important;
       min-height: 297mm !important;
       box-sizing: border-box !important;
-      position: relative !important;
       page-break-after: always;
-      break-inside: avoid-page;
     }
     .inv-proposal-doc .inv-page:last-child { page-break-after: avoid; }
-    .inv-proposal-doc .inv-page-footer {
-      position: absolute !important;
-      bottom: 40px !important;
-      left: 48px !important;
-      right: 48px !important;
-      margin-top: 0 !important;
-    }
+    /* thead/tfoot repeat natively on every page the table spans once it's
+       actually allowed to break — the old break-inside:avoid-page hint is
+       gone on purpose, since a long section needs to span pages, not be
+       forced onto one. */
+    .inv-proposal-doc .inv-page-table thead td { padding-bottom: 0 !important; }
+    .inv-proposal-doc .inv-page-table tfoot td { padding-top: 16px !important; }
   }
 `;
 
