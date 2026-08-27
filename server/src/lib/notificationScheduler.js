@@ -15,9 +15,9 @@
 // All times are the server's local timezone, matching how meetings/tasks store
 // their date/time strings (no offset) and how the frontend parses them.
 import { prisma } from '../db.js';
-import { pushNotifications, NOTIF } from './notify.js';
+import { pushNotifications, notifyNoticePosted, NOTIF } from './notify.js';
+import { postSystemNotice, serializeNotice } from '../routes/notices.js';
 import { emitToAll } from '../chat/socket.js';
-import { serializeNotice } from '../routes/notices.js';
 
 const TICK_MS = 60 * 1000;
 const MEETING_WINDOW_MS = 10 * 60 * 1000; // "10 minutes before"
@@ -131,26 +131,56 @@ export async function runBirthdayReminders(now) {
         dedupeKey: `birthday:${person.id}:${todayKey}`,
       });
     }
-    // Also a persistent Notice Board post — createdBy stays null (a system/
-    // admin post, not attributed to any teammate). Idempotent the same way
+    // Also a persistent Notice Board post — idempotent the same way
     // Notification rows are: dedupeKey is unique, so a re-run this tick, or
-    // any later tick the same day, just hits P2002 and is skipped.
+    // any later tick the same day, just no-ops instead of double-posting.
     try {
-      const notice = await prisma.notice.create({
-        data: {
-          type: 'BIRTHDAY',
-          title: `🎂 Happy Birthday, ${person.name}!`,
-          message: `Wishing ${person.name} a fantastic year ahead — filled with success, good health, and happiness! 🎉🎂 Join us in wishing them well.`,
-          createdBy: null,
-          dedupeKey: `birthday-notice:${person.id}:${todayKey}`,
-        },
+      await postSystemNotice(prisma, {
+        type: 'BIRTHDAY',
+        title: `🎂 Happy Birthday, ${person.name}!`,
+        message: `Wishing ${person.name} a fantastic year ahead — filled with success, good health, and happiness! 🎉🎂 Join us in wishing them well.`,
+        dedupeKey: `birthday-notice:${person.id}:${todayKey}`,
       });
-      emitToAll('notice:new', { notice: serializeNotice(notice) });
     } catch (err) {
-      if (err?.code !== 'P2002') console.error('[scheduler] birthday notice:', err);
+      console.error('[scheduler] birthday notice:', err);
     }
   }
   await pushNotifications(prisma, items);
+}
+
+// ---- Scheduled notice board posts (future-dated trigger + auto-expiry) ----
+// A notice created with a future date sits invisible (see GET /api/notices'
+// effectiveDate filter) until this catches up to it — every tick, not
+// hour-gated like birthdays, so a scheduled notice appears within ~60s of its
+// date actually arriving. Expiry is a one-time broadcast near the moment a
+// notice's expiresAt actually lapses, so an already-open dashboard drops it
+// live instead of waiting for its next GET /api/notices to silently exclude it.
+export async function runScheduledNotices(now) {
+  const todayKey = localDateKey(now);
+
+  const toTrigger = await prisma.notice.findMany({
+    where: { deletedAt: null, triggered: false, effectiveDate: { lte: todayKey } },
+  });
+  for (const row of toTrigger) {
+    const updated = await prisma.notice.update({ where: { id: row.id }, data: { triggered: true } });
+    emitToAll('notice:new', { notice: serializeNotice(updated) });
+    if (updated.createdBy) {
+      const poster = await prisma.user.findUnique({ where: { id: updated.createdBy }, select: { name: true } });
+      notifyNoticePosted(prisma, updated, poster?.name || 'Someone')
+        .catch((err) => console.error('[scheduler] scheduled-notice notify:', err));
+    }
+  }
+
+  // "Just expired" = expiresAt fell within the last tick's window (with a
+  // small buffer for tick jitter) — fires the removal broadcast once, not on
+  // every subsequent tick for the same already-lapsed notice.
+  const windowStart = new Date(now.getTime() - TICK_MS - 5000);
+  const justExpired = await prisma.notice.findMany({
+    where: { deletedAt: null, expiresAt: { gt: windowStart, lte: now } },
+  });
+  for (const row of justExpired) {
+    emitToAll('notice:deleted', { id: row.id });
+  }
 }
 
 async function tick() {
@@ -158,6 +188,7 @@ async function tick() {
   try { await runMeetingReminders(now); } catch (err) { console.error('[scheduler] meetings:', err); }
   try { await runTaskDueReminders(now); } catch (err) { console.error('[scheduler] task-due:', err); }
   try { await runBirthdayReminders(now); } catch (err) { console.error('[scheduler] birthdays:', err); }
+  try { await runScheduledNotices(now); } catch (err) { console.error('[scheduler] scheduled-notices:', err); }
 }
 
 export function startNotificationScheduler() {

@@ -11,6 +11,7 @@ import { parseBody } from '../lib/validate.js';
 import { can } from '../lib/permissions.js';
 import { logActivity } from '../lib/activityLog.js';
 import { notifyLeaveApplied, notifyLeaveResponded } from '../lib/notify.js';
+import { postSystemNotice } from './notices.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -165,6 +166,28 @@ router.post('/:id/respond', asyncHandler(async (req, res) => {
   });
   res.json({ leave: serialize(row) });
   notifyLeaveResponded(prisma, row).catch((err) => console.error('[notify] leave responded:', err));
+  if (decision === 'Approved' && row.leaveType === 'Full Day') {
+    postLeaveNotice(prisma, row).catch((err) => console.error('[notify] leave notice:', err));
+  }
 }));
+
+// An approved Full Day leave gets its own Notice Board post — a genuine
+// whole-day absence, unlike Half Day/Early Leave/Late Entry (the person is
+// still in for part of the day, so "X is on leave" would be misleading).
+// A multi-day request states the whole range up front, right at approval —
+// nothing further happens on the actual start date.
+async function postLeaveNotice(prisma, row) {
+  const requester = await prisma.user.findUnique({ where: { id: row.createdBy }, select: { name: true } });
+  const name = requester?.name || 'A teammate';
+  const fmt = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const isMultiDay = row.toDate !== row.fromDate;
+  await postSystemNotice(prisma, {
+    type: 'LEAVE',
+    title: isMultiDay ? `🌴 ${name} is on leave` : `🌴 ${name} is on leave today`,
+    message: isMultiDay
+      ? `${name} will be on leave from ${fmt(row.fromDate)} to ${fmt(row.toDate)}.`
+      : `${name} is on leave on ${fmt(row.fromDate)}.`,
+  });
+}
 
 export default router;

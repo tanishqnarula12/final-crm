@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Megaphone, Cake, PartyPopper, MessageSquare, Calendar, Pin, Trash2, Plus, X } from 'lucide-react';
+import { Megaphone, Cake, PartyPopper, MessageSquare, Calendar, Palmtree, Pin, Trash2, Plus, X } from 'lucide-react';
 import { Card, Avatar, inputCls, selectCls, btnPrimary, btnSecondary, CoolSelect } from './UI';
-import { listNotices, createNotice, deleteNotice, NOTICE_TYPES } from '../services/notices';
+import { listNotices, createNotice, deleteNotice, NOTICE_TYPES, VISIBLE_FOR_OPTIONS } from '../services/notices';
 import { teamName } from '../services/team';
 import { onChatEvent } from '../services/chat';
 import { getCurrentUser } from '../utils/auth';
@@ -13,8 +13,26 @@ const TYPE_META = {
   HOLIDAY: { label: 'Holiday', icon: Calendar, badge: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400' },
   BIRTHDAY: { label: 'Birthday', icon: Cake, badge: 'bg-pink-50 text-pink-600 dark:bg-pink-950/40 dark:text-pink-400' },
   EVENT: { label: 'Event', icon: PartyPopper, badge: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400' },
+  LEAVE: { label: 'Leave', icon: Palmtree, badge: 'bg-cyan-50 text-cyan-600 dark:bg-cyan-950/40 dark:text-cyan-400' },
 };
+// System-only types — never manually postable (birthdays/leave are generated
+// automatically from real profile/HR data, so letting anyone free-type one
+// would let them fake an announcement about someone else).
+const SYSTEM_ONLY_TYPES = ['BIRTHDAY', 'LEAVE'];
 const MANAGER_ROLES = ['ADMIN', 'INTERNAL_MANAGER'];
+
+// Local YYYY-MM-DD — never use toISOString() here (UTC-based; near midnight
+// IST it can report the wrong calendar day).
+const localDateStr = (d = new Date()) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+const fmtDate = (isoOrDateStr) => {
+  const d = new Date(isoOrDateStr.length === 10 ? `${isoOrDateStr}T00:00:00` : isoOrDateStr);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+};
 
 const timeAgo = (iso) => {
   const d = new Date(iso);
@@ -35,6 +53,7 @@ export default function NoticeBoard() {
   const [showAll, setShowAll] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [expanded, setExpanded] = useState(() => new Set());
+  const [toast, setToast] = useState('');
   const me = getCurrentUser();
 
   const toggleExpand = (id) => setExpanded((prev) => {
@@ -157,10 +176,22 @@ export default function NoticeBoard() {
         </button>
       )}
 
+      {toast && (
+        <p className="mt-3.5 pt-3.5 border-t border-slate-100 dark:border-slate-800 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">{toast}</p>
+      )}
+
       {showForm && (
         <NewNoticeModal
           onClose={() => setShowForm(false)}
-          onPosted={(n) => { setNotices((prev) => [n, ...prev]); setShowForm(false); }}
+          onPosted={({ notice, scheduled }) => {
+            setShowForm(false);
+            if (scheduled) {
+              setToast(`✅ Notice scheduled for ${fmtDate(notice.effectiveDate)}`);
+              setTimeout(() => setToast(''), 5000);
+            } else {
+              setNotices((prev) => (prev.some((n) => n.id === notice.id) ? prev : [notice, ...prev]));
+            }
+          }}
         />
       )}
     </Card>
@@ -171,16 +202,19 @@ function NewNoticeModal({ onClose, onPosted }) {
   const [type, setType] = useState('GENERAL');
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
+  const [date, setDate] = useState(() => localDateStr());
+  const [visibleForDays, setVisibleForDays] = useState(7);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const today = localDateStr();
 
   const submit = async () => {
     if (!title.trim() || !message.trim()) { setError('Title and message are required.'); return; }
     setSaving(true);
     setError('');
     try {
-      const notice = await createNotice({ type, title: title.trim(), message: message.trim() });
-      onPosted(notice);
+      const result = await createNotice({ type, title: title.trim(), message: message.trim(), date, visibleForDays });
+      onPosted(result);
     } catch (err) {
       setError(err.message || 'Could not post the notice.');
       setSaving(false);
@@ -209,11 +243,38 @@ function NewNoticeModal({ onClose, onPosted }) {
           <div>
             <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">Notice Type</label>
             <CoolSelect showValueOnSelect value={type} onChange={(e) => setType(e.target.value)} className={selectCls}>
-              {NOTICE_TYPES.filter((t) => t !== 'BIRTHDAY').map((t) => (
+              {NOTICE_TYPES.filter((t) => !SYSTEM_ONLY_TYPES.includes(t)).map((t) => (
                 <option key={t} value={t}>{TYPE_META[t]?.label || t}</option>
               ))}
             </CoolSelect>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">Notice Date</label>
+              <input
+                type="date" value={date} min={today}
+                onChange={(e) => setDate(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">Visible For</label>
+              <CoolSelect
+                value={visibleForDays === null ? 'null' : String(visibleForDays)}
+                onChange={(e) => setVisibleForDays(e.target.value === 'null' ? null : Number(e.target.value))}
+                className={selectCls}
+              >
+                {VISIBLE_FOR_OPTIONS.map((o) => (
+                  <option key={o.label} value={o.days === null ? 'null' : o.days}>{o.label}</option>
+                ))}
+              </CoolSelect>
+            </div>
+          </div>
+          {date > today && (
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 -mt-2">
+              This will post on {fmtDate(date)} — it stays hidden (including from you) until then.
+            </p>
+          )}
           <div>
             <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">Title</label>
             <input

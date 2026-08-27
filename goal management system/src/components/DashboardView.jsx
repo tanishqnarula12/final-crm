@@ -33,6 +33,11 @@ const SIP_OUT_TYPES = ['SIP Cancellation'];
 const LUMP_TYPES = ['Lumpsum Investment'];
 const REDEEM_TYPES = ['Redemption Proposal'];
 
+// Goal Achievement ring geometry
+const GOAL_RING_STROKE = 10;
+const GOAL_RING_RADIUS = (104 - GOAL_RING_STROKE) / 2;
+const GOAL_RING_CIRC = 2 * Math.PI * GOAL_RING_RADIUS;
+
 const isThisMonth = (iso) => {
   if (!iso) return false;
   const d = new Date(iso);
@@ -59,6 +64,7 @@ export default function DashboardView({
   const [tasks, setTasks] = useState(() => loadTasks());
   const [meetings, setMeetings] = useState(() => loadMeetings());
   const [showAllOther, setShowAllOther] = useState(false);
+  const [showAllGoalTypes, setShowAllGoalTypes] = useState(false);
 
   // Live refresh whenever the underlying stores change
   useEffect(() => { setProspects(loadProspects()); }, [prospectsChangeCounter]);
@@ -151,27 +157,33 @@ export default function DashboardView({
     return tasks.filter(isPolicy).reduce((s, t) => s + num(t.premiumAmount), 0);
   }, [tasks]);
 
-  // 4c. Goal & Asset Tracking — funding progress across all client goals
+  // 4c. Goal & Asset Tracking — average per-goal achievement, client coverage
+  // & goal-type distribution across all mapped goals
   const goalTrack = useMemo(() => {
-    let totalGoals = 0, totalTarget = 0;
+    let totalGoals = 0, clientsWithGoals = 0, achievementSum = 0, achievementCount = 0;
     const byType = {};
     clients.forEach(c => {
-      (c.goals || []).forEach(g => {
+      const goals = c.goals || [];
+      if (goals.length > 0) clientsWithGoals += 1;
+      goals.forEach(g => {
         totalGoals += 1;
-        const amt = num(g.amount);
-        totalTarget += amt;
         const label = g.name || 'Others';
-        byType[label] = (byType[label] || 0) + amt;
+        byType[label] = (byType[label] || 0) + 1;
+        const target = num(g.amount);
+        // Achievement % = Current Funded Value ÷ Target Value × 100 — only
+        // meaningful for a goal that actually has a target amount set.
+        if (target > 0) {
+          achievementSum += (num(g.currentInv) / target) * 100;
+          achievementCount += 1;
+        }
       });
     });
-    const topTypes = Object.entries(byType)
+    const avgAchievement = achievementCount > 0 ? Math.round(achievementSum / achievementCount) : 0;
+    const goalsMapped = Object.entries(byType)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([name, amount]) => ({ name, amount }));
-    const maxType = topTypes.length ? Math.max(...topTypes.map(t => t.amount)) || 1 : 1;
-    const fundedPct = totalTarget > 0 ? Math.min(100, Math.round((rev.aum / totalTarget) * 100)) : 0;
-    return { totalGoals, totalTarget, topTypes, maxType, fundedPct };
-  }, [clients, rev.aum]);
+      .map(([name, count]) => ({ name, count }));
+    return { totalGoals, clientsWithGoals, totalClients: clients.length, avgAchievement, goalsMapped };
+  }, [clients]);
 
   // 5. Operations/Stages counts
   const ops = useMemo(() => {
@@ -397,40 +409,61 @@ export default function DashboardView({
 
           {/* Goal & Asset Tracking */}
           <section className="space-y-3.5">
-            <SectionHeader icon={Target} title="Goal & Asset Tracking" subtitle="Client goal funding progress & asset allocation coverage" />
+            <SectionHeader icon={Target} title="Goal & Asset Tracking" subtitle="Client goal achievement, coverage & asset allocation" />
             <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900">
-              <div className="grid grid-cols-3 gap-3 text-center pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
-                <div>
-                  <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{goalTrack.totalGoals}</p>
-                  <p className="text-[9px] text-slate-450 font-bold uppercase tracking-wider mt-0.5">Goals Tracked</p>
+              <div className="flex flex-col sm:flex-row items-center gap-6 pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
+                {/* Goal Achievement ring */}
+                <div className="flex flex-col items-center shrink-0">
+                  <div className="relative w-[104px] h-[104px] flex items-center justify-center">
+                    <svg width={104} height={104} viewBox="0 0 104 104" className="-rotate-90">
+                      <circle cx="52" cy="52" r={GOAL_RING_RADIUS} fill="none" strokeWidth={GOAL_RING_STROKE} className="stroke-slate-100 dark:stroke-slate-800" />
+                      <circle
+                        cx="52" cy="52" r={GOAL_RING_RADIUS} fill="none" strokeWidth={GOAL_RING_STROKE} strokeLinecap="round"
+                        className="stroke-indigo-500 dark:stroke-indigo-450 transition-all duration-700"
+                        strokeDasharray={GOAL_RING_CIRC}
+                        strokeDashoffset={GOAL_RING_CIRC - (Math.max(0, Math.min(100, goalTrack.avgAchievement)) / 100) * GOAL_RING_CIRC}
+                      />
+                    </svg>
+                    <div className="absolute flex flex-col items-center justify-center text-center">
+                      <span className="text-lg font-black text-slate-900 dark:text-white tabular-nums leading-none">{goalTrack.avgAchievement}%</span>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider mt-2 text-center">Goal Achievement</p>
                 </div>
-                <div>
-                  <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{fmtINR(goalTrack.totalTarget)}</p>
-                  <p className="text-[9px] text-slate-450 font-bold uppercase tracking-wider mt-0.5">Target Corpus</p>
-                </div>
-                <div>
-                  <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 tabular-nums">{goalTrack.fundedPct}%</p>
-                  <p className="text-[9px] text-slate-455 font-bold uppercase tracking-wider mt-0.5">Funded (AUM/Target)</p>
+
+                {/* Clients With Goals */}
+                <div className="flex-1 w-full text-center sm:text-left">
+                  <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">
+                    {goalTrack.clientsWithGoals}<span className="text-slate-350 dark:text-slate-600"> / {goalTrack.totalClients}</span>
+                  </p>
+                  <p className="text-[10px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider mt-2">Clients With Goals</p>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1">Clients with goals mapped / Total clients</p>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-2.5 pt-2.5 border-t border-slate-100 dark:border-slate-800 sm:border-0 sm:pt-0 sm:mt-1.5">
+                    <span className="font-black text-slate-700 dark:text-slate-250 tabular-nums">{goalTrack.totalGoals}</span> goals mapped in total
+                  </p>
                 </div>
               </div>
 
-              {goalTrack.topTypes.length > 0 ? (
-                <div className="space-y-3.5 py-1">
-                  {goalTrack.topTypes.map((t) => (
-                    <div key={t.name} className="space-y-1">
-                      <div className="flex justify-between items-center text-xs font-bold">
-                        <span className="text-slate-700 dark:text-slate-205 truncate">{t.name}</span>
-                        <span className="text-slate-900 dark:text-white tabular-nums">{fmtINR(t.amount)}</span>
+              <h4 className="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider mb-3">Goals Mapped</h4>
+              {goalTrack.goalsMapped.length > 0 ? (
+                <>
+                  <div className="space-y-2.5">
+                    {(showAllGoalTypes ? goalTrack.goalsMapped : goalTrack.goalsMapped.slice(0, 5)).map((t) => (
+                      <div key={t.name} className="flex items-center justify-between gap-3 text-xs font-bold">
+                        <span className="text-slate-650 dark:text-slate-350 truncate">{t.name}</span>
+                        <span className="text-slate-900 dark:text-white tabular-nums shrink-0">{t.count}</span>
                       </div>
-                      <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-indigo-500 dark:bg-indigo-600 transition-all duration-500"
-                          style={{ width: `${(t.amount / goalTrack.maxType) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                  {goalTrack.goalsMapped.length > 5 && (
+                    <button
+                      onClick={() => setShowAllGoalTypes((v) => !v)}
+                      className="w-full mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800 text-center text-[11px] font-bold text-blue-600 dark:text-blue-450 hover:underline cursor-pointer"
+                    >
+                      {showAllGoalTypes ? 'Show Less' : `View All (${goalTrack.goalsMapped.length})`}
+                    </button>
+                  )}
+                </>
               ) : (
                 <div className="h-24 flex flex-col items-center justify-center text-center">
                   <Target size={22} className="text-slate-300 dark:text-slate-700 mb-1" />

@@ -439,24 +439,36 @@ model Notification {
 // Dashboard notice board — open to every user (view + post): birthdays,
 // holidays, announcements, general notices. `createdBy` is null for
 // system-generated posts (the daily birthday entry — see
-// notificationScheduler.js); everything else is authored by a real user and
-// resolved to a display name client-side via services/team.js, same as every
-// other createdBy/departmentOwner field in this app. `dedupeKey` is only set
-// on the birthday auto-post (one per person per day) — the (unique, nullable)
+// notificationScheduler.js — and an approved Full Day leave — see
+// routes/leave.js); everything else is authored by a real user and resolved
+// to a display name client-side via services/team.js, same as every other
+// createdBy/departmentOwner field in this app. `dedupeKey` is only set on the
+// birthday auto-post (one per person per day) — the (unique, nullable)
 // column lets ordinary user posts leave it null with no conflict, mirroring
 // Notification.dedupeKey above.
 model Notice {
-  id        String    @id @default(cuid())
-  type      String    @default("GENERAL") // GENERAL | ANNOUNCEMENT | HOLIDAY | BIRTHDAY | EVENT
-  title     String
-  message   String
-  createdBy String? // User.id, null = system-generated
-  dedupeKey String?   @unique
-  deletedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  type          String    @default("GENERAL") // GENERAL | ANNOUNCEMENT | HOLIDAY | BIRTHDAY | EVENT | LEAVE
+  title         String
+  message       String
+  createdBy     String? // User.id, null = system-generated
+  // YYYY-MM-DD (string, matching Leave.fromDate/toDate's convention) — the
+  // notice is invisible to everyone, including the poster, until this date
+  // arrives; `triggered` flips true the moment the scheduler (or the create
+  // request itself, for a same-day post) broadcasts it live, so a later tick
+  // never re-broadcasts an already-shown notice once its date has passed.
+  effectiveDate String
+  triggered     Boolean   @default(false)
+  // Null = never expires. Once passed, the notice drops out of GET /api/notices
+  // (query-time filter) and the scheduler broadcasts a one-time notice:deleted
+  // to every open dashboard around the moment it lapses.
+  expiresAt     DateTime?
+  dedupeKey     String?   @unique
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  @@index([deletedAt, createdAt])
+  @@index([deletedAt, effectiveDate, createdAt])
   @@map("notices")
 }
 
