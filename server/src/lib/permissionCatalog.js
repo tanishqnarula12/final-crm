@@ -75,11 +75,16 @@ export const ACTION_LABELS = {
 //   task    — assigner = departmentOwner, assignee = assignedTo (handled by overlay)
 //   meeting — creator, or the host/attendee (matched by NAME — see permissions.js)
 //   client  — ownership flows from the parent client's RM / createdBy
+//   prospect — a prospect's own relationshipManager / portfolioManager /
+//             serviceManager / insuranceManager field, or createdBy (see
+//             isProspectAssignee() in permissions.js) — distinct from
+//             'client' because a prospect carries several parallel assignee
+//             fields, not just the client's RM.
 export const OWNERSHIP = {
   leads: 'self', clients: 'self', tasks: 'task', cobr: 'task', queries: 'task', mom: 'self', meetings: 'meeting',
   renewals: 'task', claims: 'task', fixedDeposits: 'task', otherInsurancePolicies: 'task',
   goals: 'client', assetAllocation: 'client', investmentProposal: 'client', insuranceProposal: 'client',
-  portfolioReview: 'client', policyReview: 'client', investmentProspects: 'client', insuranceProspects: 'client',
+  portfolioReview: 'client', policyReview: 'client', investmentProspects: 'prospect', insuranceProspects: 'prospect',
   documents: 'client', leave: 'creator',
 };
 

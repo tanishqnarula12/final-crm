@@ -49,6 +49,19 @@ function isClientRm(record, uid) {
     || record?.client?.clientDetails?.relationshipManager === uid;
 }
 
+// A prospect carries several parallel assignee fields — relationshipManager,
+// portfolioManager, serviceManager (investment) and insuranceManager
+// (insurance). isClientRm() above only recognizes the RM, so a Portfolio
+// Manager granted ASSIGNED changeStage/editDetails on Investment Prospects
+// could never satisfy ownership here — mirrors server/src/lib/permissions.js's
+// isProspectAssignee() exactly.
+function isProspectAssignee(record, uid) {
+  return isClientRm(record, uid)
+    || record.portfolioManager === uid
+    || record.serviceManager === uid
+    || record.insuranceManager === uid;
+}
+
 // A task's extra participants (sub-people). Client records ARE the payload, so
 // it's read directly; `.payload` fallback keeps it safe either way. Mirrors the
 // server: reads the `subPersons` array, falling back to the legacy single
@@ -82,6 +95,7 @@ function ownsRecord(module, record, user) {
   if (kind === 'task') return record.departmentOwner === uid || record.assignedTo === uid || taskSubPersons(record).includes(uid);
   if (kind === 'meeting') return isMeetingParticipant(record, user);
   if (kind === 'client') return isClientRm(record, uid) || record.createdBy === uid;
+  if (kind === 'prospect') return isProspectAssignee(record, uid) || record.createdBy === uid;
   // self (leads): ownerId alongside assignedTo — mirrors the server engine,
   // see its comment. Some leads predate the assignedTo RBAC column, so
   // ownerId (what the UI shows as "RM") is the only reliable signal on them.

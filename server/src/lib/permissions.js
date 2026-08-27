@@ -60,6 +60,26 @@ function isClientRm(record, uid) {
     || record?.client?.clientDetails?.relationshipManager === uid;
 }
 
+// A prospect carries several parallel assignee fields — relationshipManager,
+// portfolioManager, serviceManager (investment) and insuranceManager
+// (insurance) — each a distinct person who may hold an ASSIGNED-scoped role
+// on the matrix (e.g. Portfolio Manager). isClientRm() above only recognizes
+// the RM, so a Portfolio Manager granted ASSIGNED changeStage/editDetails on
+// Investment Prospects could never satisfy ownership on any record — the
+// matrix said they had the right, but every actual attempt was silently
+// denied. Checked in both shapes isClientRm() checks: the raw incoming
+// payload at create-time, and record.payload.* on a stored Prisma row
+// (Prospects don't promote these fields to real columns).
+function isProspectAssignee(record, uid) {
+  return isClientRm(record, uid)
+    || record.portfolioManager === uid
+    || record.payload?.portfolioManager === uid
+    || record.serviceManager === uid
+    || record.payload?.serviceManager === uid
+    || record.insuranceManager === uid
+    || record.payload?.insuranceManager === uid;
+}
+
 // ---- ownership resolvers ---------------------------------------------------
 // A task's "sub people" are the extra participants beyond the assigner and the
 // assignee (e.g. an RM assigns a task to an ops person AND tags colleagues who
@@ -102,6 +122,10 @@ function ownsRecord(module, record, user) {
   // meeting = the creator, the host, or an attendee (by name — see above).
   if (kind === 'meeting') return isMeetingParticipant(record, user);
   if (kind === 'client') return isClientRm(record, uid) || record.createdBy === uid;
+  // prospect = investment/insurance prospects — owned by whichever of their
+  // several assignee fields (RM, Portfolio Manager, Service Manager,
+  // Insurance Manager) matches this user, or the creator.
+  if (kind === 'prospect') return isProspectAssignee(record, uid) || record.createdBy === uid;
   // self (leads): `ownerId` is checked alongside `assignedTo` — some leads
   // predate the `assignedTo` RBAC column (assigned before it existed) and
   // never got backfilled, so `assignedTo` is null there even though `ownerId`
