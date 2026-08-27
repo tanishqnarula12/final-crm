@@ -8,6 +8,10 @@ import { addProspects } from '../utils/prospects';
 import { saveGeneratedDocument, wrapStandaloneHtml } from '../utils/documents';
 import { ProspectModal } from './BusinessProspects';
 
+// New insurance lines of business — shown as disabled "Coming Soon" pills
+// until their field sets are defined and each gets its own proposal section.
+const COMING_SOON_TYPES = ['Motor', 'Home', 'Fire', 'Marine', 'Travel', 'Indemnity'];
+
 export default function InsuranceProposal({ client, isViewer }) {
   const getSavedVal = (subKey, defaultVal) => {
     try {
@@ -818,6 +822,17 @@ export default function InsuranceProposal({ client, isViewer }) {
                     />
                     Accidental
                   </label>
+                  {COMING_SOON_TYPES.map(label => (
+                    <label
+                      key={label}
+                      title="Coming soon"
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-slate-200 dark:border-slate-750 bg-slate-50/30 dark:bg-slate-950/20 text-xs font-semibold text-slate-400 dark:text-slate-550 cursor-not-allowed select-none"
+                    >
+                      <input type="checkbox" checked={false} disabled className="rounded text-slate-300 border-slate-300 dark:border-slate-750" />
+                      {label}
+                      <span className="px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 text-[8px] font-black uppercase tracking-wide">Soon</span>
+                    </label>
+                  ))}
                 </div>
               </div>
             </div>
