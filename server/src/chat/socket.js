@@ -41,6 +41,14 @@ export function emitToUser(userId, event, payload) {
   io.to(`user:${userId}`).emit(event, payload);
 }
 
+// Fan out to every connected socket, regardless of who's online — used for
+// data that's genuinely open to everyone (the notice board), so every open
+// dashboard updates live instead of waiting on a per-recipient notification
+// or a window-focus refetch. Mirrors broadcastPresence() below.
+export function emitToAll(event, payload) {
+  if (io) io.emit(event, payload);
+}
+
 // Make every online socket of the given members join a (new) conversation's
 // room so they receive its events without reconnecting.
 export function joinMembersToConversation(conversationId, memberIds) {

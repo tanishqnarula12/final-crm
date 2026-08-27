@@ -634,7 +634,10 @@ export default function DashboardView({
 
         {/* Right Side: Command Center / Operations Sidebar (Spans 1 column) */}
         <div className="xl:sticky xl:top-20 space-y-6 self-start">
-          
+
+          {/* Notice Board */}
+          <NoticeBoard />
+
           {/* Quick Actions Console */}
           <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 relative overflow-hidden">
             <h4 className="text-xs font-bold uppercase tracking-widest text-slate-450 dark:text-slate-500 mb-3.5 flex items-center gap-1.5">
@@ -664,9 +667,6 @@ export default function DashboardView({
               </button>
             </div>
           </Card>
-
-          {/* Notice Board */}
-          <NoticeBoard />
 
           {/* Upcoming Meetings Timeline */}
           <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900">

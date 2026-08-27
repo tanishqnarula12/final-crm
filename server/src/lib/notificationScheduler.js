@@ -16,6 +16,8 @@
 // their date/time strings (no offset) and how the frontend parses them.
 import { prisma } from '../db.js';
 import { pushNotifications, NOTIF } from './notify.js';
+import { emitToAll } from '../chat/socket.js';
+import { serializeNotice } from '../routes/notices.js';
 
 const TICK_MS = 60 * 1000;
 const MEETING_WINDOW_MS = 10 * 60 * 1000; // "10 minutes before"
@@ -134,7 +136,7 @@ export async function runBirthdayReminders(now) {
     // Notification rows are: dedupeKey is unique, so a re-run this tick, or
     // any later tick the same day, just hits P2002 and is skipped.
     try {
-      await prisma.notice.create({
+      const notice = await prisma.notice.create({
         data: {
           type: 'BIRTHDAY',
           title: `🎂 Happy Birthday, ${person.name}!`,
@@ -143,6 +145,7 @@ export async function runBirthdayReminders(now) {
           dedupeKey: `birthday-notice:${person.id}:${todayKey}`,
         },
       });
+      emitToAll('notice:new', { notice: serializeNotice(notice) });
     } catch (err) {
       if (err?.code !== 'P2002') console.error('[scheduler] birthday notice:', err);
     }

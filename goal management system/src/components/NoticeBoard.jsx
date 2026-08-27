@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Megaphone, Cake, PartyPopper, MessageSquare, Calendar, Pin, Trash2, Plus, X } from 'lucide-react';
 import { Card, Avatar, inputCls, selectCls, btnPrimary, btnSecondary, CoolSelect } from './UI';
 import { listNotices, createNotice, deleteNotice, NOTICE_TYPES } from '../services/notices';
 import { teamName } from '../services/team';
-import { onNotificationArrival } from '../services/notifications';
+import { onChatEvent } from '../services/chat';
 import { getCurrentUser } from '../utils/auth';
 
 const TYPE_META = {
@@ -33,7 +34,14 @@ export default function NoticeBoard() {
   const [loading, setLoading] = useState(true);
   const [showAll, setShowAll] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [expanded, setExpanded] = useState(() => new Set());
   const me = getCurrentUser();
+
+  const toggleExpand = (id) => setExpanded((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   const refresh = useCallback(() => {
     listNotices().then(setNotices).catch(() => {}).finally(() => setLoading(false));
@@ -41,17 +49,23 @@ export default function NoticeBoard() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Live refresh: on window focus (matches the rest of the dashboard's
-  // refresh pattern), and the instant a NOTICE_POSTED/BIRTHDAY notification
-  // arrives over the socket — someone else just posted, or the daily
-  // birthday entry just landed.
+  // True real-time sync: the server broadcasts notice:new / notice:deleted to
+  // EVERY connected socket the instant anyone posts or removes a notice (open
+  // board = open broadcast, not scoped to notification recipients), so every
+  // dashboard patches its list immediately — no refetch, no window-focus wait,
+  // and it covers deletes too (which never had a notification of their own).
+  // window focus stays as a cheap fallback in case a tab's socket dropped.
   useEffect(() => {
     const onFocus = () => refresh();
     window.addEventListener('focus', onFocus);
-    const off = onNotificationArrival((n) => {
-      if (n.type === 'NOTICE_POSTED' || n.type === 'BIRTHDAY') refresh();
+    const offNew = onChatEvent('notice:new', ({ notice }) => {
+      if (!notice) return;
+      setNotices((cur) => (cur.some((n) => n.id === notice.id) ? cur : [notice, ...cur]));
     });
-    return () => { window.removeEventListener('focus', onFocus); off(); };
+    const offDeleted = onChatEvent('notice:deleted', ({ id }) => {
+      setNotices((cur) => cur.filter((n) => n.id !== id));
+    });
+    return () => { window.removeEventListener('focus', onFocus); offNew(); offDeleted(); };
   }, [refresh]);
 
   const handleDelete = async (id) => {
@@ -88,6 +102,8 @@ export default function NoticeBoard() {
           const meta = TYPE_META[n.type] || TYPE_META.GENERAL;
           const Icon = meta.icon;
           const posterName = n.createdBy ? teamName(n.createdBy) : 'Team Fintness';
+          const isLong = n.message.length > 110;
+          const isExpanded = expanded.has(n.id);
           return (
             <div key={n.id} className="p-3 rounded-2xl border border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/10 group">
               <div className="flex items-start gap-2.5">
@@ -105,7 +121,15 @@ export default function NoticeBoard() {
                       </button>
                     )}
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5 line-clamp-2">{n.message}</p>
+                  <p className={`text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5 whitespace-pre-wrap ${isExpanded ? '' : 'line-clamp-2'}`}>{n.message}</p>
+                  {isLong && (
+                    <button
+                      onClick={() => toggleExpand(n.id)}
+                      className="text-[10px] font-bold text-blue-600 dark:text-blue-450 hover:underline mt-0.5 cursor-pointer"
+                    >
+                      {isExpanded ? 'Show less' : 'Read more'}
+                    </button>
+                  )}
                   <div className="flex items-center gap-1.5 mt-1.5">
                     <Avatar name={posterName} size="xs" />
                     <span className="text-[9px] text-slate-400 dark:text-slate-500 font-bold">{posterName} · {timeAgo(n.createdAt)}</span>
@@ -163,7 +187,13 @@ function NewNoticeModal({ onClose, onPosted }) {
     }
   };
 
-  return (
+  // Portaled straight to <body> — NoticeBoard renders inside UI.jsx's <Card>,
+  // whose backdrop-blur establishes a containing block for fixed-position
+  // descendants (per the CSS Filter Effects spec, same as `transform`), which
+  // trapped this modal inside the card's own box instead of the viewport.
+  // Every other overlay in this app (CoolSelect's menu, the sidebar flyout)
+  // already portals to document.body for exactly this reason.
+  return createPortal(
     <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" onClick={onClose}>
       <div
         className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md flex flex-col max-h-[90vh] shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up"
@@ -207,6 +237,7 @@ function NewNoticeModal({ onClose, onPosted }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

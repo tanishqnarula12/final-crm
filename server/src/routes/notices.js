@@ -11,6 +11,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/error.js';
 import { parseBody } from '../lib/validate.js';
 import { notifyNoticePosted } from '../lib/notify.js';
+import { emitToAll } from '../chat/socket.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -25,7 +26,7 @@ const createSchema = z.object({
   message: z.string().trim().min(1, 'Message is required').max(2000, 'Keep the message under 2000 characters'),
 });
 
-const serialize = (n) => ({
+export const serializeNotice = (n) => ({
   id: n.id,
   type: n.type,
   title: n.title,
@@ -43,16 +44,21 @@ router.get('/', asyncHandler(async (req, res) => {
     orderBy: { createdAt: 'desc' },
     take: 100,
   });
-  res.json({ notices: rows.map(serialize) });
+  res.json({ notices: rows.map(serializeNotice) });
 }));
 
-// POST /api/notices — anyone may post.
+// POST /api/notices — anyone may post. Broadcast live to every connected
+// dashboard (emitToAll), not just via the per-user notification — the board
+// is open to everyone, so every open tab should see it appear instantly, the
+// same way presence/typing already broadcast to everyone.
 router.post('/', asyncHandler(async (req, res) => {
   const { type, title, message } = parseBody(createSchema, req.body);
   const row = await prisma.notice.create({
     data: { type, title, message, createdBy: req.user.id },
   });
-  res.status(201).json({ notice: serialize(row) });
+  const notice = serializeNotice(row);
+  res.status(201).json({ notice });
+  emitToAll('notice:new', { notice });
   notifyNoticePosted(prisma, row, req.user.name).catch((err) => console.error('[notify] notice posted:', err));
 }));
 
@@ -68,6 +74,7 @@ router.delete('/:id', asyncHandler(async (req, res) => {
   }
   await prisma.notice.update({ where: { id: existing.id }, data: { deletedAt: new Date() } });
   res.json({ ok: true });
+  emitToAll('notice:deleted', { id: existing.id });
 }));
 
 export default router;
