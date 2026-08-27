@@ -129,6 +129,23 @@ export async function runBirthdayReminders(now) {
         dedupeKey: `birthday:${person.id}:${todayKey}`,
       });
     }
+    // Also a persistent Notice Board post — createdBy stays null (a system/
+    // admin post, not attributed to any teammate). Idempotent the same way
+    // Notification rows are: dedupeKey is unique, so a re-run this tick, or
+    // any later tick the same day, just hits P2002 and is skipped.
+    try {
+      await prisma.notice.create({
+        data: {
+          type: 'BIRTHDAY',
+          title: `🎂 Happy Birthday, ${person.name}!`,
+          message: `Wishing ${person.name} a fantastic year ahead — filled with success, good health, and happiness! 🎉🎂 Join us in wishing them well.`,
+          createdBy: null,
+          dedupeKey: `birthday-notice:${person.id}:${todayKey}`,
+        },
+      });
+    } catch (err) {
+      if (err?.code !== 'P2002') console.error('[scheduler] birthday notice:', err);
+    }
   }
   await pushNotifications(prisma, items);
 }

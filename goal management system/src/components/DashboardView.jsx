@@ -9,6 +9,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip
 } from 'recharts';
 import { Card, Avatar } from './UI';
+import NoticeBoard from './NoticeBoard';
 import { fmtINR } from '../utils/calc';
 import { loadProspects, ALL_STAGE_THEME } from '../utils/prospects';
 import { loadTasks, TASK_STAGES, STAGE_THEME } from '../utils/tasks';
@@ -57,6 +58,7 @@ export default function DashboardView({
   const [prospects, setProspects] = useState(() => loadProspects());
   const [tasks, setTasks] = useState(() => loadTasks());
   const [meetings, setMeetings] = useState(() => loadMeetings());
+  const [showAllOther, setShowAllOther] = useState(false);
 
   // Live refresh whenever the underlying stores change
   useEffect(() => { setProspects(loadProspects()); }, [prospectsChangeCounter]);
@@ -85,7 +87,15 @@ export default function DashboardView({
     const knownTypes = [...SIP_IN_TYPES, ...SIP_OUT_TYPES, ...LUMP_TYPES, ...REDEEM_TYPES];
     const other = items.filter(p => !knownTypes.includes(p.proposalType));
     const otherAmt = other.reduce((s, p) => s + num(p.amount), 0);
-    return { sipIn, sipOut, netSip: sipIn - sipOut, lump, redeem, netLump: lump - redeem, other, otherCount: other.length, otherAmt, count: items.length };
+    const otherByTypeMap = {};
+    other.forEach(p => {
+      const t = p.proposalType || 'Other';
+      otherByTypeMap[t] = (otherByTypeMap[t] || 0) + num(p.amount);
+    });
+    const otherByType = Object.entries(otherByTypeMap)
+      .map(([type, amount]) => ({ type, amount }))
+      .sort((a, b) => b.amount - a.amount);
+    return { sipIn, sipOut, netSip: sipIn - sipOut, lump, redeem, netLump: lump - redeem, other, otherByType, otherCount: other.length, otherAmt, count: items.length };
   }, [prospects]);
 
   // 2. Insurance calculations
@@ -348,44 +358,34 @@ export default function DashboardView({
               </Card>
             </div>
 
-            {/* Other Proposal table */}
+            {/* Other Proposals — grouped by transaction type */}
             <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900">
               <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
                 <div>
-                  <h4 className="text-xs font-bold text-slate-850 dark:text-slate-200 uppercase tracking-wider">Other Proposal</h4>
-                  <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Prospect activity outside SIP & Lumpsum flows</p>
+                  <h4 className="text-xs font-bold text-slate-850 dark:text-slate-200 uppercase tracking-wider">Other Proposals</h4>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Transaction types outside SIP & Lumpsum flows</p>
                 </div>
                 <Repeat size={15} className="text-slate-400 dark:text-slate-500" />
               </div>
-              {inv.other.length > 0 ? (
-                <div className="overflow-x-auto -mx-1">
-                  <table className="w-full text-xs border-collapse min-w-[560px]">
-                    <thead>
-                      <tr className="text-[10px] text-slate-450 dark:text-slate-500 uppercase tracking-wider font-extrabold">
-                        <th className="text-left font-extrabold pb-2 px-1">Type</th>
-                        <th className="text-left font-extrabold pb-2 px-1">Client</th>
-                        <th className="text-right font-extrabold pb-2 px-1">Amount</th>
-                        <th className="text-left font-extrabold pb-2 px-1">Status</th>
-                        <th className="text-left font-extrabold pb-2 px-1">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {inv.other.slice(0, 8).map((p) => (
-                        <tr key={p.id} className="border-t border-slate-100 dark:border-slate-800/70">
-                          <td className="py-2 px-1 font-bold text-slate-700 dark:text-slate-250 truncate max-w-[160px]">{p.proposalType || 'Other'}</td>
-                          <td className="py-2 px-1 font-medium text-slate-600 dark:text-slate-350 truncate max-w-[160px]">{p.applicant || p.groupLeader || 'Client'}</td>
-                          <td className="py-2 px-1 text-right font-black text-slate-900 dark:text-white tabular-nums">{fmtINR(num(p.amount))}</td>
-                          <td className="py-2 px-1">
-                            <span className={`px-1.5 py-0.5 rounded-full text-[8.5px] font-black shrink-0 border border-current leading-none ${ALL_STAGE_THEME[p.stage || 'Qualified'] || 'bg-slate-100 text-slate-655'}`}>
-                              {p.stage || 'Qualified'}
-                            </span>
-                          </td>
-                          <td className="py-2 px-1 text-slate-450 dark:text-slate-500 font-medium whitespace-nowrap">{(p.closingDate || p.createdAt || '').slice(0, 10) || '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+              {inv.otherByType.length > 0 ? (
+                <>
+                  <div className="space-y-3">
+                    {(showAllOther ? inv.otherByType : inv.otherByType.slice(0, 5)).map((t) => (
+                      <div key={t.type} className="flex items-center justify-between gap-3 text-xs font-bold">
+                        <span className="text-slate-650 dark:text-slate-350 truncate">{t.type}</span>
+                        <span className="text-slate-900 dark:text-white tabular-nums shrink-0">{fmtINR(t.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {inv.otherByType.length > 5 && (
+                    <button
+                      onClick={() => setShowAllOther(v => !v)}
+                      className="w-full mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800 text-center text-[11px] font-bold text-blue-600 dark:text-blue-450 hover:underline cursor-pointer"
+                    >
+                      {showAllOther ? 'Show Less' : `View All (${inv.otherByType.length})`}
+                    </button>
+                  )}
+                </>
               ) : (
                 <div className="h-24 flex flex-col items-center justify-center text-center">
                   <Repeat size={22} className="text-slate-300 dark:text-slate-700 mb-1" />
@@ -664,6 +664,9 @@ export default function DashboardView({
               </button>
             </div>
           </Card>
+
+          {/* Notice Board */}
+          <NoticeBoard />
 
           {/* Upcoming Meetings Timeline */}
           <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900">

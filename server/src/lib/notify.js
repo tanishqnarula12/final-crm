@@ -27,6 +27,7 @@ export const NOTIF = {
   TASK_COMPLETED: 'TASK_COMPLETED',
   LEAVE_APPLIED: 'LEAVE_APPLIED',
   LEAVE_RESPONDED: 'LEAVE_RESPONDED',
+  NOTICE_POSTED: 'NOTICE_POSTED',
 };
 
 export const serializeNotification = (n) => ({
@@ -357,4 +358,21 @@ export async function notifyLeaveResponded(prisma, leaveRow) {
     body: leaveRow.responseMessage || leaveLabel(leaveRow),
     link: { view: 'leave', id: leaveRow.id },
   }]);
+}
+
+// A new notice board post → every OTHER active user (it's open to everyone,
+// so everyone is told, not just a scoped audience like leads/leave). Never
+// fires for the daily system-generated birthday post — the scheduler's own
+// BIRTHDAY notification already tells everyone, so this would just double it.
+export async function notifyNoticePosted(prisma, noticeRow, posterName) {
+  const users = await prisma.user.findMany({ where: { active: true }, select: { id: true } });
+  const items = users
+    .filter((u) => u.id !== noticeRow.createdBy)
+    .map((u) => ({
+      userId: u.id, type: NOTIF.NOTICE_POSTED,
+      title: `📌 New notice from ${posterName}`,
+      body: noticeRow.title,
+      link: { view: 'dashboard' },
+    }));
+  await pushNotifications(prisma, items);
 }

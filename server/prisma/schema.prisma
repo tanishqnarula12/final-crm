@@ -423,7 +423,7 @@ model ChatMessage {
 model Notification {
   id        String    @id @default(cuid())
   userId    String // recipient (User.id)
-  type      String // TASK_ASSIGNED | MEETING_SOON | TASK_DUE | PROSPECT_ASSIGNED | LEAD_NEW | BIRTHDAY | LEAD_RM_ASSIGNED | QUERY_RAISED | LEAVE_APPLIED | LEAVE_RESPONDED
+  type      String // TASK_ASSIGNED | MEETING_SOON | TASK_DUE | PROSPECT_ASSIGNED | LEAD_NEW | BIRTHDAY | LEAD_RM_ASSIGNED | QUERY_RAISED | LEAVE_APPLIED | LEAVE_RESPONDED | NOTICE_POSTED
   title     String
   body      String    @default("")
   link      Json? // { view, id } for click-through, optional
@@ -434,6 +434,30 @@ model Notification {
   @@unique([userId, dedupeKey])
   @@index([userId, readAt])
   @@map("notifications")
+}
+
+// Dashboard notice board — open to every user (view + post): birthdays,
+// holidays, announcements, general notices. `createdBy` is null for
+// system-generated posts (the daily birthday entry — see
+// notificationScheduler.js); everything else is authored by a real user and
+// resolved to a display name client-side via services/team.js, same as every
+// other createdBy/departmentOwner field in this app. `dedupeKey` is only set
+// on the birthday auto-post (one per person per day) — the (unique, nullable)
+// column lets ordinary user posts leave it null with no conflict, mirroring
+// Notification.dedupeKey above.
+model Notice {
+  id        String    @id @default(cuid())
+  type      String    @default("GENERAL") // GENERAL | ANNOUNCEMENT | HOLIDAY | BIRTHDAY | EVENT
+  title     String
+  message   String
+  createdBy String? // User.id, null = system-generated
+  dedupeKey String?   @unique
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([deletedAt, createdAt])
+  @@map("notices")
 }
 
 // Web Push subscriptions (one per browser/device the user granted notification
