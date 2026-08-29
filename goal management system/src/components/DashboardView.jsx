@@ -33,15 +33,21 @@ const SIP_OUT_TYPES = ['SIP Cancellation'];
 const LUMP_TYPES = ['Lumpsum Investment'];
 const REDEEM_TYPES = ['Redemption Proposal'];
 
-// Goal completion-range buckets — red-to-green so the >70% "on track" zone
-// reads as a distinct, positive band at a glance.
+// Goal completion-range buckets — red-to-green gradients so the >70% "on
+// track" zone reads as a distinct, glowing, positive band at a glance.
 const RANGE_BUCKETS = [
-  { key: '0-25', label: '0–25%', color: 'bg-rose-400' },
-  { key: '25-50', label: '25–50%', color: 'bg-amber-400' },
-  { key: '50-70', label: '50–70%', color: 'bg-yellow-400' },
-  { key: '70-100', label: '70–100%', color: 'bg-emerald-400' },
-  { key: '100+', label: '100%+', color: 'bg-emerald-600' },
+  { key: '0-25', label: '0–25%', grad: 'from-rose-500 to-rose-400', glow: '', onTrack: false },
+  { key: '25-50', label: '25–50%', grad: 'from-orange-500 to-amber-400', glow: '', onTrack: false },
+  { key: '50-70', label: '50–70%', grad: 'from-amber-400 to-yellow-300', glow: '', onTrack: false },
+  { key: '70-100', label: '70–100%', grad: 'from-teal-400 to-emerald-400', glow: 'shadow-[0_0_10px_rgba(52,211,153,0.55)]', onTrack: true },
+  { key: '100+', label: '100%+', grad: 'from-emerald-500 to-green-400', glow: 'shadow-[0_0_12px_rgba(16,185,129,0.65)]', onTrack: true },
 ];
+
+// Semi-circle gauge geometry — a single SVG <path> arc (not Recharts: its
+// `fill`/`stroke` props need real color values, not Tailwind classes, which
+// breaks dark mode) so the track can stay theme-aware via a stroke- class.
+const GAUGE_ARC_D = 'M 20 100 A 80 80 0 0 1 180 100';
+const GAUGE_ARC_LEN = Math.PI * 80;
 
 const isThisMonth = (iso) => {
   if (!iso) return false;
@@ -200,9 +206,10 @@ export default function DashboardView({
       barPct: Math.round((rangeCounts[b.key] / maxRangeCount) * 100),
     }));
     const onTrackCount = rangeCounts['70-100'] + rangeCounts['100+'];
+    const onTrackPct = achievementCount > 0 ? Math.round((onTrackCount / achievementCount) * 100) : 0;
     return {
       totalGoals, totalTarget, clientsWithGoals, totalClients: clients.length, avgAchievement, goalsMapped,
-      ranges, onTrackCount, rangedGoalCount: achievementCount,
+      ranges, onTrackCount, onTrackPct, rangedGoalCount: achievementCount,
     };
   }, [clients]);
 
@@ -451,36 +458,63 @@ export default function DashboardView({
                 </div>
               </div>
 
-              {/* Goal Progress Distribution — completion-range breakdown. Each
-                  range gets its own bar sized against the LARGEST bucket (not
-                  the total), so a real portfolio skewed heavily into one range
-                  still shows every other range as a legible, visible bar
-                  instead of a near-invisible sliver. */}
+              {/* Goal Progress Distribution — an on-track gauge + a
+                  completion-range breakdown. Each range's bar is sized
+                  against the LARGEST bucket (not the total), so a real
+                  portfolio skewed heavily into one range still shows every
+                  other range as a legible bar instead of a near-invisible
+                  sliver. */}
               {goalTrack.rangedGoalCount > 0 && (
                 <div className="mb-5 pb-5 border-b border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider">Goal Progress Distribution</h4>
-                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                      {goalTrack.onTrackCount} on track (≥70%)
-                    </span>
-                  </div>
-                  <div className="space-y-2.5">
-                    {goalTrack.ranges.map((r) => (
-                      <div
-                        key={r.key}
-                        className="flex items-center gap-2.5 cursor-default"
-                        title={`${r.label}: ${r.count} goal${r.count === 1 ? '' : 's'} (${r.pct}% of mapped goals)`}
-                      >
-                        <span className="w-14 shrink-0 text-[10px] font-bold text-slate-550 dark:text-slate-400">{r.label}</span>
-                        <div className="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${r.color} transition-all duration-500 hover:opacity-80`}
-                            style={{ width: `${r.barPct}%` }}
-                          />
-                        </div>
-                        <span className="w-8 shrink-0 text-right text-[10px] font-black text-slate-900 dark:text-white tabular-nums">{r.count}</span>
+                  <h4 className="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider mb-3">Goal Progress Distribution</h4>
+                  <div className="flex flex-col sm:flex-row items-center gap-5">
+                    {/* On-Track gauge */}
+                    <div className="relative w-full max-w-[180px] shrink-0">
+                      <svg viewBox="0 0 200 110" className="w-full">
+                        <defs>
+                          <linearGradient id="goalGaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#f43f5e" />
+                            <stop offset="55%" stopColor="#f59e0b" />
+                            <stop offset="100%" stopColor="#10b981" />
+                          </linearGradient>
+                        </defs>
+                        <path d={GAUGE_ARC_D} fill="none" strokeWidth="16" strokeLinecap="round" className="stroke-slate-100 dark:stroke-slate-800" />
+                        <path
+                          d={GAUGE_ARC_D} fill="none" strokeWidth="16" strokeLinecap="round"
+                          stroke="url(#goalGaugeGrad)"
+                          strokeDasharray={GAUGE_ARC_LEN}
+                          strokeDashoffset={GAUGE_ARC_LEN - (Math.max(0, Math.min(100, goalTrack.onTrackPct)) / 100) * GAUGE_ARC_LEN}
+                          className="transition-all duration-1000 ease-out"
+                          style={{ filter: 'drop-shadow(0 0 5px rgba(16,185,129,0.35))' }}
+                        />
+                      </svg>
+                      <div className="absolute inset-x-0 bottom-1 flex flex-col items-center text-center">
+                        <span className="text-2xl font-black text-slate-900 dark:text-white tabular-nums leading-none">{goalTrack.onTrackPct}%</span>
+                        <span className="text-[9px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider mt-1">
+                          {goalTrack.onTrackCount} On Track (≥70%)
+                        </span>
                       </div>
-                    ))}
+                    </div>
+
+                    {/* Range breakdown */}
+                    <div className="w-full space-y-2.5">
+                      {goalTrack.ranges.map((r) => (
+                        <div
+                          key={r.key}
+                          className="flex items-center gap-2.5 cursor-default group"
+                          title={`${r.label}: ${r.count} goal${r.count === 1 ? '' : 's'} (${r.pct}% of mapped goals)`}
+                        >
+                          <span className={`w-14 shrink-0 text-[10px] font-bold ${r.onTrack ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-550 dark:text-slate-400'}`}>{r.label}</span>
+                          <div className="flex-1 h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full bg-gradient-to-r ${r.grad} ${r.glow} transition-all duration-700 ease-out group-hover:brightness-110`}
+                              style={{ width: `${r.barPct}%` }}
+                            />
+                          </div>
+                          <span className="w-8 shrink-0 text-right text-[10px] font-black text-slate-900 dark:text-white tabular-nums">{r.count}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
