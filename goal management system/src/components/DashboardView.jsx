@@ -49,17 +49,15 @@ const RANGE_BUCKETS = [
   { key: '100+', label: '100%+', grad: 'from-emerald-500 to-green-400', glow: 'shadow-[0_0_12px_rgba(16,185,129,0.65)]', onTrack: true },
 ];
 
-// Goal-type bar colors — the dashboard's existing accent rotation
-// (indigo/blue/cyan/violet/teal), cycled by rank so each mapped goal type
-// gets a distinct, on-brand gradient.
-const GOAL_TYPE_GRADIENTS = [
-  'from-indigo-500 to-blue-400',
-  'from-blue-500 to-cyan-400',
-  'from-violet-500 to-purple-400',
-  'from-cyan-500 to-teal-400',
-  'from-teal-500 to-emerald-400',
-  'from-purple-500 to-indigo-400',
-];
+// Goal-type donut colors — Recharts' Cell needs real hex values (Tailwind
+// classes don't apply to SVG fill), matching the same indigo/blue/cyan/
+// violet/teal accent rotation used elsewhere in this dashboard. "Others" is
+// a catch-all, not a real type, so it gets its own neutral slate rather than
+// competing for a "real" accent color.
+const GOAL_TYPE_COLORS = {
+  rotation: ['#6366f1', '#3b82f6', '#8b5cf6', '#06b6d4', '#14b8a6', '#a855f7'],
+  others: '#94a3b8',
+};
 
 // Semi-circle gauge geometry — a single SVG <path> arc (not Recharts: its
 // `fill`/`stroke` props need real color values, not Tailwind classes, which
@@ -93,7 +91,6 @@ export default function DashboardView({
   const [tasks, setTasks] = useState(() => loadTasks());
   const [meetings, setMeetings] = useState(() => loadMeetings());
   const [showAllOther, setShowAllOther] = useState(false);
-  const [showAllGoalTypes, setShowAllGoalTypes] = useState(false);
 
   // Live refresh whenever the underlying stores change
   useEffect(() => { setProspects(loadProspects()); }, [prospectsChangeCounter]);
@@ -214,14 +211,20 @@ export default function DashboardView({
       });
     });
     const avgAchievement = achievementCount > 0 ? Math.round(achievementSum / achievementCount) : 0;
-    const maxTypeCount = Math.max(1, ...Object.values(byType));
+    // "Others" is a catch-all, not a real goal type — it always sorts last
+    // regardless of its count, so it doesn't crowd out the actual named
+    // categories at the top just because it aggregates the most one-offs.
+    let colorIdx = 0;
     const goalsMapped = Object.entries(byType)
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, count], i) => ({
+      .sort((a, b) => {
+        if (a[0] === 'Others') return 1;
+        if (b[0] === 'Others') return -1;
+        return b[1] - a[1];
+      })
+      .map(([name, count]) => ({
         name, count,
         pct: totalGoals > 0 ? Math.round((count / totalGoals) * 100) : 0,
-        barPct: Math.round((count / maxTypeCount) * 100),
-        grad: GOAL_TYPE_GRADIENTS[i % GOAL_TYPE_GRADIENTS.length],
+        color: name === 'Others' ? GOAL_TYPE_COLORS.others : GOAL_TYPE_COLORS.rotation[colorIdx++ % GOAL_TYPE_COLORS.rotation.length],
       }));
     const maxRangeCount = Math.max(1, ...Object.values(rangeCounts));
     const ranges = RANGE_BUCKETS.map(b => ({
@@ -553,34 +556,44 @@ export default function DashboardView({
 
               <h4 className="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider mb-3">Goals Mapped</h4>
               {goalTrack.goalsMapped.length > 0 ? (
-                <>
-                  <div className="space-y-3">
-                    {(showAllGoalTypes ? goalTrack.goalsMapped : goalTrack.goalsMapped.slice(0, 5)).map((t) => (
-                      <div key={t.name} className="cursor-default" title={`${t.name}: ${t.count} goal${t.count === 1 ? '' : 's'} (${t.pct}% of mapped goals)`}>
-                        <div className="flex items-center justify-between gap-3 text-xs font-bold mb-1">
-                          <span className="text-slate-700 dark:text-slate-250 truncate">{t.name}</span>
-                          <span className="text-slate-900 dark:text-white tabular-nums shrink-0">
-                            {t.count} <span className="text-slate-400 dark:text-slate-550 font-medium">({t.pct}%)</span>
-                          </span>
-                        </div>
-                        <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full bg-gradient-to-r ${t.grad} transition-all duration-700 ease-out hover:brightness-110`}
-                            style={{ width: `${t.barPct}%` }}
-                          />
-                        </div>
+                <div className="flex flex-col md:flex-row items-center gap-5">
+                  <div className="flex-1 w-full space-y-2.5">
+                    {goalTrack.goalsMapped.map((t) => (
+                      <div
+                        key={t.name}
+                        className="flex items-center gap-2.5 text-xs font-bold cursor-default"
+                        title={`${t.name}: ${t.count} goal${t.count === 1 ? '' : 's'} (${t.pct}% of mapped goals)`}
+                      >
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
+                        <span className="text-slate-650 dark:text-slate-350 truncate">{t.name}</span>
+                        <span className="ml-auto text-slate-900 dark:text-white tabular-nums shrink-0">
+                          {t.count} <span className="text-slate-400 dark:text-slate-550 font-medium">({t.pct}%)</span>
+                        </span>
                       </div>
                     ))}
                   </div>
-                  {goalTrack.goalsMapped.length > 5 && (
-                    <button
-                      onClick={() => setShowAllGoalTypes((v) => !v)}
-                      className="w-full mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800 text-center text-[11px] font-bold text-blue-600 dark:text-blue-450 hover:underline cursor-pointer"
-                    >
-                      {showAllGoalTypes ? 'Show Less' : `View All (${goalTrack.goalsMapped.length})`}
-                    </button>
-                  )}
-                </>
+                  <div className="relative w-[110px] h-[110px] flex items-center justify-center shrink-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={goalTrack.goalsMapped}
+                          cx="50%" cy="50%"
+                          innerRadius={32} outerRadius={43}
+                          paddingAngle={goalTrack.goalsMapped.length > 1 ? 3.5 : 0}
+                          dataKey="count"
+                          nameKey="name"
+                        >
+                          {goalTrack.goalsMapped.map((t) => <Cell key={t.name} fill={t.color} />)}
+                        </Pie>
+                        <Tooltip content={<ChartTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute flex flex-col items-center justify-center text-center">
+                      <span className="text-sm font-black text-slate-900 dark:text-white tabular-nums leading-none">{goalTrack.totalGoals}</span>
+                      <span className="text-[7.5px] uppercase tracking-wider text-slate-400 font-extrabold mt-0.5">Total</span>
+                    </div>
+                  </div>
+                </div>
               ) : (
                 <div className="h-24 flex flex-col items-center justify-center text-center">
                   <Target size={22} className="text-slate-300 dark:text-slate-700 mb-1" />

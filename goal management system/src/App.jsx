@@ -980,7 +980,13 @@ export default function App() {
       e.count++;
       e.clients.push({ id: c.id, name: c.name, goal: g });
     }));
-    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+    // "Others" is a catch-all, not a real goal type — always last regardless
+    // of its count, so it doesn't crowd out the actual named presets.
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.name === 'Others') return 1;
+      if (b.name === 'Others') return -1;
+      return b.count - a.count;
+    });
   }, [clients, KNOWN_GOAL_PRESETS]);
 
   // Calculate totals for active client
