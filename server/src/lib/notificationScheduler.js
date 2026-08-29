@@ -16,7 +16,7 @@
 // their date/time strings (no offset) and how the frontend parses them.
 import { prisma } from '../db.js';
 import { pushNotifications, notifyNoticePosted, NOTIF } from './notify.js';
-import { postSystemNotice, serializeNotice } from '../routes/notices.js';
+import { postSystemNotice, serializeNotice, endOfDayExpiry, isDue } from '../routes/notices.js';
 import { emitToAll } from '../chat/socket.js';
 
 const TICK_MS = 60 * 1000;
@@ -131,15 +131,18 @@ export async function runBirthdayReminders(now) {
         dedupeKey: `birthday:${person.id}:${todayKey}`,
       });
     }
-    // Also a persistent Notice Board post — idempotent the same way
-    // Notification rows are: dedupeKey is unique, so a re-run this tick, or
-    // any later tick the same day, just no-ops instead of double-posting.
+    // Also a persistent Notice Board post — visible only for the birthday
+    // itself (expires end of today, same as a "1 Day" user post), not
+    // indefinitely. Idempotent the same way Notification rows are: dedupeKey
+    // is unique, so a re-run this tick, or any later tick the same day, just
+    // no-ops instead of double-posting.
     try {
       await postSystemNotice(prisma, {
         type: 'BIRTHDAY',
         title: `🎂 Happy Birthday, ${person.name}!`,
         message: `Wishing ${person.name} a fantastic year ahead — filled with success, good health, and happiness! 🎉🎂 Join us in wishing them well.`,
         dedupeKey: `birthday-notice:${person.id}:${todayKey}`,
+        expiresAt: endOfDayExpiry(todayKey, 1),
       });
     } catch (err) {
       console.error('[scheduler] birthday notice:', err);
@@ -158,9 +161,13 @@ export async function runBirthdayReminders(now) {
 export async function runScheduledNotices(now) {
   const todayKey = localDateKey(now);
 
-  const toTrigger = await prisma.notice.findMany({
+  // Date filter narrows to candidates; isDue() applies the same effectiveTime
+  // gate GET /api/notices uses, so a notice timed for later today doesn't
+  // trigger the moment its date starts.
+  const candidates = await prisma.notice.findMany({
     where: { deletedAt: null, triggered: false, effectiveDate: { lte: todayKey } },
   });
+  const toTrigger = candidates.filter((row) => isDue(row, now));
   for (const row of toTrigger) {
     const updated = await prisma.notice.update({ where: { id: row.id }, data: { triggered: true } });
     emitToAll('notice:new', { notice: serializeNotice(updated) });

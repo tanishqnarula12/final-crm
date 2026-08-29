@@ -458,6 +458,13 @@ model Notice {
   // request itself, for a same-day post) broadcasts it live, so a later tick
   // never re-broadcasts an already-shown notice once its date has passed.
   effectiveDate String
+  // HH:MM (string, matching Leave.timeValue's convention), optional. Null =
+  // no specific time — visible from the start of effectiveDate, today's
+  // existing behavior. Set = the notice additionally waits for this time of
+  // day on effectiveDate before triggering (checked in app code, not the DB
+  // query — see the effectiveTime filtering in the GET route and the
+  // scheduler's runScheduledNotices).
+  effectiveTime String?
   triggered     Boolean   @default(false)
   // Null = never expires. Once passed, the notice drops out of GET /api/notices
   // (query-time filter) and the scheduler broadcasts a one-time notice:deleted

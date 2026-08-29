@@ -6,6 +6,7 @@ import { listNotices, createNotice, deleteNotice, NOTICE_TYPES, VISIBLE_FOR_OPTI
 import { teamName } from '../services/team';
 import { onChatEvent } from '../services/chat';
 import { getCurrentUser } from '../utils/auth';
+import logoImg from '../assets/logo.png';
 
 const TYPE_META = {
   GENERAL: { label: 'General', icon: MessageSquare, badge: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
@@ -150,7 +151,7 @@ export default function NoticeBoard() {
                     </button>
                   )}
                   <div className="flex items-center gap-1.5 mt-1.5">
-                    <Avatar name={posterName} size="xs" />
+                    <Avatar name={posterName} photo={n.createdBy ? undefined : logoImg} size="xs" />
                     <span className="text-[9px] text-slate-400 dark:text-slate-500 font-bold">{posterName} · {timeAgo(n.createdAt)}</span>
                   </div>
                 </div>
@@ -203,17 +204,23 @@ function NewNoticeModal({ onClose, onPosted }) {
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [date, setDate] = useState(() => localDateStr());
+  const [time, setTime] = useState('');
   const [visibleForDays, setVisibleForDays] = useState(7);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const today = localDateStr();
+  const nowTime = () => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
+  const isScheduled = date > today || (date === today && time && time > nowTime());
 
   const submit = async () => {
     if (!title.trim() || !message.trim()) { setError('Title and message are required.'); return; }
     setSaving(true);
     setError('');
     try {
-      const result = await createNotice({ type, title: title.trim(), message: message.trim(), date, visibleForDays });
+      const result = await createNotice({ type, title: title.trim(), message: message.trim(), date, time: time || null, visibleForDays });
       onPosted(result);
     } catch (err) {
       setError(err.message || 'Could not post the notice.');
@@ -258,21 +265,31 @@ function NewNoticeModal({ onClose, onPosted }) {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">Visible For</label>
-              <CoolSelect
-                value={visibleForDays === null ? 'null' : String(visibleForDays)}
-                onChange={(e) => setVisibleForDays(e.target.value === 'null' ? null : Number(e.target.value))}
-                className={selectCls}
-              >
-                {VISIBLE_FOR_OPTIONS.map((o) => (
-                  <option key={o.label} value={o.days === null ? 'null' : o.days}>{o.label}</option>
-                ))}
-              </CoolSelect>
+              <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">
+                Notice Time <span className="normal-case text-slate-350 dark:text-slate-600">(optional)</span>
+              </label>
+              <input
+                type="time" value={time}
+                onChange={(e) => setTime(e.target.value)}
+                className={inputCls}
+              />
             </div>
           </div>
-          {date > today && (
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">Visible For</label>
+            <CoolSelect
+              value={visibleForDays === null ? 'null' : String(visibleForDays)}
+              onChange={(e) => setVisibleForDays(e.target.value === 'null' ? null : Number(e.target.value))}
+              className={selectCls}
+            >
+              {VISIBLE_FOR_OPTIONS.map((o) => (
+                <option key={o.label} value={o.days === null ? 'null' : o.days}>{o.label}</option>
+              ))}
+            </CoolSelect>
+          </div>
+          {isScheduled && (
             <p className="text-[10px] text-slate-400 dark:text-slate-500 -mt-2">
-              This will post on {fmtDate(date)} — it stays hidden (including from you) until then.
+              This will post on {fmtDate(date)}{time ? ` at ${time}` : ''} — it stays hidden (including from you) until then.
             </p>
           )}
           <div>
