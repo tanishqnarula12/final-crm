@@ -36,8 +36,7 @@ import ChangePasswordModal from './components/ChangePasswordModal';
 import ChatView from './components/chat/ChatView';
 import { connectChat, disconnectChat, onChatEvent, fetchConversations as fetchChatConversations, fetchChatUsers } from './services/chat';
 import ChatHoverPreview from './components/ChatHoverPreview';
-import { normalizeAllocation, buildAllocationEdits, hasAllocation } from './utils/assets';
-import { StatTile } from './components/UI';
+import { normalizeAllocation, buildAllocationEdits } from './utils/assets';
 import Login from './components/Login';
 import { isAuthenticated, isViewerRole, isAdminRole, refreshSession, logout as apiLogout, getCurrentUser } from './utils/auth';
 import MomWorkspace from './components/MomWorkspace';
@@ -1006,34 +1005,6 @@ export default function App() {
     return { totalSip, totalAdditional, totalLump, totalCurrentSip };
   }, [selectedClient]);
 
-  // Build global statistics
-  const globalStats = useMemo(() => {
-    const totalClients = clients.length;
-    let activeGoals = 0;
-    let clientsWithGoals = 0;
-    let clientsWithoutGoals = 0;
-    let clientsWithAllocation = 0;
-    let clientsWithoutAllocation = 0;
-
-    clients.forEach(c => {
-      const gc = c.goals ? c.goals.length : 0;
-      activeGoals += gc;
-      if (gc > 0) clientsWithGoals++;
-      else clientsWithoutGoals++;
-      if (hasAllocation(c)) clientsWithAllocation++;
-      else clientsWithoutAllocation++;
-    });
-
-    return {
-      totalClients,
-      activeGoals,
-      clientsWithGoals,
-      clientsWithoutGoals,
-      clientsWithAllocation,
-      clientsWithoutAllocation,
-    };
-  }, [clients]);
-
   // Build rows for Reports timeline tab
   const reportRows = useMemo(() => {
     const cutoffKey = (CURRENT_YEAR + reportTimeframe) * 12 + CURRENT_MONTH;
@@ -1846,18 +1817,6 @@ export default function App() {
         <>
       {/* Main Container */}
       <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
-        {/* Global Summary Statistics Dashboard */}
-        {!inClientProfile && !selectedGoalName && (
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6 animate-fade-in">
-            <StatTile label="Total Clients" value={globalStats.totalClients} icon={Users} accent="blue" />
-            <StatTile label="Clients with Goals" value={globalStats.clientsWithGoals} icon={CheckCircle2} accent="emerald" />
-            <StatTile label="Clients without Goals" value={globalStats.clientsWithoutGoals} icon={AlertCircle} accent="amber" />
-            <StatTile label="Total Goals" value={globalStats.activeGoals} icon={Target} accent="indigo" />
-            <StatTile label="Clients with Asset Allocation" value={globalStats.clientsWithAllocation} icon={Wallet} accent="emerald" />
-            <StatTile label="Clients without Asset Allocation" value={globalStats.clientsWithoutAllocation} icon={PieChart} accent="amber" />
-          </div>
-        )}
-
         {/* Navigation Tabs (top-level) OR per-client profile sub-nav */}
         {!inClientProfile ? (
           <div className="w-full overflow-x-auto mb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
