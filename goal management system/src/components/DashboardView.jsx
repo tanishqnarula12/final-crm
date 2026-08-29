@@ -43,6 +43,18 @@ const RANGE_BUCKETS = [
   { key: '100+', label: '100%+', grad: 'from-emerald-500 to-green-400', glow: 'shadow-[0_0_12px_rgba(16,185,129,0.65)]', onTrack: true },
 ];
 
+// Goal-type bar colors — the dashboard's existing accent rotation
+// (indigo/blue/cyan/violet/teal), cycled by rank so each mapped goal type
+// gets a distinct, on-brand gradient.
+const GOAL_TYPE_GRADIENTS = [
+  'from-indigo-500 to-blue-400',
+  'from-blue-500 to-cyan-400',
+  'from-violet-500 to-purple-400',
+  'from-cyan-500 to-teal-400',
+  'from-teal-500 to-emerald-400',
+  'from-purple-500 to-indigo-400',
+];
+
 // Semi-circle gauge geometry — a single SVG <path> arc (not Recharts: its
 // `fill`/`stroke` props need real color values, not Tailwind classes, which
 // breaks dark mode) so the track can stay theme-aware via a stroke- class.
@@ -195,9 +207,15 @@ export default function DashboardView({
       });
     });
     const avgAchievement = achievementCount > 0 ? Math.round(achievementSum / achievementCount) : 0;
+    const maxTypeCount = Math.max(1, ...Object.values(byType));
     const goalsMapped = Object.entries(byType)
       .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => ({ name, count }));
+      .map(([name, count], i) => ({
+        name, count,
+        pct: totalGoals > 0 ? Math.round((count / totalGoals) * 100) : 0,
+        barPct: Math.round((count / maxTypeCount) * 100),
+        grad: GOAL_TYPE_GRADIENTS[i % GOAL_TYPE_GRADIENTS.length],
+      }));
     const maxRangeCount = Math.max(1, ...Object.values(rangeCounts));
     const ranges = RANGE_BUCKETS.map(b => ({
       ...b,
@@ -483,7 +501,14 @@ export default function DashboardView({
                           d={GAUGE_ARC_D} fill="none" strokeWidth="16" strokeLinecap="round"
                           stroke="url(#goalGaugeGrad)"
                           strokeDasharray={GAUGE_ARC_LEN}
-                          strokeDashoffset={GAUGE_ARC_LEN - (Math.max(0, Math.min(100, goalTrack.onTrackPct)) / 100) * GAUGE_ARC_LEN}
+                          strokeDashoffset={
+                            GAUGE_ARC_LEN
+                            // A real but tiny % (e.g. 8%) reads as barely-there
+                            // at true scale on a 180° sweep — floor the VISUAL
+                            // fill at 6% so there's always a legible sliver;
+                            // the number shown is still the real percentage.
+                            - (goalTrack.onTrackPct > 0 ? Math.max(6, Math.min(100, goalTrack.onTrackPct)) : 0) / 100 * GAUGE_ARC_LEN
+                          }
                           className="transition-all duration-1000 ease-out"
                           style={{ filter: 'drop-shadow(0 0 5px rgba(16,185,129,0.35))' }}
                         />
@@ -522,11 +547,21 @@ export default function DashboardView({
               <h4 className="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider mb-3">Goals Mapped</h4>
               {goalTrack.goalsMapped.length > 0 ? (
                 <>
-                  <div className="space-y-2.5">
+                  <div className="space-y-3">
                     {(showAllGoalTypes ? goalTrack.goalsMapped : goalTrack.goalsMapped.slice(0, 5)).map((t) => (
-                      <div key={t.name} className="flex items-center justify-between gap-3 text-xs font-bold">
-                        <span className="text-slate-650 dark:text-slate-350 truncate">{t.name}</span>
-                        <span className="text-slate-900 dark:text-white tabular-nums shrink-0">{t.count}</span>
+                      <div key={t.name} className="cursor-default" title={`${t.name}: ${t.count} goal${t.count === 1 ? '' : 's'} (${t.pct}% of mapped goals)`}>
+                        <div className="flex items-center justify-between gap-3 text-xs font-bold mb-1">
+                          <span className="text-slate-700 dark:text-slate-250 truncate">{t.name}</span>
+                          <span className="text-slate-900 dark:text-white tabular-nums shrink-0">
+                            {t.count} <span className="text-slate-400 dark:text-slate-550 font-medium">({t.pct}%)</span>
+                          </span>
+                        </div>
+                        <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full bg-gradient-to-r ${t.grad} transition-all duration-700 ease-out hover:brightness-110`}
+                            style={{ width: `${t.barPct}%` }}
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>
