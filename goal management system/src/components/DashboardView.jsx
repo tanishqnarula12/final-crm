@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import { Card, Avatar } from './UI';
 import NoticeBoard from './NoticeBoard';
-import { fmtINR } from '../utils/calc';
+import { fmtINR, GOAL_PRESETS } from '../utils/calc';
 import { loadProspects, ALL_STAGE_THEME } from '../utils/prospects';
 import { loadTasks, TASK_STAGES, STAGE_THEME } from '../utils/tasks';
 import { loadMeetings, MEETING_STATUSES } from '../utils/meetings';
@@ -32,6 +32,12 @@ const SIP_IN_TYPES = ['Purchase with SIP', 'Special SIP', 'SIP Registration'];
 const SIP_OUT_TYPES = ['SIP Cancellation'];
 const LUMP_TYPES = ['Lumpsum Investment'];
 const REDEEM_TYPES = ['Redemption Proposal'];
+
+// Every goal whose name isn't one of the standard presets (including a goal
+// literally named "Others", or a custom free-text name like "Wealth Creation
+// (Geeta Devi)") folds into a single "Others" bucket in Goals Mapped below —
+// mirrors App.jsx's allGoalNames grouping for the Goal Categories overview.
+const KNOWN_GOAL_PRESETS = new Set(GOAL_PRESETS.filter((p) => p !== 'Others'));
 
 // Goal completion-range buckets — red-to-green gradients so the >70% "on
 // track" zone reads as a distinct, glowing, positive band at a glance.
@@ -191,7 +197,8 @@ export default function DashboardView({
       if (goals.length > 0) clientsWithGoals += 1;
       goals.forEach(g => {
         totalGoals += 1;
-        const label = g.name || 'Others';
+        const raw = (g.name || '').trim();
+        const label = KNOWN_GOAL_PRESETS.has(raw) ? raw : 'Others';
         byType[label] = (byType[label] || 0) + 1;
         const target = num(g.amount);
         totalTarget += target;

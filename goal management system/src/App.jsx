@@ -13,7 +13,7 @@ import {
   getClients, addClient, updateClient, deleteClient, addGoal, updateGoal, deleteGoal, getLeadMoms, reparentLeadMoms
 } from './services/db';
 import {
-  calcGoal, CURRENT_YEAR, CURRENT_MONTH, uid, monthsBetween, buildGoalEdits, initials
+  calcGoal, CURRENT_YEAR, CURRENT_MONTH, uid, monthsBetween, buildGoalEdits, initials, GOAL_PRESETS
 } from './utils/calc';
 import { loadAdvisorProfile, hydrateAdvisorProfile } from './utils/advisorProfile';
 import logoImg from './assets/logo.png';
@@ -964,18 +964,24 @@ export default function App() {
     setTab('clients');
   };
 
-  // Group goals for overview tab
+  // Group goals for overview tab — every goal whose name isn't one of the
+  // standard presets (including a goal literally named "Others", or a custom
+  // free-text name like "Wealth Creation (Geeta Devi)") folds into a single
+  // consolidated "Others" bucket, instead of each custom name getting its own
+  // tile. Presets themselves still group and show individually as before.
+  const KNOWN_GOAL_PRESETS = useMemo(() => new Set(GOAL_PRESETS.filter(p => p !== 'Others')), []);
   const allGoalNames = useMemo(() => {
     const map = new Map();
     clients.forEach(c => (c.goals || []).forEach(g => {
-      const key = g.name.trim();
+      const raw = g.name.trim();
+      const key = KNOWN_GOAL_PRESETS.has(raw) ? raw : 'Others';
       if (!map.has(key)) map.set(key, { name: key, count: 0, clients: [] });
       const e = map.get(key);
       e.count++;
       e.clients.push({ id: c.id, name: c.name, goal: g });
     }));
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
-  }, [clients]);
+  }, [clients, KNOWN_GOAL_PRESETS]);
 
   // Calculate totals for active client
   const totals = useMemo(() => {
