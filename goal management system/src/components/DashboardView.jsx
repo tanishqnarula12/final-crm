@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import { Card, Avatar } from './UI';
 import NoticeBoard from './NoticeBoard';
-import { fmtINR, GOAL_PRESETS } from '../utils/calc';
+import { fmtINR, GOAL_PRESETS, goalEmoji } from '../utils/calc';
 import { loadProspects, ALL_STAGE_THEME } from '../utils/prospects';
 import { loadTasks, TASK_STAGES, STAGE_THEME } from '../utils/tasks';
 import { loadMeetings, MEETING_STATUSES } from '../utils/meetings';
@@ -49,15 +49,18 @@ const RANGE_BUCKETS = [
   { key: '100+', label: '100%+', grad: 'from-emerald-500 to-green-400', glow: 'shadow-[0_0_12px_rgba(16,185,129,0.65)]', onTrack: true },
 ];
 
-// Goal-type donut colors — Recharts' Cell needs real hex values (Tailwind
-// classes don't apply to SVG fill), matching the same indigo/blue/cyan/
-// violet/teal accent rotation used elsewhere in this dashboard. "Others" is
-// a catch-all, not a real type, so it gets its own neutral slate rather than
-// competing for a "real" accent color.
-const GOAL_TYPE_COLORS = {
-  rotation: ['#6366f1', '#3b82f6', '#8b5cf6', '#06b6d4', '#14b8a6', '#a855f7'],
-  others: '#94a3b8',
-};
+// Goals Mapped leaderboard — rank #1-3 get a medal badge + matching glow,
+// every other real goal type shares one on-brand indigo style, and "Others"
+// (a catch-all, not a real type) gets its own neutral slate regardless of
+// rank so it never reads as if it "won" a medal just by aggregating the
+// most one-off custom names.
+const GOAL_RANK_STYLES = [
+  { badge: 'bg-gradient-to-br from-amber-400 to-yellow-500 text-white shadow-[0_0_8px_rgba(245,158,11,0.55)]', bar: 'from-amber-400 to-yellow-500', barGlow: 'shadow-[0_0_8px_rgba(245,158,11,0.5)]' },
+  { badge: 'bg-gradient-to-br from-slate-300 to-slate-400 text-white shadow-[0_0_6px_rgba(148,163,184,0.5)]', bar: 'from-slate-400 to-slate-300', barGlow: '' },
+  { badge: 'bg-gradient-to-br from-orange-300 to-amber-600 text-white shadow-[0_0_6px_rgba(217,119,6,0.4)]', bar: 'from-orange-400 to-amber-600', barGlow: '' },
+  { badge: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400', bar: 'from-indigo-500 to-blue-400', barGlow: '' },
+];
+const GOAL_OTHERS_STYLE = { badge: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400', bar: 'from-slate-400 to-slate-300', barGlow: '' };
 
 // Semi-circle gauge geometry — a single SVG <path> arc (not Recharts: its
 // `fill`/`stroke` props need real color values, not Tailwind classes, which
@@ -214,17 +217,19 @@ export default function DashboardView({
     // "Others" is a catch-all, not a real goal type — it always sorts last
     // regardless of its count, so it doesn't crowd out the actual named
     // categories at the top just because it aggregates the most one-offs.
-    let colorIdx = 0;
+    const maxTypeCount = Math.max(1, ...Object.values(byType));
     const goalsMapped = Object.entries(byType)
       .sort((a, b) => {
         if (a[0] === 'Others') return 1;
         if (b[0] === 'Others') return -1;
         return b[1] - a[1];
       })
-      .map(([name, count]) => ({
+      .map(([name, count], i) => ({
         name, count,
         pct: totalGoals > 0 ? Math.round((count / totalGoals) * 100) : 0,
-        color: name === 'Others' ? GOAL_TYPE_COLORS.others : GOAL_TYPE_COLORS.rotation[colorIdx++ % GOAL_TYPE_COLORS.rotation.length],
+        barPct: Math.round((count / maxTypeCount) * 100),
+        style: name === 'Others' ? GOAL_OTHERS_STYLE : GOAL_RANK_STYLES[Math.min(i, GOAL_RANK_STYLES.length - 1)],
+        rank: i + 1,
       }));
     const maxRangeCount = Math.max(1, ...Object.values(rangeCounts));
     const ranges = RANGE_BUCKETS.map(b => ({
@@ -556,43 +561,33 @@ export default function DashboardView({
 
               <h4 className="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider mb-3">Goals Mapped</h4>
               {goalTrack.goalsMapped.length > 0 ? (
-                <div className="flex flex-col md:flex-row items-center gap-5">
-                  <div className="flex-1 w-full space-y-2.5">
-                    {goalTrack.goalsMapped.map((t) => (
-                      <div
-                        key={t.name}
-                        className="flex items-center gap-2.5 text-xs font-bold cursor-default"
-                        title={`${t.name}: ${t.count} goal${t.count === 1 ? '' : 's'} (${t.pct}% of mapped goals)`}
-                      >
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
-                        <span className="text-slate-650 dark:text-slate-350 truncate">{t.name}</span>
-                        <span className="ml-auto text-slate-900 dark:text-white tabular-nums shrink-0">
-                          {t.count} <span className="text-slate-400 dark:text-slate-550 font-medium">({t.pct}%)</span>
-                        </span>
+                <div className="space-y-3">
+                  {goalTrack.goalsMapped.map((t) => (
+                    <div
+                      key={t.name}
+                      className="flex items-center gap-3 cursor-default group"
+                      title={`${t.name}: ${t.count} goal${t.count === 1 ? '' : 's'} (${t.pct}% of mapped goals)`}
+                    >
+                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${t.style.badge}`}>
+                        {t.rank}
+                      </span>
+                      <span className="text-base leading-none shrink-0 select-none">{goalEmoji(t.name)}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 text-xs font-bold mb-1">
+                          <span className="text-slate-700 dark:text-slate-250 truncate">{t.name}</span>
+                          <span className="text-slate-900 dark:text-white tabular-nums shrink-0">
+                            {t.count} <span className="text-slate-400 dark:text-slate-550 font-medium">({t.pct}%)</span>
+                          </span>
+                        </div>
+                        <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full bg-gradient-to-r ${t.style.bar} ${t.style.barGlow} transition-all duration-700 ease-out group-hover:brightness-110`}
+                            style={{ width: `${t.barPct}%` }}
+                          />
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                  <div className="relative w-[110px] h-[110px] flex items-center justify-center shrink-0">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={goalTrack.goalsMapped}
-                          cx="50%" cy="50%"
-                          innerRadius={32} outerRadius={43}
-                          paddingAngle={goalTrack.goalsMapped.length > 1 ? 3.5 : 0}
-                          dataKey="count"
-                          nameKey="name"
-                        >
-                          {goalTrack.goalsMapped.map((t) => <Cell key={t.name} fill={t.color} />)}
-                        </Pie>
-                        <Tooltip content={<ChartTooltip />} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="absolute flex flex-col items-center justify-center text-center">
-                      <span className="text-sm font-black text-slate-900 dark:text-white tabular-nums leading-none">{goalTrack.totalGoals}</span>
-                      <span className="text-[7.5px] uppercase tracking-wider text-slate-400 font-extrabold mt-0.5">Total</span>
                     </div>
-                  </div>
+                  ))}
                 </div>
               ) : (
                 <div className="h-24 flex flex-col items-center justify-center text-center">
