@@ -38,6 +38,16 @@ const GOAL_RING_STROKE = 10;
 const GOAL_RING_RADIUS = (104 - GOAL_RING_STROKE) / 2;
 const GOAL_RING_CIRC = 2 * Math.PI * GOAL_RING_RADIUS;
 
+// Goal completion-range buckets — red-to-green so the >70% "on track" zone
+// reads as a distinct, positive band at a glance.
+const RANGE_BUCKETS = [
+  { key: '0-25', label: '0–25%', color: 'bg-rose-400', dot: 'bg-rose-400' },
+  { key: '25-50', label: '25–50%', color: 'bg-amber-400', dot: 'bg-amber-400' },
+  { key: '50-70', label: '50–70%', color: 'bg-yellow-400', dot: 'bg-yellow-400' },
+  { key: '70-100', label: '70–100%', color: 'bg-emerald-400', dot: 'bg-emerald-400' },
+  { key: '100+', label: '100%+', color: 'bg-emerald-600', dot: 'bg-emerald-600' },
+];
+
 const isThisMonth = (iso) => {
   if (!iso) return false;
   const d = new Date(iso);
@@ -157,11 +167,12 @@ export default function DashboardView({
     return tasks.filter(isPolicy).reduce((s, t) => s + num(t.premiumAmount), 0);
   }, [tasks]);
 
-  // 4c. Goal & Asset Tracking — average per-goal achievement, client coverage
-  // & goal-type distribution across all mapped goals
+  // 4c. Goal & Asset Tracking — average per-goal completion, client coverage,
+  // goal-type distribution & a completion-range breakdown across all mapped goals
   const goalTrack = useMemo(() => {
     let totalGoals = 0, clientsWithGoals = 0, achievementSum = 0, achievementCount = 0;
     const byType = {};
+    const rangeCounts = { '0-25': 0, '25-50': 0, '50-70': 0, '70-100': 0, '100+': 0 };
     clients.forEach(c => {
       const goals = c.goals || [];
       if (goals.length > 0) clientsWithGoals += 1;
@@ -170,11 +181,14 @@ export default function DashboardView({
         const label = g.name || 'Others';
         byType[label] = (byType[label] || 0) + 1;
         const target = num(g.amount);
-        // Achievement % = Current Funded Value ÷ Target Value × 100 — only
+        // Completion % = Current Funded Value ÷ Target Value × 100 — only
         // meaningful for a goal that actually has a target amount set.
         if (target > 0) {
-          achievementSum += (num(g.currentInv) / target) * 100;
+          const pct = (num(g.currentInv) / target) * 100;
+          achievementSum += pct;
           achievementCount += 1;
+          const bucket = pct >= 100 ? '100+' : pct >= 70 ? '70-100' : pct >= 50 ? '50-70' : pct >= 25 ? '25-50' : '0-25';
+          rangeCounts[bucket] += 1;
         }
       });
     });
@@ -182,7 +196,16 @@ export default function DashboardView({
     const goalsMapped = Object.entries(byType)
       .sort((a, b) => b[1] - a[1])
       .map(([name, count]) => ({ name, count }));
-    return { totalGoals, clientsWithGoals, totalClients: clients.length, avgAchievement, goalsMapped };
+    const ranges = RANGE_BUCKETS.map(b => ({
+      ...b,
+      count: rangeCounts[b.key],
+      pct: achievementCount > 0 ? Math.round((rangeCounts[b.key] / achievementCount) * 100) : 0,
+    }));
+    const onTrackCount = rangeCounts['70-100'] + rangeCounts['100+'];
+    return {
+      totalGoals, clientsWithGoals, totalClients: clients.length, avgAchievement, goalsMapped,
+      ranges, onTrackCount, rangedGoalCount: achievementCount,
+    };
   }, [clients]);
 
   // 5. Operations/Stages counts
@@ -428,7 +451,7 @@ export default function DashboardView({
                       <span className="text-lg font-black text-slate-900 dark:text-white tabular-nums leading-none">{goalTrack.avgAchievement}%</span>
                     </div>
                   </div>
-                  <p className="text-[10px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider mt-2 text-center">Goal Achievement</p>
+                  <p className="text-[10px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider mt-2 text-center">Avg Completion Rate</p>
                 </div>
 
                 {/* Clients With Goals */}
@@ -443,6 +466,41 @@ export default function DashboardView({
                   </p>
                 </div>
               </div>
+
+              {/* Goal Progress Distribution — completion-range breakdown */}
+              {goalTrack.rangedGoalCount > 0 && (
+                <div className="mb-5 pb-5 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <h4 className="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider">Goal Progress Distribution</h4>
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                      {goalTrack.onTrackCount} on track (≥70%)
+                    </span>
+                  </div>
+                  <div className="w-full h-3 rounded-full overflow-hidden flex bg-slate-100 dark:bg-slate-800">
+                    {goalTrack.ranges.filter((r) => r.count > 0).map((r) => (
+                      <div
+                        key={r.key}
+                        className={`h-full ${r.color} transition-all duration-500 hover:opacity-80 cursor-default`}
+                        style={{ width: `${r.pct}%` }}
+                        title={`${r.label}: ${r.count} goal${r.count === 1 ? '' : 's'} (${r.pct}%)`}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3">
+                    {goalTrack.ranges.map((r) => (
+                      <div
+                        key={r.key}
+                        className="flex items-center gap-1.5 text-[10px] font-bold text-slate-550 dark:text-slate-400 cursor-default"
+                        title={`${r.label}: ${r.count} goal${r.count === 1 ? '' : 's'} (${r.pct}%)`}
+                      >
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${r.dot}`} />
+                        {r.label}
+                        <span className="text-slate-900 dark:text-white tabular-nums">{r.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <h4 className="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider mb-3">Goals Mapped</h4>
               {goalTrack.goalsMapped.length > 0 ? (
