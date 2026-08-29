@@ -33,19 +33,14 @@ const SIP_OUT_TYPES = ['SIP Cancellation'];
 const LUMP_TYPES = ['Lumpsum Investment'];
 const REDEEM_TYPES = ['Redemption Proposal'];
 
-// Goal Achievement ring geometry
-const GOAL_RING_STROKE = 10;
-const GOAL_RING_RADIUS = (104 - GOAL_RING_STROKE) / 2;
-const GOAL_RING_CIRC = 2 * Math.PI * GOAL_RING_RADIUS;
-
 // Goal completion-range buckets — red-to-green so the >70% "on track" zone
 // reads as a distinct, positive band at a glance.
 const RANGE_BUCKETS = [
-  { key: '0-25', label: '0–25%', color: 'bg-rose-400', dot: 'bg-rose-400' },
-  { key: '25-50', label: '25–50%', color: 'bg-amber-400', dot: 'bg-amber-400' },
-  { key: '50-70', label: '50–70%', color: 'bg-yellow-400', dot: 'bg-yellow-400' },
-  { key: '70-100', label: '70–100%', color: 'bg-emerald-400', dot: 'bg-emerald-400' },
-  { key: '100+', label: '100%+', color: 'bg-emerald-600', dot: 'bg-emerald-600' },
+  { key: '0-25', label: '0–25%', color: 'bg-rose-400' },
+  { key: '25-50', label: '25–50%', color: 'bg-amber-400' },
+  { key: '50-70', label: '50–70%', color: 'bg-yellow-400' },
+  { key: '70-100', label: '70–100%', color: 'bg-emerald-400' },
+  { key: '100+', label: '100%+', color: 'bg-emerald-600' },
 ];
 
 const isThisMonth = (iso) => {
@@ -170,7 +165,7 @@ export default function DashboardView({
   // 4c. Goal & Asset Tracking — average per-goal completion, client coverage,
   // goal-type distribution & a completion-range breakdown across all mapped goals
   const goalTrack = useMemo(() => {
-    let totalGoals = 0, clientsWithGoals = 0, achievementSum = 0, achievementCount = 0;
+    let totalGoals = 0, totalTarget = 0, clientsWithGoals = 0, achievementSum = 0, achievementCount = 0;
     const byType = {};
     const rangeCounts = { '0-25': 0, '25-50': 0, '50-70': 0, '70-100': 0, '100+': 0 };
     clients.forEach(c => {
@@ -181,6 +176,7 @@ export default function DashboardView({
         const label = g.name || 'Others';
         byType[label] = (byType[label] || 0) + 1;
         const target = num(g.amount);
+        totalTarget += target;
         // Completion % = Current Funded Value ÷ Target Value × 100 — only
         // meaningful for a goal that actually has a target amount set.
         if (target > 0) {
@@ -196,14 +192,16 @@ export default function DashboardView({
     const goalsMapped = Object.entries(byType)
       .sort((a, b) => b[1] - a[1])
       .map(([name, count]) => ({ name, count }));
+    const maxRangeCount = Math.max(1, ...Object.values(rangeCounts));
     const ranges = RANGE_BUCKETS.map(b => ({
       ...b,
       count: rangeCounts[b.key],
       pct: achievementCount > 0 ? Math.round((rangeCounts[b.key] / achievementCount) * 100) : 0,
+      barPct: Math.round((rangeCounts[b.key] / maxRangeCount) * 100),
     }));
     const onTrackCount = rangeCounts['70-100'] + rangeCounts['100+'];
     return {
-      totalGoals, clientsWithGoals, totalClients: clients.length, avgAchievement, goalsMapped,
+      totalGoals, totalTarget, clientsWithGoals, totalClients: clients.length, avgAchievement, goalsMapped,
       ranges, onTrackCount, rangedGoalCount: achievementCount,
     };
   }, [clients]);
@@ -434,68 +432,53 @@ export default function DashboardView({
           <section className="space-y-3.5">
             <SectionHeader icon={Target} title="Goal & Asset Tracking" subtitle="Client goal achievement, coverage & asset allocation" />
             <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900">
-              <div className="flex flex-col sm:flex-row items-center gap-6 pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
-                {/* Goal Achievement ring */}
-                <div className="flex flex-col items-center shrink-0">
-                  <div className="relative w-[104px] h-[104px] flex items-center justify-center">
-                    <svg width={104} height={104} viewBox="0 0 104 104" className="-rotate-90">
-                      <circle cx="52" cy="52" r={GOAL_RING_RADIUS} fill="none" strokeWidth={GOAL_RING_STROKE} className="stroke-slate-100 dark:stroke-slate-800" />
-                      <circle
-                        cx="52" cy="52" r={GOAL_RING_RADIUS} fill="none" strokeWidth={GOAL_RING_STROKE} strokeLinecap="round"
-                        className="stroke-indigo-500 dark:stroke-indigo-450 transition-all duration-700"
-                        strokeDasharray={GOAL_RING_CIRC}
-                        strokeDashoffset={GOAL_RING_CIRC - (Math.max(0, Math.min(100, goalTrack.avgAchievement)) / 100) * GOAL_RING_CIRC}
-                      />
-                    </svg>
-                    <div className="absolute flex flex-col items-center justify-center text-center">
-                      <span className="text-lg font-black text-slate-900 dark:text-white tabular-nums leading-none">{goalTrack.avgAchievement}%</span>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider mt-2 text-center">Avg Completion Rate</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
+                <div>
+                  <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{goalTrack.totalGoals}</p>
+                  <p className="text-[9px] text-slate-450 font-bold uppercase tracking-wider mt-0.5">Goals Tracked</p>
                 </div>
-
-                {/* Clients With Goals */}
-                <div className="flex-1 w-full text-center sm:text-left">
-                  <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">
-                    {goalTrack.clientsWithGoals}<span className="text-slate-350 dark:text-slate-600"> / {goalTrack.totalClients}</span>
-                  </p>
-                  <p className="text-[10px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider mt-2">Clients With Goals</p>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1">Clients with goals mapped / Total clients</p>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-2.5 pt-2.5 border-t border-slate-100 dark:border-slate-800 sm:border-0 sm:pt-0 sm:mt-1.5">
-                    <span className="font-black text-slate-700 dark:text-slate-250 tabular-nums">{goalTrack.totalGoals}</span> goals mapped in total
-                  </p>
+                <div>
+                  <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{fmtINR(goalTrack.totalTarget)}</p>
+                  <p className="text-[9px] text-slate-450 font-bold uppercase tracking-wider mt-0.5">Target Corpus</p>
+                </div>
+                <div>
+                  <p className="text-lg font-black text-indigo-600 dark:text-indigo-400 tabular-nums">{goalTrack.avgAchievement}%</p>
+                  <p className="text-[9px] text-slate-455 font-bold uppercase tracking-wider mt-0.5">Avg Completion Rate</p>
+                </div>
+                <div>
+                  <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{goalTrack.clientsWithGoals}<span className="text-slate-400">/{goalTrack.totalClients}</span></p>
+                  <p className="text-[9px] text-slate-450 font-bold uppercase tracking-wider mt-0.5">Clients With Goals</p>
                 </div>
               </div>
 
-              {/* Goal Progress Distribution — completion-range breakdown */}
+              {/* Goal Progress Distribution — completion-range breakdown. Each
+                  range gets its own bar sized against the LARGEST bucket (not
+                  the total), so a real portfolio skewed heavily into one range
+                  still shows every other range as a legible, visible bar
+                  instead of a near-invisible sliver. */}
               {goalTrack.rangedGoalCount > 0 && (
                 <div className="mb-5 pb-5 border-b border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center justify-between mb-2.5">
+                  <div className="flex items-center justify-between mb-3">
                     <h4 className="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider">Goal Progress Distribution</h4>
                     <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
                       {goalTrack.onTrackCount} on track (≥70%)
                     </span>
                   </div>
-                  <div className="w-full h-3 rounded-full overflow-hidden flex bg-slate-100 dark:bg-slate-800">
-                    {goalTrack.ranges.filter((r) => r.count > 0).map((r) => (
-                      <div
-                        key={r.key}
-                        className={`h-full ${r.color} transition-all duration-500 hover:opacity-80 cursor-default`}
-                        style={{ width: `${r.pct}%` }}
-                        title={`${r.label}: ${r.count} goal${r.count === 1 ? '' : 's'} (${r.pct}%)`}
-                      />
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3">
+                  <div className="space-y-2.5">
                     {goalTrack.ranges.map((r) => (
                       <div
                         key={r.key}
-                        className="flex items-center gap-1.5 text-[10px] font-bold text-slate-550 dark:text-slate-400 cursor-default"
-                        title={`${r.label}: ${r.count} goal${r.count === 1 ? '' : 's'} (${r.pct}%)`}
+                        className="flex items-center gap-2.5 cursor-default"
+                        title={`${r.label}: ${r.count} goal${r.count === 1 ? '' : 's'} (${r.pct}% of mapped goals)`}
                       >
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${r.dot}`} />
-                        {r.label}
-                        <span className="text-slate-900 dark:text-white tabular-nums">{r.count}</span>
+                        <span className="w-14 shrink-0 text-[10px] font-bold text-slate-550 dark:text-slate-400">{r.label}</span>
+                        <div className="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${r.color} transition-all duration-500 hover:opacity-80`}
+                            style={{ width: `${r.barPct}%` }}
+                          />
+                        </div>
+                        <span className="w-8 shrink-0 text-right text-[10px] font-black text-slate-900 dark:text-white tabular-nums">{r.count}</span>
                       </div>
                     ))}
                   </div>
