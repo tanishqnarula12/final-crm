@@ -217,8 +217,12 @@ export function can(user, module, action, record = null, ctx = {}) {
   // edits, only Assigned By/Assigned To change stage, no other user" was
   // stated with no carve-out. Tasks/COBR keep the ALL-bypass (their
   // deliberate "close to Admin" oversight exception); Queries already worked
-  // this way for confidentiality.
-  const STRICT_TWO_PARTY = ['queries', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies'];
+  // this way for confidentiality. otherInsurancePolicies was moved OUT of
+  // this list — an Insurance Manager granted ALL on it via the Permission
+  // Matrix (e.g. Preksha) must actually get unrestricted access, matching
+  // what the matrix UI already tells the admin ALL means; it was silently
+  // capping her to assigner/assignee-only regardless of the matrix cell.
+  const STRICT_TWO_PARTY = ['queries', 'renewals', 'claims', 'fixedDeposits'];
   if (TASK_SHAPED.includes(module) && ['editDetails', 'changeStage', 'editLog'].includes(action) && record) {
     if (scope === 'ALL' && !STRICT_TWO_PARTY.includes(module)) return true;
     const isAssigner = record.departmentOwner === user.id;

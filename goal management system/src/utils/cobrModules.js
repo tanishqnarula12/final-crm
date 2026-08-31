@@ -386,7 +386,7 @@ export const RENEWAL_EXCEL_FIELDS = [
   { key: 'modeOfPayment', label: 'Mode of Payment', type: 'select', options: MODE_OF_PAYMENT_OPTIONS },
   { key: 'brokerCode', label: 'Broker Code', type: 'text' },
   { key: 'dueDate', label: 'Due Date', type: 'date' },
-  { key: 'assignedTo', label: 'Assigned To', type: 'text' },
+  { key: 'assignedTo', label: 'Assigned To', type: 'text', required: true },
   { key: 'upSell', label: 'Up Sell', type: 'boolean' },
   { key: 'upSellAmount', label: 'Up Sell Amount', type: 'number' },
   { key: 'crossSell', label: 'Cross Sell', type: 'boolean' },
@@ -409,7 +409,7 @@ export const CLAIM_EXCEL_FIELDS = [
   { key: 'claimType', label: 'Claim Type', type: 'select', options: CLAIM_TYPES },
   { key: 'claimAmount', label: 'Claim Amount', type: 'number' },
   { key: 'dueDate', label: 'Target Date', type: 'date' },
-  { key: 'assignedTo', label: 'Assigned To', type: 'text' },
+  { key: 'assignedTo', label: 'Assigned To', type: 'text', required: true },
 ];
 export const claimDedupeKey = (r) => (r.groupLeaderId && r.applicant ? `${r.groupLeaderId}|${r.applicant}|${(r.policyNumber || '').toLowerCase()}|${(r.claimType || '').toLowerCase()}` : '');
 
@@ -421,7 +421,7 @@ export const FD_EXCEL_FIELDS = [
   { key: 'startingDate', label: 'Starting Date', type: 'date' },
   { key: 'maturityDate', label: 'Maturity Date', type: 'date' },
   { key: 'maturityAmount', label: 'Maturity Amount', type: 'number' },
-  { key: 'assignedTo', label: 'Assigned To', type: 'text' },
+  { key: 'assignedTo', label: 'Assigned To', type: 'text', required: true },
 ];
 export const fdDedupeKey = (r) => (r.groupLeaderId && r.applicant ? `${r.groupLeaderId}|${r.applicant}|${(r.bankName || '').toLowerCase()}|${r.startingDate || ''}` : '');
 
@@ -446,7 +446,7 @@ export const POLICY_EXCEL_FIELDS = [
   { key: 'startDate', label: 'Start Date', type: 'date' },
   { key: 'maturityDate', label: 'Maturity Date', type: 'date' },
   { key: 'dueDate', label: 'Renewal Date', type: 'date' },
-  { key: 'assignedTo', label: 'Assigned To', type: 'text' },
+  { key: 'assignedTo', label: 'Assigned To', type: 'text', required: true },
 ];
 export const policyDedupeKey = (r) => (r.groupLeaderId && r.applicant ? `${r.groupLeaderId}|${r.applicant}|${(r.policyNumber || '').toLowerCase()}` : '');
 

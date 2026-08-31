@@ -60,15 +60,14 @@ export default function CobrView({
 
   useEffect(() => { setTasks(loadTasks()); }, [tasksChangeCounter]);
 
-  const mayCreate = !isViewer && canDo('cobr', 'create');
-  // Excel Upload and Delete ride each register's OWN create/delete
-  // permission (the four were split into independent Permission Matrix
-  // columns already) rather than the single 'cobr' check the New-record
-  // button above still uses. Delete's default scope is NONE for every role
-  // except Admin, which bypasses the matrix entirely (services/permissions.js)
-  // — so this alone is enough to put a working Delete option in front of an
-  // admin account without any matrix change.
+  // Excel Upload, Delete AND the New-record button all ride each register's
+  // OWN create/delete permission (the four were split into independent
+  // Permission Matrix columns already) — NOT the single shared 'cobr'
+  // column. A role granted ALL on e.g. otherInsurancePolicies but nothing on
+  // 'cobr' itself used to see Import/Delete work but the "+ New Policy"
+  // button stay hidden, which read as "the matrix grant isn't respected."
   const PERMISSION_MODULE = { [REC.RENEWAL]: 'renewals', [REC.CLAIM]: 'claims', [REC.FD]: 'fixedDeposits', [REC.POLICY]: 'otherInsurancePolicies' };
+  const mayCreate = !isViewer && canDo(PERMISSION_MODULE[tab] || 'cobr', 'create');
   const canImportFor = (type) => !isViewer && canDo(PERMISSION_MODULE[type], 'create');
   const canDeleteFor = (type, record) => !isViewer && canDo(PERMISSION_MODULE[type], 'delete', record);
 

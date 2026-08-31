@@ -166,12 +166,12 @@ export function can(module, action, record = null, ctx = {}) {
 
   // Mirrors server/src/lib/permissions.js's TASK_SHAPED/STRICT_TWO_PARTY split.
   const TASK_SHAPED = ['tasks', 'cobr', 'queries', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies'];
-  const STRICT_TWO_PARTY = ['queries', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies'];
+  const STRICT_TWO_PARTY = ['queries', 'renewals', 'claims', 'fixedDeposits'];
   if (TASK_SHAPED.includes(module) && ['editDetails', 'changeStage', 'editLog'].includes(action) && record) {
-    // Queries + the four other COBR-workspace registers: a hard requirement,
+    // Queries + three other COBR-workspace registers: a hard requirement,
     // even for a role matrix-configured to ALL — only the assigner edits,
-    // only the assigner/assignee move the stage, no carve-out. Tasks/COBR
-    // keep the ALL-bypass (Internal Manager's oversight exception).
+    // only the assigner/assignee move the stage, no carve-out. Tasks/COBR/
+    // otherInsurancePolicies keep the ALL-bypass (see server engine).
     if (scope === 'ALL' && !STRICT_TWO_PARTY.includes(module)) return true;
     const isAssigner = record.departmentOwner === user.id;
     const isAssignee = record.assignedTo === user.id;
