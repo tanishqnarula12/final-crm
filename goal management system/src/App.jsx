@@ -1600,7 +1600,6 @@ export default function App() {
               onOpenTask={handleOpenTask}
               onOpenMeeting={handleOpenMeeting}
               onOpenProspect={handleOpenProspect}
-              onOpenGoalsSummary={() => { setTab('goals'); setSelectedGoalName(null); handleSetView('clients'); }}
             />
           </main>
         )}

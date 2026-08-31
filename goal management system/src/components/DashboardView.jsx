@@ -69,13 +69,13 @@ export default function DashboardView({
   onNewTask,
   onOpenTask,
   onOpenMeeting,
-  onOpenProspect,
-  onOpenGoalsSummary
+  onOpenProspect
 }) {
   const [prospects, setProspects] = useState(() => loadProspects());
   const [tasks, setTasks] = useState(() => loadTasks());
   const [meetings, setMeetings] = useState(() => loadMeetings());
   const [showAllOther, setShowAllOther] = useState(false);
+  const [showAllGoals, setShowAllGoals] = useState(false);
 
   // Live refresh whenever the underlying stores change
   useEffect(() => { setProspects(loadProspects()); }, [prospectsChangeCounter]);
@@ -202,7 +202,6 @@ export default function DashboardView({
     // "Others" is a catch-all, not a real goal type — it always sorts last
     // regardless of its count, so it doesn't crowd out the actual named
     // categories at the top just because it aggregates the most one-offs.
-    const maxTypeCount = Math.max(1, ...Object.values(byType).map((v) => v.count));
     const goalsMapped = Object.entries(byType)
       .sort((a, b) => {
         if (a[0] === 'Others') return 1;
@@ -214,7 +213,6 @@ export default function DashboardView({
         // % of the total mapped-goal COUNT this type represents — not a
         // funding/completion ratio (that's Goal Progress Distribution above).
         pct: totalGoals > 0 ? Math.round((v.count / totalGoals) * 100) : 0,
-        barPct: Math.round((v.count / maxTypeCount) * 100),
         target: v.target,
       }));
     const maxRangeCount = Math.max(1, ...Object.values(rangeCounts));
@@ -504,49 +502,46 @@ export default function DashboardView({
                 </div>
               )}
 
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">Goals &amp; Aspirations</h4>
-                  <p className="text-[11px] text-slate-450 dark:text-slate-500 font-medium mt-0.5">Track your client's financial priorities and progress</p>
-                </div>
-                {goalTrack.goalsMapped.length > 0 && onOpenGoalsSummary && (
-                  <button
-                    onClick={onOpenGoalsSummary}
-                    className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline shrink-0 flex items-center gap-1 cursor-pointer"
-                  >
-                    View all <ArrowUpRight size={12} className="rotate-45" />
-                  </button>
-                )}
+              <div className="mb-4">
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white">Goals &amp; Aspirations</h4>
+                <p className="text-[11px] text-slate-450 dark:text-slate-500 font-medium mt-0.5">Track your client's financial priorities and progress</p>
               </div>
 
               {goalTrack.goalsMapped.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {goalTrack.goalsMapped.slice(0, 3).map((t) => (
-                    <div
-                      key={t.name}
-                      className="flex items-center gap-3 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800/70 bg-white dark:bg-slate-900"
-                    >
-                      <div className="w-8 h-8 flex items-center justify-center shrink-0 text-lg select-none">
-                        {goalEmoji(t.name)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate block">{t.name}</span>
-                            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold">{t.count} goal{t.count === 1 ? '' : 's'} mapped</span>
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {(showAllGoals ? goalTrack.goalsMapped : goalTrack.goalsMapped.slice(0, 3)).map((t) => (
+                      <div
+                        key={t.name}
+                        className="flex items-center gap-3 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800/70 bg-white dark:bg-slate-900"
+                      >
+                        <div className="w-8 h-8 flex items-center justify-center shrink-0 text-lg select-none">
+                          {goalEmoji(t.name)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate block">{t.name}</span>
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold">{t.count} goal{t.count === 1 ? '' : 's'} mapped</span>
+                            </div>
+                            <span className="text-sm font-black text-slate-900 dark:text-white tabular-nums shrink-0">{t.pct}%</span>
                           </div>
-                          <span className="text-sm font-black text-slate-900 dark:text-white tabular-nums shrink-0">{t.pct}%</span>
-                        </div>
-                        <div className="mt-1.5 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                          <div className="h-full rounded-full bg-indigo-500" style={{ width: `${t.barPct}%` }} />
-                        </div>
-                        <div className="flex items-center justify-end mt-1.5">
-                          <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold tabular-nums">{t.target > 0 ? fmtINR(t.target) : '—'}</span>
+                          <div className="flex items-center justify-end mt-1.5">
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold tabular-nums">{t.target > 0 ? fmtINR(t.target) : '—'}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                  {goalTrack.goalsMapped.length > 3 && (
+                    <button
+                      onClick={() => setShowAllGoals(v => !v)}
+                      className="w-full mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800 text-center text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                    >
+                      {showAllGoals ? 'Show Less' : `Read More (${goalTrack.goalsMapped.length - 3})`}
+                    </button>
+                  )}
+                </>
               ) : (
                 <div className="h-24 flex flex-col items-center justify-center text-center">
                   <Target size={22} className="text-slate-300 dark:text-slate-700 mb-1" />
