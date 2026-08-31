@@ -55,16 +55,10 @@ const RANGE_BUCKETS = [
 // every card uses the SAME brand indigo for its icon tint; only the status
 // chip/ring/bar carries color, and only to mean on-track/attention/risk.
 const GOAL_STATUS_META = {
-  onTrack: { label: 'On Track', hex: '#10b981', dot: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-400', chip: 'bg-emerald-50 dark:bg-emerald-950/30 ring-1 ring-emerald-200/60 dark:ring-emerald-900/40', bar: 'bg-emerald-500' },
-  attention: { label: 'Needs Attention', hex: '#f59e0b', dot: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-400', chip: 'bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200/60 dark:ring-amber-900/40', bar: 'bg-amber-500' },
-  risk: { label: 'At Risk', hex: '#f43f5e', dot: 'bg-rose-500', text: 'text-rose-700 dark:text-rose-400', chip: 'bg-rose-50 dark:bg-rose-950/30 ring-1 ring-rose-200/60 dark:ring-rose-900/40', bar: 'bg-rose-500' },
-  unknown: { label: 'No Target Set', hex: '#94a3b8', dot: 'bg-slate-400', text: 'text-slate-500 dark:text-slate-400', chip: 'bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-200/60 dark:ring-slate-700/40', bar: 'bg-slate-400' },
+  onTrack: { label: 'On Track', dot: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-400', chip: 'bg-emerald-50 dark:bg-emerald-950/30 ring-1 ring-emerald-200/60 dark:ring-emerald-900/40', bar: 'bg-emerald-500' },
+  attention: { label: 'Needs Attention', dot: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-400', chip: 'bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200/60 dark:ring-amber-900/40', bar: 'bg-amber-500' },
+  unknown: { label: 'No Target Set', dot: 'bg-slate-400', text: 'text-slate-500 dark:text-slate-400', chip: 'bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-200/60 dark:ring-slate-700/40', bar: 'bg-slate-400' },
 };
-// Circular progress rings use a raw SVG <circle> (not Recharts: its
-// `fill`/`stroke` props need literal color values, not Tailwind classes,
-// which breaks dark mode) — geometry for a 100×100 viewBox, r=40.
-const CIRCLE_R = 40;
-const CIRCLE_C = 2 * Math.PI * CIRCLE_R;
 
 const isThisMonth = (iso) => {
   if (!iso) return false;
@@ -202,7 +196,7 @@ export default function DashboardView({
         totalGoals += 1;
         const raw = (g.name || '').trim();
         const label = KNOWN_GOAL_PRESETS.has(raw) ? raw : 'Others';
-        const entry = byType[label] || (byType[label] = { count: 0, funded: 0, target: 0, minYear: null });
+        const entry = byType[label] || (byType[label] = { count: 0, funded: 0, target: 0 });
         entry.count += 1;
         const target = num(g.amount);
         // Completion % = Current Funded Value ÷ Target Value × 100 — only
@@ -210,8 +204,6 @@ export default function DashboardView({
         if (target > 0) {
           entry.funded += num(g.currentInv);
           entry.target += target;
-          const yr = Number(g.targetYear) || 0;
-          if (yr > 0 && (!entry.minYear || yr < entry.minYear)) entry.minYear = yr;
           const pct = (num(g.currentInv) / target) * 100;
           achievementCount += 1;
           const bucket = pct >= 100 ? '100+' : pct >= 70 ? '70-100' : pct >= 50 ? '50-70' : pct >= 25 ? '25-50' : '0-25';
@@ -234,13 +226,12 @@ export default function DashboardView({
         const pctFunded = hasTarget ? Math.min(999, Math.round((v.funded / v.target) * 100)) : null;
         const status = !hasTarget ? GOAL_STATUS_META.unknown
           : pctFunded >= 70 ? GOAL_STATUS_META.onTrack
-          : pctFunded >= 30 ? GOAL_STATUS_META.attention
-          : GOAL_STATUS_META.risk;
+          : GOAL_STATUS_META.attention;
         return {
           name, count: v.count,
           pct: totalGoals > 0 ? Math.round((v.count / totalGoals) * 100) : 0,
           barPct: Math.round((v.count / maxTypeCount) * 100),
-          funded: v.funded, target: v.target, hasTarget, pctFunded, minYear: v.minYear, status,
+          target: v.target, hasTarget, pctFunded, status,
         };
       });
     const maxRangeCount = Math.max(1, ...Object.values(rangeCounts));
@@ -546,110 +537,42 @@ export default function DashboardView({
               </div>
 
               {goalTrack.goalsMapped.length > 0 ? (
-                <>
-                  {/* Featured goals — the top 3 by how many client portfolios
-                      map to them, shown as larger cards with a circular
-                      funded-vs-target ring. */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-4">
-                    {goalTrack.goalsMapped.slice(0, 3).map((t) => {
-                      const GoalIcon = goalIcon(t.name);
-                      const ringPct = t.hasTarget ? Math.max(4, Math.min(100, t.pctFunded)) : 0;
-                      const ringOffset = CIRCLE_C - (ringPct / 100) * CIRCLE_C;
-                      return (
-                        <div
-                          key={t.name}
-                          onClick={onOpenGoalsSummary}
-                          className={`group relative p-4 rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900 transition-all duration-300 ${onOpenGoalsSummary ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-none hover:border-indigo-300 dark:hover:border-indigo-800/70' : ''}`}
-                        >
-                          <ArrowUpRight size={14} className="absolute top-4 right-4 text-slate-300 dark:text-slate-650 group-hover:text-indigo-500 dark:group-hover:text-indigo-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
-
-                          <div className="flex items-center gap-2.5 pr-5 mb-3.5">
-                            <div className="w-9 h-9 rounded-full bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center shrink-0">
-                              <GoalIcon size={16} className="text-indigo-600 dark:text-indigo-400" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-xs font-bold text-slate-900 dark:text-white truncate leading-tight">{t.name}</p>
-                              <span className={`inline-flex items-center gap-1 text-[8.5px] font-bold uppercase tracking-wide mt-1 px-1.5 py-0.5 rounded-full ${t.status.chip} ${t.status.text}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${t.status.dot}`} /> {t.status.label}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-3.5">
-                            <div className="relative w-16 h-16 shrink-0">
-                              <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                                <circle cx="50" cy="50" r={CIRCLE_R} fill="none" strokeWidth="9" className="stroke-slate-100 dark:stroke-slate-800" />
-                                {t.hasTarget && (
-                                  <circle
-                                    cx="50" cy="50" r={CIRCLE_R} fill="none" strokeWidth="9" strokeLinecap="round"
-                                    stroke={t.status.hex}
-                                    strokeDasharray={CIRCLE_C}
-                                    strokeDashoffset={ringOffset}
-                                    className="transition-all duration-700 ease-out"
-                                  />
-                                )}
-                              </svg>
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <span className="text-sm font-black text-slate-900 dark:text-white tabular-nums">{t.hasTarget ? `${t.pctFunded}%` : '—'}</span>
-                              </div>
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              {t.hasTarget ? (
-                                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold leading-snug">
-                                  {fmtINR(t.funded)} <span className="text-slate-300 dark:text-slate-600 font-medium">of</span> {fmtINR(t.target)} funded
-                                </p>
-                              ) : (
-                                <p className="text-[11px] text-slate-400 dark:text-slate-500 font-semibold leading-snug">No target amount set</p>
-                              )}
-                              {t.minYear && <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold mt-1">Target: {t.minYear}</p>}
-                            </div>
-                          </div>
-
-                          <p className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 dark:text-slate-500 font-semibold">
-                            {t.count} goal{t.count === 1 ? '' : 's'} mapped · {t.pct}% of portfolio
-                          </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {goalTrack.goalsMapped.map((t) => {
+                    const GoalIcon = goalIcon(t.name);
+                    const barPct = t.hasTarget ? Math.max(4, Math.min(100, t.pctFunded)) : 0;
+                    return (
+                      <div
+                        key={t.name}
+                        onClick={onOpenGoalsSummary}
+                        title={`${t.name}: ${t.count} goal${t.count === 1 ? '' : 's'} (${t.pct}% of mapped goals)`}
+                        className={`flex items-center gap-3 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800/70 bg-white dark:bg-slate-900 transition-colors ${onOpenGoalsSummary ? 'cursor-pointer hover:border-indigo-300 dark:hover:border-indigo-800/70' : ''}`}
+                      >
+                        <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center shrink-0">
+                          <GoalIcon size={14} className="text-indigo-600 dark:text-indigo-400" />
                         </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Other Goals — remaining types as compact cards */}
-                  {goalTrack.goalsMapped.length > 3 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {goalTrack.goalsMapped.slice(3).map((t) => {
-                        const GoalIcon = goalIcon(t.name);
-                        const barPct = t.hasTarget ? Math.max(4, Math.min(100, t.pctFunded)) : 0;
-                        return (
-                          <div
-                            key={t.name}
-                            onClick={onOpenGoalsSummary}
-                            title={`${t.name}: ${t.count} goal${t.count === 1 ? '' : 's'} (${t.pct}% of mapped goals)`}
-                            className={`flex items-center gap-3 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800/70 bg-white dark:bg-slate-900 transition-colors ${onOpenGoalsSummary ? 'cursor-pointer hover:border-indigo-300 dark:hover:border-indigo-800/70' : ''}`}
-                          >
-                            <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center shrink-0">
-                              <GoalIcon size={14} className="text-indigo-600 dark:text-indigo-400" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate block">{t.name}</span>
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold">{t.count} goal{t.count === 1 ? '' : 's'} mapped</span>
                             </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{t.name}</span>
-                                <span className="text-xs font-black text-slate-900 dark:text-white tabular-nums shrink-0">{t.hasTarget ? `${t.pctFunded}%` : '—'}</span>
-                              </div>
-                              <div className="mt-1.5 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                                <div className={`h-full rounded-full ${t.status.bar} transition-all duration-700 ease-out`} style={{ width: `${barPct}%` }} />
-                              </div>
-                              <div className="flex items-center justify-between mt-1.5">
-                                <span className={`inline-flex items-center gap-1 text-[9px] font-bold ${t.status.text}`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${t.status.dot}`} /> {t.status.label}
-                                </span>
-                                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold tabular-nums">{t.hasTarget ? fmtINR(t.target) : '—'}</span>
-                              </div>
-                            </div>
+                            <span className="text-sm font-black text-slate-900 dark:text-white tabular-nums shrink-0">{t.hasTarget ? `${t.pctFunded}%` : '—'}</span>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
+                          <div className="mt-1.5 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                            <div className={`h-full rounded-full ${t.status.bar} transition-all duration-700 ease-out`} style={{ width: `${barPct}%` }} />
+                          </div>
+                          <div className="flex items-center justify-between mt-1.5">
+                            <span className={`inline-flex items-center gap-1 text-[9px] font-bold ${t.status.text}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${t.status.dot}`} /> {t.status.label}
+                            </span>
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold tabular-nums">{t.hasTarget ? fmtINR(t.target) : '—'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               ) : (
                 <div className="h-24 flex flex-col items-center justify-center text-center">
                   <Target size={22} className="text-slate-300 dark:text-slate-700 mb-1" />
