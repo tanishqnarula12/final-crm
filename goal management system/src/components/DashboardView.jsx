@@ -14,7 +14,7 @@ import { fmtINR, GOAL_PRESETS, goalEmoji } from '../utils/calc';
 import { loadProspects, ALL_STAGE_THEME } from '../utils/prospects';
 import { loadTasks, TASK_STAGES, STAGE_THEME } from '../utils/tasks';
 import { loadMeetings, MEETING_STATUSES } from '../utils/meetings';
-import { hasAllocation } from '../utils/assets';
+import { hasAllocation, allocationTotals } from '../utils/assets';
 import { isPolicy } from '../utils/cobrModules';
 
 // Parse "₹ 50,000" / "50000" / numbers → number
@@ -173,12 +173,16 @@ export default function DashboardView({
 
   // 4. Revenue/AUM calculations
   const rev = useMemo(() => {
-    let aum = 0, totalSip = 0;
+    let aum = 0, totalSip = 0, totalNetWorth = 0;
     clients.forEach(c => {
       (c.goals || []).forEach(g => { aum += num(g.currentInv); totalSip += num(g.currentSip); });
+      // Net worth = total assets − liabilities, from the client's Asset
+      // Allocation record — a client with none configured contributes 0
+      // (allocationTotals normalizes a missing/empty record safely).
+      totalNetWorth += allocationTotals(c.assetAllocation).netWorth;
     });
     const withAlloc = clients.filter(c => hasAllocation(c)).length;
-    return { aum, totalSip, withAlloc };
+    return { aum, totalSip, totalNetWorth, withAlloc };
   }, [clients]);
 
   // 4b. Managed Insurance — total premium value of policies under active service (Policy sub-form)
@@ -475,7 +479,7 @@ export default function DashboardView({
                   <p className="text-[9px] text-slate-450 font-bold uppercase tracking-wider mt-0.5">Goals Tracked</p>
                 </div>
                 <div>
-                  <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{fmtINR(rev.aum)}</p>
+                  <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{fmtINR(rev.totalNetWorth)}</p>
                   <p className="text-[9px] text-slate-450 font-bold uppercase tracking-wider mt-0.5">Managing Assets</p>
                 </div>
                 <div>
