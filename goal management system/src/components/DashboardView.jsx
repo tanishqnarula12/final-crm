@@ -189,7 +189,7 @@ export default function DashboardView({
   // 4c. Goal & Asset Tracking — average per-goal completion, client coverage,
   // goal-type distribution & a completion-range breakdown across all mapped goals
   const goalTrack = useMemo(() => {
-    let totalGoals = 0, totalTarget = 0, clientsWithGoals = 0, achievementSum = 0, achievementCount = 0;
+    let totalGoals = 0, clientsWithGoals = 0, achievementCount = 0;
     const byType = {};
     const rangeCounts = { '0-25': 0, '25-50': 0, '50-70': 0, '70-100': 0, '100+': 0 };
     clients.forEach(c => {
@@ -201,19 +201,16 @@ export default function DashboardView({
         const label = KNOWN_GOAL_PRESETS.has(raw) ? raw : 'Others';
         byType[label] = (byType[label] || 0) + 1;
         const target = num(g.amount);
-        totalTarget += target;
         // Completion % = Current Funded Value ÷ Target Value × 100 — only
         // meaningful for a goal that actually has a target amount set.
         if (target > 0) {
           const pct = (num(g.currentInv) / target) * 100;
-          achievementSum += pct;
           achievementCount += 1;
           const bucket = pct >= 100 ? '100+' : pct >= 70 ? '70-100' : pct >= 50 ? '50-70' : pct >= 25 ? '25-50' : '0-25';
           rangeCounts[bucket] += 1;
         }
       });
     });
-    const avgAchievement = achievementCount > 0 ? Math.round(achievementSum / achievementCount) : 0;
     // "Others" is a catch-all, not a real goal type — it always sorts last
     // regardless of its count, so it doesn't crowd out the actual named
     // categories at the top just because it aggregates the most one-offs.
@@ -241,7 +238,7 @@ export default function DashboardView({
     const onTrackCount = rangeCounts['70-100'] + rangeCounts['100+'];
     const onTrackPct = achievementCount > 0 ? Math.round((onTrackCount / achievementCount) * 100) : 0;
     return {
-      totalGoals, totalTarget, clientsWithGoals, totalClients: clients.length, avgAchievement, goalsMapped,
+      totalGoals, clientsWithGoals, totalClients: clients.length, goalsMapped,
       ranges, onTrackCount, onTrackPct, rangedGoalCount: achievementCount,
     };
   }, [clients]);
@@ -478,12 +475,12 @@ export default function DashboardView({
                   <p className="text-[9px] text-slate-450 font-bold uppercase tracking-wider mt-0.5">Goals Tracked</p>
                 </div>
                 <div>
-                  <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{fmtINR(goalTrack.totalTarget)}</p>
-                  <p className="text-[9px] text-slate-450 font-bold uppercase tracking-wider mt-0.5">Target Corpus</p>
+                  <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{fmtINR(rev.aum)}</p>
+                  <p className="text-[9px] text-slate-450 font-bold uppercase tracking-wider mt-0.5">Managing Assets</p>
                 </div>
                 <div>
-                  <p className="text-lg font-black text-indigo-600 dark:text-indigo-400 tabular-nums">{goalTrack.avgAchievement}%</p>
-                  <p className="text-[9px] text-slate-455 font-bold uppercase tracking-wider mt-0.5">Avg Completion Rate</p>
+                  <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{rev.withAlloc}<span className="text-slate-400">/{clients.length}</span></p>
+                  <p className="text-[9px] text-slate-455 font-bold uppercase tracking-wider mt-0.5">Clients With Assets</p>
                 </div>
                 <div>
                   <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{goalTrack.clientsWithGoals}<span className="text-slate-400">/{goalTrack.totalClients}</span></p>
@@ -529,9 +526,9 @@ export default function DashboardView({
                         />
                       </svg>
                       <div className="absolute inset-x-0 bottom-1 flex flex-col items-center text-center">
-                        <span className="text-2xl font-black text-slate-900 dark:text-white tabular-nums leading-none">{goalTrack.onTrackPct}%</span>
+                        <span className="text-2xl font-black text-slate-900 dark:text-white tabular-nums leading-none">{goalTrack.onTrackCount}</span>
                         <span className="text-[9px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider mt-1">
-                          {goalTrack.onTrackCount} On Track (≥70%)
+                          On Track (≥70%)
                         </span>
                       </div>
                     </div>
@@ -595,11 +592,6 @@ export default function DashboardView({
                   <p className="text-xs text-slate-400 dark:text-slate-500 italic font-bold">No client goals recorded yet.</p>
                 </div>
               )}
-
-              <div className="flex items-center justify-between mt-5 pt-3.5 border-t border-slate-100 dark:border-slate-800">
-                <span className="text-[10px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider">Asset Allocation Mapped</span>
-                <span className="text-xs font-black text-slate-900 dark:text-white tabular-nums">{rev.withAlloc} / {clients.length} clients</span>
-              </div>
             </Card>
           </section>
 
