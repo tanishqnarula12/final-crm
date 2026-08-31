@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import { Card, Avatar } from './UI';
 import NoticeBoard from './NoticeBoard';
-import { fmtINR, GOAL_PRESETS, goalIcon } from '../utils/calc';
+import { fmtINR, GOAL_PRESETS, goalEmoji } from '../utils/calc';
 import { loadProspects, ALL_STAGE_THEME } from '../utils/prospects';
 import { loadTasks, TASK_STAGES, STAGE_THEME } from '../utils/tasks';
 import { loadMeetings, MEETING_STATUSES } from '../utils/meetings';
@@ -48,17 +48,6 @@ const RANGE_BUCKETS = [
   { key: '70-100', label: '70–100%', grad: 'from-teal-400 to-emerald-400', glow: 'shadow-[0_0_10px_rgba(52,211,153,0.55)]', onTrack: true },
   { key: '100+', label: '100%+', grad: 'from-emerald-500 to-green-400', glow: 'shadow-[0_0_12px_rgba(16,185,129,0.65)]', onTrack: true },
 ];
-
-// Goals & Aspirations funding status — a strict 3-state semantic palette
-// (plus a neutral 4th for goals with no target amount set at all), driven
-// by aggregate funded ÷ target per goal type, NOT varied per-goal-type —
-// every card uses the SAME brand indigo for its icon tint; only the status
-// chip/ring/bar carries color, and only to mean on-track/attention/risk.
-const GOAL_STATUS_META = {
-  onTrack: { label: 'On Track', dot: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-400', chip: 'bg-emerald-50 dark:bg-emerald-950/30 ring-1 ring-emerald-200/60 dark:ring-emerald-900/40', bar: 'bg-emerald-500' },
-  attention: { label: 'Needs Attention', dot: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-400', chip: 'bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200/60 dark:ring-amber-900/40', bar: 'bg-amber-500' },
-  unknown: { label: 'No Target Set', dot: 'bg-slate-400', text: 'text-slate-500 dark:text-slate-400', chip: 'bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-200/60 dark:ring-slate-700/40', bar: 'bg-slate-400' },
-};
 
 const isThisMonth = (iso) => {
   if (!iso) return false;
@@ -196,13 +185,12 @@ export default function DashboardView({
         totalGoals += 1;
         const raw = (g.name || '').trim();
         const label = KNOWN_GOAL_PRESETS.has(raw) ? raw : 'Others';
-        const entry = byType[label] || (byType[label] = { count: 0, funded: 0, target: 0 });
+        const entry = byType[label] || (byType[label] = { count: 0, target: 0 });
         entry.count += 1;
         const target = num(g.amount);
         // Completion % = Current Funded Value ÷ Target Value × 100 — only
         // meaningful for a goal that actually has a target amount set.
         if (target > 0) {
-          entry.funded += num(g.currentInv);
           entry.target += target;
           const pct = (num(g.currentInv) / target) * 100;
           achievementCount += 1;
@@ -221,19 +209,14 @@ export default function DashboardView({
         if (b[0] === 'Others') return -1;
         return b[1].count - a[1].count;
       })
-      .map(([name, v]) => {
-        const hasTarget = v.target > 0;
-        const pctFunded = hasTarget ? Math.min(999, Math.round((v.funded / v.target) * 100)) : null;
-        const status = !hasTarget ? GOAL_STATUS_META.unknown
-          : pctFunded >= 70 ? GOAL_STATUS_META.onTrack
-          : GOAL_STATUS_META.attention;
-        return {
-          name, count: v.count,
-          pct: totalGoals > 0 ? Math.round((v.count / totalGoals) * 100) : 0,
-          barPct: Math.round((v.count / maxTypeCount) * 100),
-          target: v.target, hasTarget, pctFunded, status,
-        };
-      });
+      .map(([name, v]) => ({
+        name, count: v.count,
+        // % of the total mapped-goal COUNT this type represents — not a
+        // funding/completion ratio (that's Goal Progress Distribution above).
+        pct: totalGoals > 0 ? Math.round((v.count / totalGoals) * 100) : 0,
+        barPct: Math.round((v.count / maxTypeCount) * 100),
+        target: v.target,
+      }));
     const maxRangeCount = Math.max(1, ...Object.values(rangeCounts));
     const ranges = RANGE_BUCKETS.map(b => ({
       ...b,
@@ -537,41 +520,32 @@ export default function DashboardView({
               </div>
 
               {goalTrack.goalsMapped.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {goalTrack.goalsMapped.map((t) => {
-                    const GoalIcon = goalIcon(t.name);
-                    const barPct = t.hasTarget ? Math.max(4, Math.min(100, t.pctFunded)) : 0;
-                    return (
-                      <div
-                        key={t.name}
-                        onClick={onOpenGoalsSummary}
-                        title={`${t.name}: ${t.count} goal${t.count === 1 ? '' : 's'} (${t.pct}% of mapped goals)`}
-                        className={`flex items-center gap-3 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800/70 bg-white dark:bg-slate-900 transition-colors ${onOpenGoalsSummary ? 'cursor-pointer hover:border-indigo-300 dark:hover:border-indigo-800/70' : ''}`}
-                      >
-                        <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center shrink-0">
-                          <GoalIcon size={14} className="text-indigo-600 dark:text-indigo-400" />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {goalTrack.goalsMapped.slice(0, 3).map((t) => (
+                    <div
+                      key={t.name}
+                      className="flex items-center gap-3 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800/70 bg-white dark:bg-slate-900"
+                    >
+                      <div className="w-8 h-8 flex items-center justify-center shrink-0 text-lg select-none">
+                        {goalEmoji(t.name)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate block">{t.name}</span>
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold">{t.count} goal{t.count === 1 ? '' : 's'} mapped</span>
+                          </div>
+                          <span className="text-sm font-black text-slate-900 dark:text-white tabular-nums shrink-0">{t.pct}%</span>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="min-w-0">
-                              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate block">{t.name}</span>
-                              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold">{t.count} goal{t.count === 1 ? '' : 's'} mapped</span>
-                            </div>
-                            <span className="text-sm font-black text-slate-900 dark:text-white tabular-nums shrink-0">{t.hasTarget ? `${t.pctFunded}%` : '—'}</span>
-                          </div>
-                          <div className="mt-1.5 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                            <div className={`h-full rounded-full ${t.status.bar} transition-all duration-700 ease-out`} style={{ width: `${barPct}%` }} />
-                          </div>
-                          <div className="flex items-center justify-between mt-1.5">
-                            <span className={`inline-flex items-center gap-1 text-[9px] font-bold ${t.status.text}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${t.status.dot}`} /> {t.status.label}
-                            </span>
-                            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold tabular-nums">{t.hasTarget ? fmtINR(t.target) : '—'}</span>
-                          </div>
+                        <div className="mt-1.5 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                          <div className="h-full rounded-full bg-indigo-500" style={{ width: `${t.barPct}%` }} />
+                        </div>
+                        <div className="flex items-center justify-end mt-1.5">
+                          <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold tabular-nums">{t.target > 0 ? fmtINR(t.target) : '—'}</span>
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="h-24 flex flex-col items-center justify-center text-center">
