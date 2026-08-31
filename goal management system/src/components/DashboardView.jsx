@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import { Card, Avatar } from './UI';
 import NoticeBoard from './NoticeBoard';
-import { fmtINR, GOAL_PRESETS, goalEmoji } from '../utils/calc';
+import { fmtINR, GOAL_PRESETS, goalIcon } from '../utils/calc';
 import { loadProspects, ALL_STAGE_THEME } from '../utils/prospects';
 import { loadTasks, TASK_STAGES, STAGE_THEME } from '../utils/tasks';
 import { loadMeetings, MEETING_STATUSES } from '../utils/meetings';
@@ -49,24 +49,22 @@ const RANGE_BUCKETS = [
   { key: '100+', label: '100%+', grad: 'from-emerald-500 to-green-400', glow: 'shadow-[0_0_12px_rgba(16,185,129,0.65)]', onTrack: true },
 ];
 
-// Goals Mapped leaderboard — rank #1-3 get a medal badge + matching glow,
-// every other real goal type shares one on-brand indigo style, and "Others"
-// (a catch-all, not a real type) gets its own neutral slate regardless of
-// rank so it never reads as if it "won" a medal just by aggregating the
-// most one-off custom names.
-const GOAL_RANK_STYLES = [
-  { badge: 'bg-gradient-to-br from-amber-400 to-yellow-500 text-white shadow-[0_0_8px_rgba(245,158,11,0.55)]', bar: 'from-amber-400 to-yellow-500', barGlow: 'shadow-[0_0_8px_rgba(245,158,11,0.5)]' },
-  { badge: 'bg-gradient-to-br from-slate-300 to-slate-400 text-white shadow-[0_0_6px_rgba(148,163,184,0.5)]', bar: 'from-slate-400 to-slate-300', barGlow: '' },
-  { badge: 'bg-gradient-to-br from-orange-300 to-amber-600 text-white shadow-[0_0_6px_rgba(217,119,6,0.4)]', bar: 'from-orange-400 to-amber-600', barGlow: '' },
-  { badge: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400', bar: 'from-indigo-500 to-blue-400', barGlow: '' },
-];
-const GOAL_OTHERS_STYLE = { badge: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400', bar: 'from-slate-400 to-slate-300', barGlow: '' };
-
-// Semi-circle gauge geometry — a single SVG <path> arc (not Recharts: its
-// `fill`/`stroke` props need real color values, not Tailwind classes, which
-// breaks dark mode) so the track can stay theme-aware via a stroke- class.
-const GAUGE_ARC_D = 'M 20 100 A 80 80 0 0 1 180 100';
-const GAUGE_ARC_LEN = Math.PI * 80;
+// Goals & Aspirations funding status — a strict 3-state semantic palette
+// (plus a neutral 4th for goals with no target amount set at all), driven
+// by aggregate funded ÷ target per goal type, NOT varied per-goal-type —
+// every card uses the SAME brand indigo for its icon tint; only the status
+// chip/ring/bar carries color, and only to mean on-track/attention/risk.
+const GOAL_STATUS_META = {
+  onTrack: { label: 'On Track', hex: '#10b981', dot: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-400', chip: 'bg-emerald-50 dark:bg-emerald-950/30 ring-1 ring-emerald-200/60 dark:ring-emerald-900/40', bar: 'bg-emerald-500' },
+  attention: { label: 'Needs Attention', hex: '#f59e0b', dot: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-400', chip: 'bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200/60 dark:ring-amber-900/40', bar: 'bg-amber-500' },
+  risk: { label: 'At Risk', hex: '#f43f5e', dot: 'bg-rose-500', text: 'text-rose-700 dark:text-rose-400', chip: 'bg-rose-50 dark:bg-rose-950/30 ring-1 ring-rose-200/60 dark:ring-rose-900/40', bar: 'bg-rose-500' },
+  unknown: { label: 'No Target Set', hex: '#94a3b8', dot: 'bg-slate-400', text: 'text-slate-500 dark:text-slate-400', chip: 'bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-200/60 dark:ring-slate-700/40', bar: 'bg-slate-400' },
+};
+// Circular progress rings use a raw SVG <circle> (not Recharts: its
+// `fill`/`stroke` props need literal color values, not Tailwind classes,
+// which breaks dark mode) — geometry for a 100×100 viewBox, r=40.
+const CIRCLE_R = 40;
+const CIRCLE_C = 2 * Math.PI * CIRCLE_R;
 
 const isThisMonth = (iso) => {
   if (!iso) return false;
@@ -88,7 +86,8 @@ export default function DashboardView({
   onNewTask,
   onOpenTask,
   onOpenMeeting,
-  onOpenProspect
+  onOpenProspect,
+  onOpenGoalsSummary
 }) {
   const [prospects, setProspects] = useState(() => loadProspects());
   const [tasks, setTasks] = useState(() => loadTasks());
@@ -203,11 +202,16 @@ export default function DashboardView({
         totalGoals += 1;
         const raw = (g.name || '').trim();
         const label = KNOWN_GOAL_PRESETS.has(raw) ? raw : 'Others';
-        byType[label] = (byType[label] || 0) + 1;
+        const entry = byType[label] || (byType[label] = { count: 0, funded: 0, target: 0, minYear: null });
+        entry.count += 1;
         const target = num(g.amount);
         // Completion % = Current Funded Value ÷ Target Value × 100 — only
         // meaningful for a goal that actually has a target amount set.
         if (target > 0) {
+          entry.funded += num(g.currentInv);
+          entry.target += target;
+          const yr = Number(g.targetYear) || 0;
+          if (yr > 0 && (!entry.minYear || yr < entry.minYear)) entry.minYear = yr;
           const pct = (num(g.currentInv) / target) * 100;
           achievementCount += 1;
           const bucket = pct >= 100 ? '100+' : pct >= 70 ? '70-100' : pct >= 50 ? '50-70' : pct >= 25 ? '25-50' : '0-25';
@@ -218,20 +222,27 @@ export default function DashboardView({
     // "Others" is a catch-all, not a real goal type — it always sorts last
     // regardless of its count, so it doesn't crowd out the actual named
     // categories at the top just because it aggregates the most one-offs.
-    const maxTypeCount = Math.max(1, ...Object.values(byType));
+    const maxTypeCount = Math.max(1, ...Object.values(byType).map((v) => v.count));
     const goalsMapped = Object.entries(byType)
       .sort((a, b) => {
         if (a[0] === 'Others') return 1;
         if (b[0] === 'Others') return -1;
-        return b[1] - a[1];
+        return b[1].count - a[1].count;
       })
-      .map(([name, count], i) => ({
-        name, count,
-        pct: totalGoals > 0 ? Math.round((count / totalGoals) * 100) : 0,
-        barPct: Math.round((count / maxTypeCount) * 100),
-        style: name === 'Others' ? GOAL_OTHERS_STYLE : GOAL_RANK_STYLES[Math.min(i, GOAL_RANK_STYLES.length - 1)],
-        rank: i + 1,
-      }));
+      .map(([name, v]) => {
+        const hasTarget = v.target > 0;
+        const pctFunded = hasTarget ? Math.min(999, Math.round((v.funded / v.target) * 100)) : null;
+        const status = !hasTarget ? GOAL_STATUS_META.unknown
+          : pctFunded >= 70 ? GOAL_STATUS_META.onTrack
+          : pctFunded >= 30 ? GOAL_STATUS_META.attention
+          : GOAL_STATUS_META.risk;
+        return {
+          name, count: v.count,
+          pct: totalGoals > 0 ? Math.round((v.count / totalGoals) * 100) : 0,
+          barPct: Math.round((v.count / maxTypeCount) * 100),
+          funded: v.funded, target: v.target, hasTarget, pctFunded, minYear: v.minYear, status,
+        };
+      });
     const maxRangeCount = Math.max(1, ...Object.values(rangeCounts));
     const ranges = RANGE_BUCKETS.map(b => ({
       ...b,
@@ -239,11 +250,9 @@ export default function DashboardView({
       pct: achievementCount > 0 ? Math.round((rangeCounts[b.key] / achievementCount) * 100) : 0,
       barPct: Math.round((rangeCounts[b.key] / maxRangeCount) * 100),
     }));
-    const onTrackCount = rangeCounts['70-100'] + rangeCounts['100+'];
-    const onTrackPct = achievementCount > 0 ? Math.round((onTrackCount / achievementCount) * 100) : 0;
     return {
       totalGoals, clientsWithGoals, totalClients: clients.length, goalsMapped,
-      ranges, onTrackCount, onTrackPct, rangedGoalCount: achievementCount,
+      ranges, rangedGoalCount: achievementCount,
     };
   }, [clients]);
 
@@ -492,104 +501,155 @@ export default function DashboardView({
                 </div>
               </div>
 
-              {/* Goal Progress Distribution — an on-track gauge + a
-                  completion-range breakdown. Each range's bar is sized
-                  against the LARGEST bucket (not the total), so a real
-                  portfolio skewed heavily into one range still shows every
-                  other range as a legible bar instead of a near-invisible
-                  sliver. */}
+              {/* Goal Progress Distribution — a completion-range breakdown.
+                  Each range's bar is sized against the LARGEST bucket (not
+                  the total), so a real portfolio skewed heavily into one
+                  range still shows every other range as a legible bar
+                  instead of a near-invisible sliver. */}
               {goalTrack.rangedGoalCount > 0 && (
                 <div className="mb-5 pb-5 border-b border-slate-100 dark:border-slate-800">
                   <h4 className="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider mb-3">Goal Progress Distribution</h4>
-                  <div className="flex flex-col sm:flex-row items-center gap-5">
-                    {/* On-Track gauge */}
-                    <div className="relative w-full max-w-[180px] shrink-0">
-                      <svg viewBox="0 0 200 110" className="w-full">
-                        <defs>
-                          <linearGradient id="goalGaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stopColor="#f43f5e" />
-                            <stop offset="55%" stopColor="#f59e0b" />
-                            <stop offset="100%" stopColor="#10b981" />
-                          </linearGradient>
-                        </defs>
-                        <path d={GAUGE_ARC_D} fill="none" strokeWidth="16" strokeLinecap="round" className="stroke-slate-100 dark:stroke-slate-800" />
-                        <path
-                          d={GAUGE_ARC_D} fill="none" strokeWidth="16" strokeLinecap="round"
-                          stroke="url(#goalGaugeGrad)"
-                          strokeDasharray={GAUGE_ARC_LEN}
-                          strokeDashoffset={
-                            GAUGE_ARC_LEN
-                            // A real but tiny % (e.g. 8%) reads as barely-there
-                            // at true scale on a 180° sweep — floor the VISUAL
-                            // fill at 6% so there's always a legible sliver;
-                            // the number shown is still the real percentage.
-                            - (goalTrack.onTrackPct > 0 ? Math.max(6, Math.min(100, goalTrack.onTrackPct)) : 0) / 100 * GAUGE_ARC_LEN
-                          }
-                          className="transition-all duration-1000 ease-out"
-                          style={{ filter: 'drop-shadow(0 0 5px rgba(16,185,129,0.35))' }}
-                        />
-                      </svg>
-                      <div className="absolute inset-x-0 bottom-1 flex flex-col items-center text-center">
-                        <span className="text-2xl font-black text-slate-900 dark:text-white tabular-nums leading-none">{goalTrack.onTrackCount}</span>
-                        <span className="text-[9px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider mt-1">
-                          On Track (≥70%)
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Range breakdown */}
-                    <div className="w-full space-y-2.5">
-                      {goalTrack.ranges.map((r) => (
-                        <div
-                          key={r.key}
-                          className="flex items-center gap-2.5 cursor-default group"
-                          title={`${r.label}: ${r.count} goal${r.count === 1 ? '' : 's'} (${r.pct}% of mapped goals)`}
-                        >
-                          <span className={`w-14 shrink-0 text-[10px] font-bold ${r.onTrack ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-550 dark:text-slate-400'}`}>{r.label}</span>
-                          <div className="flex-1 h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                            <div
-                              className={`h-full rounded-full bg-gradient-to-r ${r.grad} ${r.glow} transition-all duration-700 ease-out group-hover:brightness-110`}
-                              style={{ width: `${r.barPct}%` }}
-                            />
-                          </div>
-                          <span className="w-8 shrink-0 text-right text-[10px] font-black text-slate-900 dark:text-white tabular-nums">{r.count}</span>
+                  <div className="w-full space-y-2.5">
+                    {goalTrack.ranges.map((r) => (
+                      <div
+                        key={r.key}
+                        className="flex items-center gap-2.5 cursor-default group"
+                        title={`${r.label}: ${r.count} goal${r.count === 1 ? '' : 's'} (${r.pct}% of mapped goals)`}
+                      >
+                        <span className={`w-14 shrink-0 text-[10px] font-bold ${r.onTrack ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-550 dark:text-slate-400'}`}>{r.label}</span>
+                        <div className="flex-1 h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full bg-gradient-to-r ${r.grad} ${r.glow} transition-all duration-700 ease-out group-hover:brightness-110`}
+                            style={{ width: `${r.barPct}%` }}
+                          />
                         </div>
-                      ))}
-                    </div>
+                        <span className="w-8 shrink-0 text-right text-[10px] font-black text-slate-900 dark:text-white tabular-nums">{r.count}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
 
-              <h4 className="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider mb-3">Goals Mapped</h4>
-              {goalTrack.goalsMapped.length > 0 ? (
-                <div className="space-y-3">
-                  {goalTrack.goalsMapped.map((t) => (
-                    <div
-                      key={t.name}
-                      className="flex items-center gap-3 cursor-default group"
-                      title={`${t.name}: ${t.count} goal${t.count === 1 ? '' : 's'} (${t.pct}% of mapped goals)`}
-                    >
-                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${t.style.badge}`}>
-                        {t.rank}
-                      </span>
-                      <span className="text-base leading-none shrink-0 select-none">{goalEmoji(t.name)}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 text-xs font-bold mb-1">
-                          <span className="text-slate-700 dark:text-slate-250 truncate">{t.name}</span>
-                          <span className="text-slate-900 dark:text-white tabular-nums shrink-0">
-                            {t.count} <span className="text-slate-400 dark:text-slate-550 font-medium">({t.pct}%)</span>
-                          </span>
-                        </div>
-                        <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full bg-gradient-to-r ${t.style.bar} ${t.style.barGlow} transition-all duration-700 ease-out group-hover:brightness-110`}
-                            style={{ width: `${t.barPct}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">Goals &amp; Aspirations</h4>
+                  <p className="text-[11px] text-slate-450 dark:text-slate-500 font-medium mt-0.5">Track your client's financial priorities and progress</p>
                 </div>
+                {goalTrack.goalsMapped.length > 0 && onOpenGoalsSummary && (
+                  <button
+                    onClick={onOpenGoalsSummary}
+                    className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline shrink-0 flex items-center gap-1 cursor-pointer"
+                  >
+                    View all <ArrowUpRight size={12} className="rotate-45" />
+                  </button>
+                )}
+              </div>
+
+              {goalTrack.goalsMapped.length > 0 ? (
+                <>
+                  {/* Featured goals — the top 3 by how many client portfolios
+                      map to them, shown as larger cards with a circular
+                      funded-vs-target ring. */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-4">
+                    {goalTrack.goalsMapped.slice(0, 3).map((t) => {
+                      const GoalIcon = goalIcon(t.name);
+                      const ringPct = t.hasTarget ? Math.max(4, Math.min(100, t.pctFunded)) : 0;
+                      const ringOffset = CIRCLE_C - (ringPct / 100) * CIRCLE_C;
+                      return (
+                        <div
+                          key={t.name}
+                          onClick={onOpenGoalsSummary}
+                          className={`group relative p-4 rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900 transition-all duration-300 ${onOpenGoalsSummary ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-none hover:border-indigo-300 dark:hover:border-indigo-800/70' : ''}`}
+                        >
+                          <ArrowUpRight size={14} className="absolute top-4 right-4 text-slate-300 dark:text-slate-650 group-hover:text-indigo-500 dark:group-hover:text-indigo-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
+
+                          <div className="flex items-center gap-2.5 pr-5 mb-3.5">
+                            <div className="w-9 h-9 rounded-full bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center shrink-0">
+                              <GoalIcon size={16} className="text-indigo-600 dark:text-indigo-400" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-slate-900 dark:text-white truncate leading-tight">{t.name}</p>
+                              <span className={`inline-flex items-center gap-1 text-[8.5px] font-bold uppercase tracking-wide mt-1 px-1.5 py-0.5 rounded-full ${t.status.chip} ${t.status.text}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${t.status.dot}`} /> {t.status.label}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3.5">
+                            <div className="relative w-16 h-16 shrink-0">
+                              <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                                <circle cx="50" cy="50" r={CIRCLE_R} fill="none" strokeWidth="9" className="stroke-slate-100 dark:stroke-slate-800" />
+                                {t.hasTarget && (
+                                  <circle
+                                    cx="50" cy="50" r={CIRCLE_R} fill="none" strokeWidth="9" strokeLinecap="round"
+                                    stroke={t.status.hex}
+                                    strokeDasharray={CIRCLE_C}
+                                    strokeDashoffset={ringOffset}
+                                    className="transition-all duration-700 ease-out"
+                                  />
+                                )}
+                              </svg>
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="text-sm font-black text-slate-900 dark:text-white tabular-nums">{t.hasTarget ? `${t.pctFunded}%` : '—'}</span>
+                              </div>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              {t.hasTarget ? (
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold leading-snug">
+                                  {fmtINR(t.funded)} <span className="text-slate-300 dark:text-slate-600 font-medium">of</span> {fmtINR(t.target)} funded
+                                </p>
+                              ) : (
+                                <p className="text-[11px] text-slate-400 dark:text-slate-500 font-semibold leading-snug">No target amount set</p>
+                              )}
+                              {t.minYear && <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold mt-1">Target: {t.minYear}</p>}
+                            </div>
+                          </div>
+
+                          <p className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 dark:text-slate-500 font-semibold">
+                            {t.count} goal{t.count === 1 ? '' : 's'} mapped · {t.pct}% of portfolio
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Other Goals — remaining types as compact cards */}
+                  {goalTrack.goalsMapped.length > 3 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {goalTrack.goalsMapped.slice(3).map((t) => {
+                        const GoalIcon = goalIcon(t.name);
+                        const barPct = t.hasTarget ? Math.max(4, Math.min(100, t.pctFunded)) : 0;
+                        return (
+                          <div
+                            key={t.name}
+                            onClick={onOpenGoalsSummary}
+                            title={`${t.name}: ${t.count} goal${t.count === 1 ? '' : 's'} (${t.pct}% of mapped goals)`}
+                            className={`flex items-center gap-3 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800/70 bg-white dark:bg-slate-900 transition-colors ${onOpenGoalsSummary ? 'cursor-pointer hover:border-indigo-300 dark:hover:border-indigo-800/70' : ''}`}
+                          >
+                            <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center shrink-0">
+                              <GoalIcon size={14} className="text-indigo-600 dark:text-indigo-400" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{t.name}</span>
+                                <span className="text-xs font-black text-slate-900 dark:text-white tabular-nums shrink-0">{t.hasTarget ? `${t.pctFunded}%` : '—'}</span>
+                              </div>
+                              <div className="mt-1.5 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                                <div className={`h-full rounded-full ${t.status.bar} transition-all duration-700 ease-out`} style={{ width: `${barPct}%` }} />
+                              </div>
+                              <div className="flex items-center justify-between mt-1.5">
+                                <span className={`inline-flex items-center gap-1 text-[9px] font-bold ${t.status.text}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${t.status.dot}`} /> {t.status.label}
+                                </span>
+                                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold tabular-nums">{t.hasTarget ? fmtINR(t.target) : '—'}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="h-24 flex flex-col items-center justify-center text-center">
                   <Target size={22} className="text-slate-300 dark:text-slate-700 mb-1" />
