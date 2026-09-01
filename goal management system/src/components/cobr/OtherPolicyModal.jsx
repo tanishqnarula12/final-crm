@@ -163,9 +163,18 @@ export default function OtherPolicyModal({ record, clients = [], onClose, onSave
   };
 
   const canSave = useMemo(() => {
-    if (!f.groupLeader || !f.applicant || !f.insuranceType || !f.assignedTo) return false;
+    // Required-field completeness is a CREATE-time guard only. Applying it to
+    // an EDIT too meant a pre-existing record missing just one of these
+    // fields (e.g. a legacy row with no Assigned To, or one bulk-imported
+    // before that field was made required) could never be saved again by
+    // anyone — not even a pure stage confirm via the always-live StagePicker,
+    // which sets local state but only actually persists through this same
+    // Save button. Often the person hitting that wall is the ASSIGNEE, who
+    // can't fix the missing field themselves (only the assigner may unlock
+    // full editing), so this became a permanent dead end for the workflow.
+    if (!isEdit && (!f.groupLeader || !f.applicant || !f.insuranceType || !f.assignedTo)) return false;
     return true;
-  }, [f]);
+  }, [f, isEdit]);
 
   // Policy Continued means there's a future check-in to schedule — create it
   // as an ordinary follow-up Task the moment that outcome is actually saved,

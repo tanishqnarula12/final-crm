@@ -112,9 +112,13 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
   };
 
   const canSave = useMemo(() => {
-    if (!f.groupLeader || !f.applicant || !f.bankName || !f.maturityDate || !f.maturityAmount || !f.assignedTo) return false;
+    // Required-field completeness is a CREATE-time guard only — see
+    // OtherPolicyModal's canSave for why applying it to an edit as well
+    // turned a legacy/imported record missing e.g. Assigned To into a
+    // record nobody could ever save again, not even a pure stage confirm.
+    if (!isEdit && (!f.groupLeader || !f.applicant || !f.bankName || !f.maturityDate || !f.maturityAmount || !f.assignedTo)) return false;
     return true;
-  }, [f]);
+  }, [f, isEdit]);
 
   // FD Renewed means there's a future check-in to schedule — create it as an
   // ordinary follow-up Task the moment that outcome is actually saved,

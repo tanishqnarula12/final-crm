@@ -147,15 +147,37 @@ export async function syncBulk(prisma, spec) {
         // stage forward + add log). COBR rows are Tasks (relatedTo: 'COBR')
         // under their own matrix column, and Queries share the identical
         // two-party (raiser/recipient) shape — same split applies to both.
+        // Each aspect applies INDEPENDENTLY — a save that bundles a stage move
+        // with a detail edit must not be all-or-nothing. It used to be: one
+        // disallowed aspect rejected the WHOLE record, so someone allowed to
+        // move the stage but not edit details (the normal assignee case) saw
+        // their stage change silently vanish on the next reconciliation, since
+        // the modal always saves the full form. Now whichever aspect is
+        // disallowed is reverted to its stored value and the rest still lands
+        // — the same treatment the non-task-shaped branch below already got.
         const changed = Object.keys(diffFields(existing.payload, rec));
-        const detailChanged = changed.some((k) => !TASK_LOG_KEYS.has(k) && !TASK_STAGE_KEYS.has(k) && !NOISE_KEYS.has(k));
-        const logChanged = changed.some((k) => TASK_LOG_KEYS.has(k));
-        allowed = true;
-        if (detailChanged) allowed = allowed && can(actor, mod, 'editDetails', existing);
-        if (stageChanged) allowed = allowed && can(actor, mod, 'changeStage', existing, { fromStage: from, toStage: to });
-        if (logChanged && !detailChanged && !stageChanged) allowed = allowed && can(actor, mod, 'editLog', existing);
+        const detailKeys = changed.filter((k) => !TASK_LOG_KEYS.has(k) && !TASK_STAGE_KEYS.has(k) && !NOISE_KEYS.has(k));
+        const logKeys = changed.filter((k) => TASK_LOG_KEYS.has(k));
+        const detailChanged = detailKeys.length > 0;
+        const logChanged = logKeys.length > 0;
+        const detailAllowed = !detailChanged || can(actor, mod, 'editDetails', existing);
+        const stageAllowed = !stageChanged || can(actor, mod, 'changeStage', existing, { fromStage: from, toStage: to });
+        // editLog is only required when the log is the ONLY thing that changed
+        // — alongside a detail/stage edit it rides on that aspect's own right.
+        const logAllowed = !logChanged || detailChanged || stageChanged || can(actor, mod, 'editLog', existing);
+        allowed = detailAllowed || stageAllowed || logAllowed;
         if (!allowed && nextAssigned !== curAssigned) allowed = true;
         if (!allowed) { stats.rejected++; continue; } // keep the stored version
+
+        if (!detailAllowed) detailKeys.forEach((k) => { rec[k] = existing.payload[k]; });
+        if (!logAllowed) logKeys.forEach((k) => { rec[k] = existing.payload[k]; });
+        if (!stageAllowed) rec[stageField] = existing[stageField];
+        // Re-derive after any partial revert — the STAGE_CHANGE log/event
+        // below must reflect what was actually applied, not what was asked for.
+        to = stageField ? (rec[stageField] ?? null) : null;
+        stageChanged = stageField && from !== to;
+        // Everything disallowed got reverted — nothing left to write.
+        if (JSON.stringify(existing.payload) === JSON.stringify(rec)) { stats.kept++; continue; }
       } else {
         // Stage and non-stage changes need their OWN, independent permission
         // check, and each must apply INDEPENDENTLY too — a save that bundles

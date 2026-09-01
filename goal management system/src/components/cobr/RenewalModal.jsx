@@ -144,12 +144,19 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
   };
 
   const canSave = useMemo(() => {
-    if (!f.groupLeader || !f.applicant || !f.insuranceType || !f.premiumAmount || !f.dueDate || !f.assignedTo) return false;
+    // Base required-field completeness is a CREATE-time guard only — see
+    // OtherPolicyModal's canSave for why applying it to an edit as well
+    // turned a legacy/imported record missing e.g. Assigned To into a
+    // record nobody could ever save again, not even a pure stage confirm.
+    // The conditional checks below stay live on every edit too, since they
+    // react to values the CURRENT session is actively setting (e.g. flipping
+    // Insurance Type to Motor), not a pre-existing gap.
+    if (!isEdit && (!f.groupLeader || !f.applicant || !f.insuranceType || !f.premiumAmount || !f.dueDate || !f.assignedTo)) return false;
     if (f.insuranceType === 'Motor' && (!f.motorVehicleType || !f.motorCoverageType)) return false;
     if (f.upSell && !f.upSellAmount) return false;
     if (f.crossSell && (!f.crossSellCompany || !f.crossSellPolicy || !f.crossSellAmount)) return false;
     return true;
-  }, [f]);
+  }, [f, isEdit]);
 
   const handleSave = () => {
     if (!canSave) return;

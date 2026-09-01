@@ -130,10 +130,14 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
   };
 
   const canSave = useMemo(() => {
-    if (!f.groupLeader || !f.applicant || !f.insuranceType || !f.claimType || !f.claimAmount || !f.assignedTo) return false;
+    // Base required-field completeness is a CREATE-time guard only — see
+    // OtherPolicyModal's canSave for why applying it to an edit as well
+    // turned a legacy/imported record missing e.g. Assigned To into a
+    // record nobody could ever save again, not even a pure stage confirm.
+    if (!isEdit && (!f.groupLeader || !f.applicant || !f.insuranceType || !f.claimType || !f.claimAmount || !f.assignedTo)) return false;
     if (f.insuranceType === 'Motor' && (!f.motorVehicleType || !f.motorCoverageType)) return false;
     return true;
-  }, [f]);
+  }, [f, isEdit]);
 
   const handleSave = () => {
     if (!canSave) return;
