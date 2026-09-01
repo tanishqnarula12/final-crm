@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, CoolSelect } from './UI';
-import { Plus, Trash2, Shield, Heart, Briefcase, FileText, Printer, ArrowLeft, CheckCircle2, AlertCircle, Save, Plane } from 'lucide-react';
+import { Plus, Trash2, Shield, Heart, Briefcase, FileText, Printer, ArrowLeft, CheckCircle2, AlertCircle, Save, Plane, Ship } from 'lucide-react';
 import { LOGO_DATA_URI } from '../assets/logoBase64';
 import { RELATIONS } from '../utils/team';
 import { uid, DOB_MIN, dobMax } from '../utils/calc';
@@ -10,8 +10,8 @@ import { ProspectModal } from './BusinessProspects';
 
 // New insurance lines of business — shown as disabled "Coming Soon" pills
 // until their field sets are defined and each gets its own proposal section.
-// Travel graduated to a real section below (types.travel / travelPolicies).
-const COMING_SOON_TYPES = ['Motor', 'Home', 'Fire', 'Marine', 'Indemnity'];
+// Travel and Marine graduated to real sections below.
+const COMING_SOON_TYPES = ['Motor', 'Home', 'Fire', 'Indemnity'];
 
 // One empty Travel entry — Card layout mirrors the CRM Data Fields spec
 // (Traveller Name / DOB-Age / Passport / Nationality / Mobile / Email /
@@ -27,6 +27,21 @@ const EMPTY_TRAVEL_POLICY = {
 };
 const TRIP_TYPES = ['Single Trip', 'Multi-trip'];
 const TRAVEL_PURPOSES = ['Leisure', 'Business', 'Study', 'Other'];
+
+// One empty Marine entry — field grouping mirrors the CRM Data Fields spec's
+// own two tables: a primary "Shipment & Cover Details" set (all Mandatory)
+// and a secondary "Additional Details" set (As applicable / after issuance).
+// `invoiceValue`/`sum`/`premium` are amount fields (see AMOUNT_KEYS below).
+const EMPTY_MARINE_POLICY = {
+  policyholderName: '', contactPerson: '', mobile: '', email: '',
+  typeOfCover: '', natureOfGoods: '', invoiceValue: '', sum: '',
+  origin: '', destination: '', modeOfTransport: '', transitStartDate: '',
+  transitEndDuration: '', shipmentsCount: '',
+  packingDetails: '', conveyanceVessel: '', previousPolicyDetails: '',
+  claimHistory: '', premium: '', policyNumber: '',
+};
+const MARINE_COVER_TYPES = ['Marine Cargo', 'Marine Hull'];
+const MARINE_TRANSPORT_MODES = ['Sea', 'Air', 'Road', 'Rail'];
 
 export default function InsuranceProposal({ client, isViewer }) {
   const getSavedVal = (subKey, defaultVal) => {
@@ -51,6 +66,7 @@ export default function InsuranceProposal({ client, isViewer }) {
     term: false,
     accidental: false,
     travel: false,
+    marine: false,
   }));
 
   // Applicants List
@@ -133,6 +149,11 @@ export default function InsuranceProposal({ client, isViewer }) {
     { ...EMPTY_TRAVEL_POLICY }
   ]));
 
+  // Marine State
+  const [marinePolicies, setMarinePolicies] = useState(() => getSavedVal('marinePolicies', [
+    { ...EMPTY_MARINE_POLICY }
+  ]));
+
   // Preview Mode
   const [isPreview, setIsPreview] = useState(false);
   const [syncStatus, setSyncStatus] = useState(''); // '', 'syncing', 'done', 'error'
@@ -202,6 +223,7 @@ export default function InsuranceProposal({ client, isViewer }) {
         if (parsed.termGroups !== undefined) setTermGroups(parsed.termGroups);
         if (parsed.accidentalPolicies !== undefined) setAccidentalPolicies(parsed.accidentalPolicies);
         if (parsed.travelPolicies !== undefined) setTravelPolicies(parsed.travelPolicies);
+        if (parsed.marinePolicies !== undefined) setMarinePolicies(parsed.marinePolicies);
         return; // loaded draft successfully, skip defaults
       } catch (e) {
         console.error('Error loading insurance proposal draft:', e);
@@ -268,6 +290,7 @@ export default function InsuranceProposal({ client, isViewer }) {
       term: false,
       accidental: false,
       travel: false,
+      marine: false,
     });
     setIsPort(false);
     setPortDate('');
@@ -281,6 +304,7 @@ export default function InsuranceProposal({ client, isViewer }) {
       { name: '', sum: '', premium: '', riders: '' }
     ]);
     setTravelPolicies([{ ...EMPTY_TRAVEL_POLICY }]);
+    setMarinePolicies([{ ...EMPTY_MARINE_POLICY }]);
   }, [client]);
 
   // Save draft on updates
@@ -300,10 +324,11 @@ export default function InsuranceProposal({ client, isViewer }) {
       topupPolicies,
       termGroups,
       accidentalPolicies,
-      travelPolicies
+      travelPolicies,
+      marinePolicies
     };
     localStorage.setItem(key, JSON.stringify(draft));
-  }, [client, proposer, types, applicants, isPort, portDate, basePolicies, topupPolicies, termGroups, accidentalPolicies, travelPolicies]);
+  }, [client, proposer, types, applicants, isPort, portDate, basePolicies, topupPolicies, termGroups, accidentalPolicies, travelPolicies, marinePolicies]);
 
   // Checkbox Toggle Helpers
   const handleTypeChange = (key) => {
@@ -445,6 +470,20 @@ export default function InsuranceProposal({ client, isViewer }) {
     setTravelPolicies(prev => prev.map((p, i) => i === index ? { ...p, [key]: v } : p));
   };
 
+  // Add/Remove Marine Entries
+  const addMarinePolicy = () => {
+    setMarinePolicies(prev => [...prev, { ...EMPTY_MARINE_POLICY }]);
+  };
+
+  const removeMarinePolicy = (index) => {
+    setMarinePolicies(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateMarinePolicy = (index, key, value) => {
+    const v = AMOUNT_KEYS.includes(key) ? fmtAmt(value) : value;
+    setMarinePolicies(prev => prev.map((p, i) => i === index ? { ...p, [key]: v } : p));
+  };
+
   // Format Helper
   const fmt = (v) => v || '—';
   
@@ -464,7 +503,7 @@ export default function InsuranceProposal({ client, isViewer }) {
     const digits = String(v == null ? '' : v).replace(/[^0-9]/g, '');
     return digits ? Number(digits).toLocaleString('en-IN') : '';
   };
-  const AMOUNT_KEYS = ['sum', 'premium'];
+  const AMOUNT_KEYS = ['sum', 'premium', 'invoiceValue'];
 
   // Google Sheets Sync
   const syncToGoogleSheets = async () => {
@@ -494,15 +533,21 @@ export default function InsuranceProposal({ client, isViewer }) {
       travelPolicies.forEach(p => totalTravel += parseNum(p.premium));
     }
 
+    let totalMarine = 0;
+    if (types.marine) {
+      marinePolicies.forEach(p => totalMarine += parseNum(p.premium));
+    }
+
     const payload = {
       proposerName: proposer,
       clientsCount: applicants.length,
-      types: [types.medical && 'Medical', types.term && 'Term', types.accidental && 'Accidental', types.travel && 'Travel'].filter(Boolean).join(' + '),
+      types: [types.medical && 'Medical', types.term && 'Term', types.accidental && 'Accidental', types.travel && 'Travel', types.marine && 'Marine'].filter(Boolean).join(' + '),
       totalMedical,
       totalTerm,
       totalAccidental,
       totalTravel,
-      totalPremium: totalMedical + totalTerm + totalAccidental + totalTravel,
+      totalMarine,
+      totalPremium: totalMedical + totalTerm + totalAccidental + totalTravel + totalMarine,
       date: new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' }),
       isPort: types.medical ? (isPort ? 'Yes' : 'No') : 'N/A',
       portDate: types.medical && isPort && portDate ? new Date(portDate).toLocaleDateString('en-IN') : ''
@@ -587,6 +632,7 @@ export default function InsuranceProposal({ client, isViewer }) {
       term: false,
       accidental: false,
       travel: false,
+      marine: false,
     });
     setIsPort(false);
     setPortDate('');
@@ -600,10 +646,11 @@ export default function InsuranceProposal({ client, isViewer }) {
       { name: '', sum: '', premium: '', riders: '' }
     ]);
     setTravelPolicies([{ ...EMPTY_TRAVEL_POLICY }]);
+    setMarinePolicies([{ ...EMPTY_MARINE_POLICY }]);
   };
 
   const handleGenerate = () => {
-    if (!types.medical && !types.term && !types.accidental && !types.travel) {
+    if (!types.medical && !types.term && !types.accidental && !types.travel && !types.marine) {
       alert('Please select at least one proposal type.');
       return;
     }
@@ -612,7 +659,7 @@ export default function InsuranceProposal({ client, isViewer }) {
   };
 
   const getProposalTypesLabel = () => {
-    return [types.medical && 'Medical', types.term && 'Term', types.accidental && 'Accidental', types.travel && 'Travel']
+    return [types.medical && 'Medical', types.term && 'Term', types.accidental && 'Accidental', types.travel && 'Travel', types.marine && 'Marine']
       .filter(Boolean)
       .join(' + ');
   };
@@ -677,6 +724,27 @@ export default function InsuranceProposal({ client, isViewer }) {
             p.travellerName || '—',
             p.destination || '—',
             (p.tripStartDate || p.tripEndDate) ? `${p.tripStartDate || '?'} — ${p.tripEndDate || '?'}` : '—',
+            p.sum ? '₹ ' + p.sum : '—',
+            p.premium ? '₹ ' + p.premium : '—',
+          ]),
+        },
+      });
+    }
+    if (types.marine) {
+      const shipments = (marinePolicies || []).filter(p => p.policyholderName || p.natureOfGoods || p.sum || p.premium);
+      // Marine's Premium/Policy Number are explicitly "after issuance" — like
+      // Travel, Sum Insured is the mandatory up-front figure the prospect's
+      // deal-size amount is based on.
+      drafts.push({
+        proposalType: 'Marine Insurance',
+        proposalCategory: 'insurance',
+        amount: (marinePolicies || []).reduce((s, p) => s + parseNum(p.sum), 0),
+        table: {
+          cols: ['Policyholder', 'Goods', 'Route', 'Sum Insured', 'Premium'],
+          rows: shipments.map(p => [
+            p.policyholderName || '—',
+            p.natureOfGoods || '—',
+            (p.origin || p.destination) ? `${p.origin || '?'} → ${p.destination || '?'}` : '—',
             p.sum ? '₹ ' + p.sum : '—',
             p.premium ? '₹ ' + p.premium : '—',
           ]),
@@ -763,6 +831,7 @@ export default function InsuranceProposal({ client, isViewer }) {
       types.term && 'Term',
       types.accidental && 'Accidental',
       types.travel && 'Travel',
+      types.marine && 'Marine',
     ].filter(Boolean);
     const who = proposer || client?.name || 'Client';
     const prevTitle = document.title;
@@ -901,6 +970,15 @@ export default function InsuranceProposal({ client, isViewer }) {
                       className="rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-750"
                     />
                     Travel
+                  </label>
+                  <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 text-xs font-semibold text-slate-700 dark:text-slate-350 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={types.marine}
+                      onChange={() => handleTypeChange('marine')}
+                      className="rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-750"
+                    />
+                    Marine
                   </label>
                   {COMING_SOON_TYPES.map(label => (
                     <label
@@ -1613,7 +1691,146 @@ export default function InsuranceProposal({ client, isViewer }) {
             </Card>
           )}
 
-          {/* Card 7: Actions */}
+          {/* Card 7: Marine Insurance Section */}
+          {types.marine && (
+            <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-md rounded-[20px] space-y-6">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/60">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-sky-50/50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 flex items-center justify-center border border-sky-100/40 dark:border-sky-900/30">
+                    <Ship size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">🚢 Marine Insurance</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium font-sans">Cover for one shipment / policy per entry</p>
+                  </div>
+                </div>
+                <button onClick={addMarinePolicy} className={btnSecondary + ' py-1.5 px-3 text-xs'}>
+                  <Plus size={12} /> Add Shipment
+                </button>
+              </div>
+
+              <div className="space-y-6 max-h-[600px] overflow-y-auto pr-1">
+                {marinePolicies.length === 0 ? (
+                  <div className="text-center py-6 text-sm text-slate-400 dark:text-slate-500 italic">No shipments added. Click "Add Shipment" to start.</div>
+                ) : (
+                  marinePolicies.map((p, i) => (
+                    <div key={i} className="p-5 rounded-2xl bg-sky-50/20 dark:bg-slate-950/20 border border-sky-100/50 dark:border-slate-805 space-y-5 relative">
+                      <button
+                        onClick={() => removeMarinePolicy(i)}
+                        disabled={marinePolicies.length === 1}
+                        className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 disabled:opacity-30 disabled:hover:text-slate-400 transition-colors"
+                        title="Remove Shipment"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+
+                      {/* Shipment & Cover Details */}
+                      <div className="space-y-3 pr-8">
+                        <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider pl-1.5 border-l-2 border-sky-500 leading-none">Shipment &amp; Cover Details</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Policyholder / Company Name *</label>
+                            <input type="text" value={p.policyholderName} onChange={(e) => updateMarinePolicy(i, 'policyholderName', e.target.value)} placeholder="e.g. Fintness Exports Pvt Ltd" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Contact Person *</label>
+                            <input type="text" value={p.contactPerson} onChange={(e) => updateMarinePolicy(i, 'contactPerson', e.target.value)} placeholder="e.g. Rohan Mehta" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Mobile *</label>
+                            <input type="text" value={p.mobile} onChange={(e) => updateMarinePolicy(i, 'mobile', e.target.value)} placeholder="e.g. 98765 43210" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Email *</label>
+                            <input type="text" value={p.email} onChange={(e) => updateMarinePolicy(i, 'email', e.target.value)} placeholder="e.g. name@email.com" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Type of Cover *</label>
+                            <select value={p.typeOfCover} onChange={(e) => updateMarinePolicy(i, 'typeOfCover', e.target.value)} className={selectCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'}>
+                              <option value="">Select…</option>
+                              {MARINE_COVER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Nature &amp; Description of Goods *</label>
+                            <input type="text" value={p.natureOfGoods} onChange={(e) => updateMarinePolicy(i, 'natureOfGoods', e.target.value)} placeholder="e.g. Textile machinery parts" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Invoice Value (Rs) *</label>
+                            <input type="text" value={p.invoiceValue} onChange={(e) => updateMarinePolicy(i, 'invoiceValue', e.target.value)} placeholder="e.g. 8,00,000" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950 text-right tabular-nums font-semibold'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Sum Insured (Rs) *</label>
+                            <input type="text" value={p.sum} onChange={(e) => updateMarinePolicy(i, 'sum', e.target.value)} placeholder="e.g. 9,00,000" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950 text-right tabular-nums font-semibold'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Origin *</label>
+                            <input type="text" value={p.origin} onChange={(e) => updateMarinePolicy(i, 'origin', e.target.value)} placeholder="e.g. Mumbai, India" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Destination *</label>
+                            <input type="text" value={p.destination} onChange={(e) => updateMarinePolicy(i, 'destination', e.target.value)} placeholder="e.g. Hamburg, Germany" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Mode of Transport *</label>
+                            <select value={p.modeOfTransport} onChange={(e) => updateMarinePolicy(i, 'modeOfTransport', e.target.value)} className={selectCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'}>
+                              <option value="">Select…</option>
+                              {MARINE_TRANSPORT_MODES.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Transit Start Date *</label>
+                            <input type="date" value={p.transitStartDate} onChange={(e) => updateMarinePolicy(i, 'transitStartDate', e.target.value)} className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Transit End Date / Duration</label>
+                            <input type="text" value={p.transitEndDuration} onChange={(e) => updateMarinePolicy(i, 'transitEndDuration', e.target.value)} placeholder="e.g. 15 days" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Number of Shipments</label>
+                            <input type="text" value={p.shipmentsCount} onChange={(e) => updateMarinePolicy(i, 'shipmentsCount', e.target.value)} placeholder="For open/annual policies" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Additional Details */}
+                      <div className="space-y-3">
+                        <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider pl-1.5 border-l-2 border-sky-500 leading-none">Additional Details</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Packing Details</label>
+                            <input type="text" value={p.packingDetails} onChange={(e) => updateMarinePolicy(i, 'packingDetails', e.target.value)} placeholder="As applicable" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Conveyance / Vessel Details</label>
+                            <input type="text" value={p.conveyanceVessel} onChange={(e) => updateMarinePolicy(i, 'conveyanceVessel', e.target.value)} placeholder="As applicable" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Previous Policy Details</label>
+                            <input type="text" value={p.previousPolicyDetails} onChange={(e) => updateMarinePolicy(i, 'previousPolicyDetails', e.target.value)} placeholder="As applicable" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Claim History</label>
+                            <input type="text" value={p.claimHistory} onChange={(e) => updateMarinePolicy(i, 'claimHistory', e.target.value)} placeholder="As applicable" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Premium (Rs)</label>
+                            <input type="text" value={p.premium} onChange={(e) => updateMarinePolicy(i, 'premium', e.target.value)} placeholder="After issuance" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950 text-right tabular-nums font-semibold'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Policy Number</label>
+                            <input type="text" value={p.policyNumber} onChange={(e) => updateMarinePolicy(i, 'policyNumber', e.target.value)} placeholder="After issuance" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </Card>
+          )}
+
+          {/* Card 8: Actions */}
           <div className="flex items-center justify-end gap-3 pt-2">
             <button onClick={handleGenerate} className={btnPrimary}>
               <Plus size={14} /> Generate Proposal
@@ -2016,6 +2233,92 @@ export default function InsuranceProposal({ client, isViewer }) {
                 </div>
               )}
 
+              {types.marine && (
+                <div style={{ marginTop: '28px' }}>
+                  <div className="psec-title">🚢 Marine Insurance</div>
+                  {marinePolicies.filter(p => p.policyholderName || p.natureOfGoods || p.sum || p.premium).length > 0 && (
+                    <>
+                      <div>
+                        <div className="psub-label psub-marine">Shipment &amp; Cover Details</div>
+                        <div className="ptable-wrap">
+                          <table className="ptable">
+                            <thead>
+                              <tr>
+                                <th>#</th>
+                                <th>Policyholder</th>
+                                <th>Type of Cover</th>
+                                <th>Goods</th>
+                                <th>Route</th>
+                                <th>Mode</th>
+                                <th>Invoice Value</th>
+                                <th>Sum Insured</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {marinePolicies.filter(p => p.policyholderName || p.natureOfGoods || p.sum || p.premium).map((p, i) => (
+                                <tr key={i}>
+                                  <td>{i + 1}</td>
+                                  <td style={{ fontWeight: 600, color: '#0d2a5e' }}>{fmt(p.policyholderName)}</td>
+                                  <td>{fmt(p.typeOfCover)}</td>
+                                  <td style={{ fontSize: '12px' }}>{fmt(p.natureOfGoods)}</td>
+                                  <td style={{ fontSize: '12px' }}>{(p.origin || p.destination) ? `${p.origin || '?'} → ${p.destination || '?'}` : '—'}</td>
+                                  <td>{fmt(p.modeOfTransport)}</td>
+                                  <td>₹ {fmtINR(p.invoiceValue)}</td>
+                                  <td>₹ {fmtINR(p.sum)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: '18px' }}>
+                        <div className="psub-label psub-marine">Additional Details</div>
+                        <div className="ptable-wrap">
+                          <table className="ptable">
+                            <thead>
+                              <tr>
+                                <th>#</th>
+                                <th>Transit</th>
+                                <th># Shipments</th>
+                                <th>Premium</th>
+                                <th>Policy No.</th>
+                                {marinePolicies.some(p => p.packingDetails || p.conveyanceVessel || p.previousPolicyDetails || p.claimHistory) && <th>Notes</th>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {marinePolicies.filter(p => p.policyholderName || p.natureOfGoods || p.sum || p.premium).map((p, i) => {
+                                const notes = [
+                                  p.packingDetails && `Packing: ${p.packingDetails}`,
+                                  p.conveyanceVessel && `Vessel: ${p.conveyanceVessel}`,
+                                  p.previousPolicyDetails && `Previous Policy: ${p.previousPolicyDetails}`,
+                                  p.claimHistory && `Claim History: ${p.claimHistory}`,
+                                ].filter(Boolean).join(' · ');
+                                return (
+                                  <tr key={i}>
+                                    <td>{i + 1}</td>
+                                    <td>
+                                      {p.transitStartDate ? new Date(p.transitStartDate).toLocaleDateString('en-IN') : '—'}
+                                      {p.transitEndDuration ? ` – ${p.transitEndDuration}` : ''}
+                                    </td>
+                                    <td>{fmt(p.shipmentsCount)}</td>
+                                    <td>{p.premium ? '₹ ' + fmtINR(p.premium) : 'Pending issuance'}</td>
+                                    <td>{p.policyNumber || 'Pending issuance'}</td>
+                                    {marinePolicies.some(x => x.packingDetails || x.conveyanceVessel || x.previousPolicyDetails || x.claimHistory) && (
+                                      <td style={{ fontSize: '12px', color: 'var(--slate)' }}>{notes || '—'}</td>
+                                    )}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               <div className="prop-footer">
                 <div className="prop-footer-note">This proposal is prepared for discussion purposes only. Final premiums are subject to underwriting and insurer approval. All amounts are in Indian Rupees (₹). Terms and conditions of respective insurers apply.</div>
                 <div className="prop-footer-brand">Team Fintness</div>
@@ -2069,6 +2372,8 @@ const INSURANCE_PRINT_STYLES = `
     --topup-light: #ede9fe;
     --travel: #0e7490;
     --travel-light: #cffafe;
+    --marine: #0369a1;
+    --marine-light: #e0f2fe;
     --danger: #dc2626;
     --radius: 12px;
     --shadow: 0 4px 24px rgba(13,42,94,0.09);
@@ -2180,6 +2485,7 @@ const INSURANCE_PRINT_STYLES = `
   .psub-base { background:var(--medical-light); color:var(--medical); }
   .psub-topup { background:var(--topup-light); color:var(--topup); }
   .psub-travel { background:var(--travel-light); color:var(--travel); }
+  .psub-marine { background:var(--marine-light); color:var(--marine); }
 
   .ptable {
     width:100%; border-collapse:collapse; margin-bottom:6px; font-size:13px;
