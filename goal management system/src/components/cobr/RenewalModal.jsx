@@ -128,14 +128,14 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
   };
   const cancelStageChange = () => { setPendingStage(null); setStageRemark(''); setTransitionFiles([]); };
   const confirmStageChange = () => {
-    if (!pendingStage || !stageRemark.trim()) return;
+    if (!pendingStage) return;
     if (requiresDocForPending && transitionFiles.length === 0) return;
     const now = new Date().toISOString();
     const by = me?.name || 'System';
     const mergedAttachments = transitionFiles.length ? [...(f.attachments || []), ...transitionFiles] : f.attachments;
     setComments((c) => [...c, {
       at: now, by,
-      text: `Stage changed from ${stage} to ${pendingStage} — ${stageRemark.trim()}${transitionFiles.length ? ` | Document(s) uploaded: ${transitionFiles.map((fl) => fl.fileName).join(', ')}` : ''}`,
+      text: `Stage changed from ${stage} to ${pendingStage}${stageRemark.trim() ? ` — ${stageRemark.trim()}` : ''}${transitionFiles.length ? ` | Document(s) uploaded: ${transitionFiles.map((fl) => fl.fileName).join(', ')}` : ''}`,
     }]);
     setStageHistory((h) => [...h, makeHistoryEntry({ stage: pendingStage, action: pendingStage, note: stageRemark.trim(), attachments: mergedAttachments, by })]);
     if (transitionFiles.length) set({ attachments: mergedAttachments });
@@ -355,13 +355,13 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
         {pendingStage && (
           <div className="rounded-xl border-2 border-blue-300 dark:border-blue-900/60 bg-white dark:bg-slate-900 p-3 space-y-2">
             <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <Check size={12} className="text-blue-500" /> Reason for stage change ({stage} → {pendingStage}) <span className="text-rose-500">*</span>
+              <Check size={12} className="text-blue-500" /> Reason for stage change ({stage} → {pendingStage})
             </label>
             <input
               autoFocus
               value={stageRemark}
               onChange={(e) => setStageRemark(e.target.value)}
-              placeholder="Why is the stage changing? (required)"
+              placeholder="Why is the stage changing? (optional)"
               className={inputCls + ' text-xs py-2'}
             />
 
@@ -386,8 +386,8 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
               <button
                 type="button"
                 onClick={confirmStageChange}
-                disabled={!stageRemark.trim() || (requiresDocForPending && transitionFiles.length === 0)}
-                className={btnPrimary + ' py-1.5 px-3 text-[10px]' + (!stageRemark.trim() || (requiresDocForPending && transitionFiles.length === 0) ? ' opacity-50 cursor-not-allowed' : '')}
+                disabled={requiresDocForPending && transitionFiles.length === 0}
+                className={btnPrimary + ' py-1.5 px-3 text-[10px]' + (requiresDocForPending && transitionFiles.length === 0 ? ' opacity-50 cursor-not-allowed' : '')}
               >
                 Confirm
               </button>
