@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, CoolSelect } from './UI';
-import { Plus, Trash2, Shield, Heart, Briefcase, FileText, Printer, ArrowLeft, CheckCircle2, AlertCircle, Save } from 'lucide-react';
+import { Plus, Trash2, Shield, Heart, Briefcase, FileText, Printer, ArrowLeft, CheckCircle2, AlertCircle, Save, Plane } from 'lucide-react';
 import { LOGO_DATA_URI } from '../assets/logoBase64';
 import { RELATIONS } from '../utils/team';
 import { uid, DOB_MIN, dobMax } from '../utils/calc';
@@ -10,7 +10,23 @@ import { ProspectModal } from './BusinessProspects';
 
 // New insurance lines of business — shown as disabled "Coming Soon" pills
 // until their field sets are defined and each gets its own proposal section.
-const COMING_SOON_TYPES = ['Motor', 'Home', 'Fire', 'Marine', 'Travel', 'Indemnity'];
+// Travel graduated to a real section below (types.travel / travelPolicies).
+const COMING_SOON_TYPES = ['Motor', 'Home', 'Fire', 'Marine', 'Indemnity'];
+
+// One empty Travel entry — Card layout mirrors the CRM Data Fields spec
+// (Traveller Name / DOB-Age / Passport / Nationality / Mobile / Email /
+// Trip dates / Destination / Trip Type / Purpose / # Travellers / Sum
+// Insured / PED / Nominee / Premium / Policy No). `sum` and `premium` reuse
+// the same keys basePolicies/termGroups/accidentalPolicies already use, so
+// they get the shared AMOUNT_KEYS comma-formatting for free.
+const EMPTY_TRAVEL_POLICY = {
+  travellerName: '', dobAge: '', passportNumber: '', nationality: '',
+  mobile: '', email: '', tripStartDate: '', tripEndDate: '', destination: '',
+  tripType: '', purpose: '', travellersCount: '', sum: '', pedCondition: '',
+  nominee: '', premium: '', policyNumber: '',
+};
+const TRIP_TYPES = ['Single Trip', 'Multi-trip'];
+const TRAVEL_PURPOSES = ['Leisure', 'Business', 'Study', 'Other'];
 
 export default function InsuranceProposal({ client, isViewer }) {
   const getSavedVal = (subKey, defaultVal) => {
@@ -34,6 +50,7 @@ export default function InsuranceProposal({ client, isViewer }) {
     medical: true,
     term: false,
     accidental: false,
+    travel: false,
   }));
 
   // Applicants List
@@ -111,6 +128,11 @@ export default function InsuranceProposal({ client, isViewer }) {
     { name: '', sum: '', premium: '', riders: '' }
   ]));
 
+  // Travel State
+  const [travelPolicies, setTravelPolicies] = useState(() => getSavedVal('travelPolicies', [
+    { ...EMPTY_TRAVEL_POLICY }
+  ]));
+
   // Preview Mode
   const [isPreview, setIsPreview] = useState(false);
   const [syncStatus, setSyncStatus] = useState(''); // '', 'syncing', 'done', 'error'
@@ -179,6 +201,7 @@ export default function InsuranceProposal({ client, isViewer }) {
         if (parsed.topupPolicies !== undefined) setTopupPolicies(parsed.topupPolicies);
         if (parsed.termGroups !== undefined) setTermGroups(parsed.termGroups);
         if (parsed.accidentalPolicies !== undefined) setAccidentalPolicies(parsed.accidentalPolicies);
+        if (parsed.travelPolicies !== undefined) setTravelPolicies(parsed.travelPolicies);
         return; // loaded draft successfully, skip defaults
       } catch (e) {
         console.error('Error loading insurance proposal draft:', e);
@@ -244,6 +267,7 @@ export default function InsuranceProposal({ client, isViewer }) {
       medical: true,
       term: false,
       accidental: false,
+      travel: false,
     });
     setIsPort(false);
     setPortDate('');
@@ -256,6 +280,7 @@ export default function InsuranceProposal({ client, isViewer }) {
     setAccidentalPolicies([
       { name: '', sum: '', premium: '', riders: '' }
     ]);
+    setTravelPolicies([{ ...EMPTY_TRAVEL_POLICY }]);
   }, [client]);
 
   // Save draft on updates
@@ -274,10 +299,11 @@ export default function InsuranceProposal({ client, isViewer }) {
       basePolicies,
       topupPolicies,
       termGroups,
-      accidentalPolicies
+      accidentalPolicies,
+      travelPolicies
     };
     localStorage.setItem(key, JSON.stringify(draft));
-  }, [client, proposer, types, applicants, isPort, portDate, basePolicies, topupPolicies, termGroups, accidentalPolicies]);
+  }, [client, proposer, types, applicants, isPort, portDate, basePolicies, topupPolicies, termGroups, accidentalPolicies, travelPolicies]);
 
   // Checkbox Toggle Helpers
   const handleTypeChange = (key) => {
@@ -405,6 +431,20 @@ export default function InsuranceProposal({ client, isViewer }) {
     setAccidentalPolicies(prev => prev.map((p, i) => i === index ? { ...p, [key]: v } : p));
   };
 
+  // Add/Remove Travel Entries
+  const addTravelPolicy = () => {
+    setTravelPolicies(prev => [...prev, { ...EMPTY_TRAVEL_POLICY }]);
+  };
+
+  const removeTravelPolicy = (index) => {
+    setTravelPolicies(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateTravelPolicy = (index, key, value) => {
+    const v = AMOUNT_KEYS.includes(key) ? fmtAmt(value) : value;
+    setTravelPolicies(prev => prev.map((p, i) => i === index ? { ...p, [key]: v } : p));
+  };
+
   // Format Helper
   const fmt = (v) => v || '—';
   
@@ -449,14 +489,20 @@ export default function InsuranceProposal({ client, isViewer }) {
       accidentalPolicies.forEach(p => totalAccidental += parseNum(p.premium));
     }
 
+    let totalTravel = 0;
+    if (types.travel) {
+      travelPolicies.forEach(p => totalTravel += parseNum(p.premium));
+    }
+
     const payload = {
       proposerName: proposer,
       clientsCount: applicants.length,
-      types: [types.medical && 'Medical', types.term && 'Term', types.accidental && 'Accidental'].filter(Boolean).join(' + '),
+      types: [types.medical && 'Medical', types.term && 'Term', types.accidental && 'Accidental', types.travel && 'Travel'].filter(Boolean).join(' + '),
       totalMedical,
       totalTerm,
       totalAccidental,
-      totalPremium: totalMedical + totalTerm + totalAccidental,
+      totalTravel,
+      totalPremium: totalMedical + totalTerm + totalAccidental + totalTravel,
       date: new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' }),
       isPort: types.medical ? (isPort ? 'Yes' : 'No') : 'N/A',
       portDate: types.medical && isPort && portDate ? new Date(portDate).toLocaleDateString('en-IN') : ''
@@ -540,6 +586,7 @@ export default function InsuranceProposal({ client, isViewer }) {
       medical: true,
       term: false,
       accidental: false,
+      travel: false,
     });
     setIsPort(false);
     setPortDate('');
@@ -552,10 +599,11 @@ export default function InsuranceProposal({ client, isViewer }) {
     setAccidentalPolicies([
       { name: '', sum: '', premium: '', riders: '' }
     ]);
+    setTravelPolicies([{ ...EMPTY_TRAVEL_POLICY }]);
   };
 
   const handleGenerate = () => {
-    if (!types.medical && !types.term && !types.accidental) {
+    if (!types.medical && !types.term && !types.accidental && !types.travel) {
       alert('Please select at least one proposal type.');
       return;
     }
@@ -564,7 +612,7 @@ export default function InsuranceProposal({ client, isViewer }) {
   };
 
   const getProposalTypesLabel = () => {
-    return [types.medical && 'Medical', types.term && 'Term', types.accidental && 'Accidental']
+    return [types.medical && 'Medical', types.term && 'Term', types.accidental && 'Accidental', types.travel && 'Travel']
       .filter(Boolean)
       .join(' + ');
   };
@@ -610,6 +658,28 @@ export default function InsuranceProposal({ client, isViewer }) {
         table: {
           cols: ['Policy', 'Sum Assured', 'Premium (p.a.)'],
           rows: accs.map(p => [p.name || '—', p.sum ? '₹ ' + p.sum : '—', p.premium ? '₹ ' + p.premium : '—']),
+        },
+      });
+    }
+    if (types.travel) {
+      const trips = (travelPolicies || []).filter(p => p.travellerName || p.destination || p.sum || p.premium);
+      // Travel's Premium is explicitly "after quotation/issuance" per the
+      // CRM Data Fields spec — not yet known at proposal time, unlike the
+      // other three types. Sum Insured IS mandatory up front, so the
+      // prospect's deal-size amount is based on that instead of premium.
+      drafts.push({
+        proposalType: 'Travel Insurance',
+        proposalCategory: 'insurance',
+        amount: (travelPolicies || []).reduce((s, p) => s + parseNum(p.sum), 0),
+        table: {
+          cols: ['Traveller', 'Destination', 'Trip Dates', 'Sum Insured', 'Premium'],
+          rows: trips.map(p => [
+            p.travellerName || '—',
+            p.destination || '—',
+            (p.tripStartDate || p.tripEndDate) ? `${p.tripStartDate || '?'} — ${p.tripEndDate || '?'}` : '—',
+            p.sum ? '₹ ' + p.sum : '—',
+            p.premium ? '₹ ' + p.premium : '—',
+          ]),
         },
       });
     }
@@ -692,6 +762,7 @@ export default function InsuranceProposal({ client, isViewer }) {
       types.medical && 'Medical',
       types.term && 'Term',
       types.accidental && 'Accidental',
+      types.travel && 'Travel',
     ].filter(Boolean);
     const who = proposer || client?.name || 'Client';
     const prevTitle = document.title;
@@ -821,6 +892,15 @@ export default function InsuranceProposal({ client, isViewer }) {
                       className="rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-750"
                     />
                     Accidental
+                  </label>
+                  <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 text-xs font-semibold text-slate-700 dark:text-slate-350 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={types.travel}
+                      onChange={() => handleTypeChange('travel')}
+                      className="rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-750"
+                    />
+                    Travel
                   </label>
                   {COMING_SOON_TYPES.map(label => (
                     <label
@@ -1399,7 +1479,141 @@ export default function InsuranceProposal({ client, isViewer }) {
             </Card>
           )}
 
-          {/* Card 6: Actions */}
+          {/* Card 6: Travel Insurance Section */}
+          {types.travel && (
+            <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-md rounded-[20px] space-y-6">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/60">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-teal-50/50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 flex items-center justify-center border border-teal-100/40 dark:border-teal-900/30">
+                    <Plane size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">✈️ Travel Insurance</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium font-sans">Cover for one trip / traveller group per entry</p>
+                  </div>
+                </div>
+                <button onClick={addTravelPolicy} className={btnSecondary + ' py-1.5 px-3 text-xs'}>
+                  <Plus size={12} /> Add Traveller / Trip
+                </button>
+              </div>
+
+              <div className="space-y-6 max-h-[600px] overflow-y-auto pr-1">
+                {travelPolicies.length === 0 ? (
+                  <div className="text-center py-6 text-sm text-slate-400 dark:text-slate-500 italic">No travellers added. Click "Add Traveller / Trip" to start.</div>
+                ) : (
+                  travelPolicies.map((p, i) => (
+                    <div key={i} className="p-5 rounded-2xl bg-teal-50/20 dark:bg-slate-950/20 border border-teal-100/50 dark:border-slate-805 space-y-5 relative">
+                      <button
+                        onClick={() => removeTravelPolicy(i)}
+                        disabled={travelPolicies.length === 1}
+                        className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 disabled:opacity-30 disabled:hover:text-slate-400 transition-colors"
+                        title="Remove Traveller / Trip"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+
+                      {/* Traveller Details */}
+                      <div className="space-y-3 pr-8">
+                        <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider pl-1.5 border-l-2 border-teal-500 leading-none">Traveller Details</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Traveller Name *</label>
+                            <input type="text" value={p.travellerName} onChange={(e) => updateTravelPolicy(i, 'travellerName', e.target.value)} placeholder="e.g. Rohan Mehta" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">DOB / Age *</label>
+                            <input type="text" value={p.dobAge} onChange={(e) => updateTravelPolicy(i, 'dobAge', e.target.value)} placeholder="e.g. 15-Jun-1990 or 34 yrs" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Passport Number *</label>
+                            <input type="text" value={p.passportNumber} onChange={(e) => updateTravelPolicy(i, 'passportNumber', e.target.value)} placeholder="e.g. M1234567" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Nationality *</label>
+                            <input type="text" value={p.nationality} onChange={(e) => updateTravelPolicy(i, 'nationality', e.target.value)} placeholder="e.g. Indian" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Mobile *</label>
+                            <input type="text" value={p.mobile} onChange={(e) => updateTravelPolicy(i, 'mobile', e.target.value)} placeholder="e.g. 98765 43210" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Email *</label>
+                            <input type="text" value={p.email} onChange={(e) => updateTravelPolicy(i, 'email', e.target.value)} placeholder="e.g. name@email.com" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Trip Details */}
+                      <div className="space-y-3">
+                        <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider pl-1.5 border-l-2 border-teal-500 leading-none">Trip Details</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Trip Start Date *</label>
+                            <input type="date" value={p.tripStartDate} onChange={(e) => updateTravelPolicy(i, 'tripStartDate', e.target.value)} className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Trip End Date *</label>
+                            <input type="date" value={p.tripEndDate} onChange={(e) => updateTravelPolicy(i, 'tripEndDate', e.target.value)} className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Destination Country / Countries *</label>
+                            <input type="text" value={p.destination} onChange={(e) => updateTravelPolicy(i, 'destination', e.target.value)} placeholder="e.g. UK, France" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Trip Type *</label>
+                            <select value={p.tripType} onChange={(e) => updateTravelPolicy(i, 'tripType', e.target.value)} className={selectCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'}>
+                              <option value="">Select…</option>
+                              {TRIP_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Purpose of Travel *</label>
+                            <select value={p.purpose} onChange={(e) => updateTravelPolicy(i, 'purpose', e.target.value)} className={selectCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'}>
+                              <option value="">Select…</option>
+                              {TRAVEL_PURPOSES.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Number of Travellers *</label>
+                            <input type="text" value={p.travellersCount} onChange={(e) => updateTravelPolicy(i, 'travellersCount', e.target.value)} placeholder="e.g. 2" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950 text-right tabular-nums font-semibold'} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Coverage & Documentation */}
+                      <div className="space-y-3">
+                        <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider pl-1.5 border-l-2 border-teal-500 leading-none">Coverage &amp; Documentation</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Sum Insured / Coverage (Rs) *</label>
+                            <input type="text" value={p.sum} onChange={(e) => updateTravelPolicy(i, 'sum', e.target.value)} placeholder="e.g. 5,00,000" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950 text-right tabular-nums font-semibold'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Pre-existing Medical Condition</label>
+                            <input type="text" value={p.pedCondition} onChange={(e) => updateTravelPolicy(i, 'pedCondition', e.target.value)} placeholder="Declare if required" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Nominee Details</label>
+                            <input type="text" value={p.nominee} onChange={(e) => updateTravelPolicy(i, 'nominee', e.target.value)} placeholder="As applicable" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Premium p.a. (Rs)</label>
+                            <input type="text" value={p.premium} onChange={(e) => updateTravelPolicy(i, 'premium', e.target.value)} placeholder="After quotation/issuance" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950 text-right tabular-nums font-semibold'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Policy Number</label>
+                            <input type="text" value={p.policyNumber} onChange={(e) => updateTravelPolicy(i, 'policyNumber', e.target.value)} placeholder="After issuance" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </Card>
+          )}
+
+          {/* Card 7: Actions */}
           <div className="flex items-center justify-end gap-3 pt-2">
             <button onClick={handleGenerate} className={btnPrimary}>
               <Plus size={14} /> Generate Proposal
@@ -1699,6 +1913,109 @@ export default function InsuranceProposal({ client, isViewer }) {
                 </div>
               )}
 
+              {types.travel && (
+                <div style={{ marginTop: '28px' }}>
+                  <div className="psec-title">✈️ Travel Insurance</div>
+                  {travelPolicies.filter(p => p.travellerName || p.destination || p.sum || p.premium).length > 0 && (
+                    <>
+                      <div>
+                        <div className="psub-label psub-travel">Traveller Details</div>
+                        <div className="ptable-wrap">
+                          <table className="ptable">
+                            <thead>
+                              <tr>
+                                <th>#</th>
+                                <th>Traveller Name</th>
+                                <th>DOB / Age</th>
+                                <th>Passport No.</th>
+                                <th>Nationality</th>
+                                <th>Mobile</th>
+                                <th>Email</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {travelPolicies.filter(p => p.travellerName || p.destination || p.sum || p.premium).map((p, i) => (
+                                <tr key={i}>
+                                  <td>{i + 1}</td>
+                                  <td style={{ fontWeight: 600, color: '#0d2a5e' }}>{fmt(p.travellerName)}</td>
+                                  <td>{fmt(p.dobAge)}</td>
+                                  <td>{fmt(p.passportNumber)}</td>
+                                  <td>{fmt(p.nationality)}</td>
+                                  <td>{fmt(p.mobile)}</td>
+                                  <td style={{ fontSize: '12px' }}>{fmt(p.email)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: '18px' }}>
+                        <div className="psub-label psub-travel">Trip Details</div>
+                        <div className="ptable-wrap">
+                          <table className="ptable">
+                            <thead>
+                              <tr>
+                                <th>#</th>
+                                <th>Destination</th>
+                                <th>Trip Type</th>
+                                <th>Purpose</th>
+                                <th>Start Date</th>
+                                <th>End Date</th>
+                                <th># Travellers</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {travelPolicies.filter(p => p.travellerName || p.destination || p.sum || p.premium).map((p, i) => (
+                                <tr key={i}>
+                                  <td>{i + 1}</td>
+                                  <td style={{ fontWeight: 600 }}>{fmt(p.destination)}</td>
+                                  <td>{fmt(p.tripType)}</td>
+                                  <td>{fmt(p.purpose)}</td>
+                                  <td>{p.tripStartDate ? new Date(p.tripStartDate).toLocaleDateString('en-IN') : '—'}</td>
+                                  <td>{p.tripEndDate ? new Date(p.tripEndDate).toLocaleDateString('en-IN') : '—'}</td>
+                                  <td>{fmt(p.travellersCount)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: '18px' }}>
+                        <div className="psub-label psub-travel">Coverage &amp; Documentation</div>
+                        <div className="ptable-wrap">
+                          <table className="ptable">
+                            <thead>
+                              <tr>
+                                <th>#</th>
+                                <th>Sum Insured</th>
+                                <th>Premium (p.a.)</th>
+                                <th>Policy No.</th>
+                                {travelPolicies.some(p => p.pedCondition) && <th>Pre-existing Medical Condition</th>}
+                                {travelPolicies.some(p => p.nominee) && <th>Nominee</th>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {travelPolicies.filter(p => p.travellerName || p.destination || p.sum || p.premium).map((p, i) => (
+                                <tr key={i}>
+                                  <td>{i + 1}</td>
+                                  <td>₹ {fmtINR(p.sum)}</td>
+                                  <td>{p.premium ? '₹ ' + fmtINR(p.premium) : 'Pending quotation'}</td>
+                                  <td>{p.policyNumber || 'Pending issuance'}</td>
+                                  {travelPolicies.some(x => x.pedCondition) && <td style={{ fontSize: '12px', color: 'var(--slate)' }}>{fmt(p.pedCondition)}</td>}
+                                  {travelPolicies.some(x => x.nominee) && <td style={{ fontSize: '12px', color: 'var(--slate)' }}>{fmt(p.nominee)}</td>}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               <div className="prop-footer">
                 <div className="prop-footer-note">This proposal is prepared for discussion purposes only. Final premiums are subject to underwriting and insurer approval. All amounts are in Indian Rupees (₹). Terms and conditions of respective insurers apply.</div>
                 <div className="prop-footer-brand">Team Fintness</div>
@@ -1750,6 +2067,8 @@ const INSURANCE_PRINT_STYLES = `
     --accidental-light: #d1fae5;
     --topup: #6366f1;
     --topup-light: #ede9fe;
+    --travel: #0e7490;
+    --travel-light: #cffafe;
     --danger: #dc2626;
     --radius: 12px;
     --shadow: 0 4px 24px rgba(13,42,94,0.09);
@@ -1860,6 +2179,7 @@ const INSURANCE_PRINT_STYLES = `
   }
   .psub-base { background:var(--medical-light); color:var(--medical); }
   .psub-topup { background:var(--topup-light); color:var(--topup); }
+  .psub-travel { background:var(--travel-light); color:var(--travel); }
 
   .ptable {
     width:100%; border-collapse:collapse; margin-bottom:6px; font-size:13px;

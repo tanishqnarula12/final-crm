@@ -46,6 +46,20 @@ const SELF_EMPLOYED_DOC_CATEGORIES = [
   { key: 'computation3yr', label: '3 Year Computation' },
   { key: 'bankStatement6m', label: '6 Month Bank Statement' },
 ];
+// Travel Insurance's own document checklist — additive to BASE_DOC_CATEGORIES
+// (like the occupation-conditional sets above), shown whenever the prospect
+// includes a Travel Insurance proposal. Keys reuse the existing 'passport' /
+// 'proposalForm' / 'previousPolicy' categories where the concept overlaps.
+const TRAVEL_DOC_CATEGORIES = [
+  { key: 'passport', label: 'Passport Copy' },
+  { key: 'visaCopy', label: 'Visa Copy, if applicable' },
+  { key: 'travelItinerary', label: 'Travel Ticket / Itinerary' },
+  { key: 'proposalForm', label: 'Proposal Form' },
+  { key: 'previousPolicy', label: 'Previous Policy Copy, if applicable' },
+  { key: 'medicalDocuments', label: 'Medical Documents, if required' },
+  { key: 'ageDobProof', label: 'Age / DOB Proof, if required' },
+  { key: 'paymentProof', label: 'Payment Proof' },
+];
 
 // Comprehensive document type list for the smart doc-upload picker.
 // key = storage key, label = display name, group = <optgroup> heading.
@@ -710,13 +724,23 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
   // everything else keeps the generic investment pipeline.
   const stageOptions = hasInsuranceItem ? INSURANCE_PROSPECT_STAGES : PROSPECT_STAGES;
 
+  const hasTravelItem = items.some(it => it.proposalType === 'Travel Insurance');
+
   const requiredDocCategories = useMemo(() => {
     if (!hasInsuranceItem) return [];
     const extra = kyc.occupation === 'Salaried' ? SALARIED_DOC_CATEGORIES
       : kyc.occupation === 'Self Employed' ? SELF_EMPLOYED_DOC_CATEGORIES
       : [];
-    return [...BASE_DOC_CATEGORIES, ...extra];
-  }, [hasInsuranceItem, kyc.occupation]);
+    const travel = hasTravelItem ? TRAVEL_DOC_CATEGORIES : [];
+    // De-dupe by key — Travel reuses passport/proposalForm/previousPolicy,
+    // which could already be present via BASE_DOC_CATEGORIES/extra.
+    const seen = new Set();
+    return [...BASE_DOC_CATEGORIES, ...extra, ...travel].filter(cat => {
+      if (seen.has(cat.key)) return false;
+      seen.add(cat.key);
+      return true;
+    });
+  }, [hasInsuranceItem, hasTravelItem, kyc.occupation]);
 
 
 
