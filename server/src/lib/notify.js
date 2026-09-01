@@ -150,7 +150,7 @@ async function pipelineManagerIds(prisma) {
  * Translate syncBulk domain events into notifications.
  *   • tasks CREATE            → assignee: "New task assigned"
  *   • leads CREATE            → Admins + Internal Managers: "New lead added"
- *   • prospects CREATE        → RM/assignee: "Business prospect assigned"
+ *   • prospects CREATE        → Portfolio/Service Manager (not RM): "Business prospect assigned"
  *   • leads ASSIGN (RM set)   → new RM: "You are now the RM for a lead"
  *   • queries CREATE/ASSIGN   → recipient: "A query has been raised to you"
  *   • queries STAGE→Resolved  → raiser: "Your query has been resolved"
@@ -218,23 +218,18 @@ export async function notifyFromEvents(prisma, events) {
         });
       }
     } else if (ev.type === 'CREATE' && (ev.module === 'investmentProspects' || ev.module === 'insuranceProspects')) {
-      // A new investment prospect starts at "Pre-Qualified", visible only to
-      // its own RM/Portfolio Manager (see permissions.js) — so notify ONLY
-      // those two, never the Service Manager (they can't see it yet; a
+      // The RM is deliberately NOT notified for prospects — only the
+      // Portfolio/Service Manager. A new investment prospect starts at
+      // "Pre-Qualified", visible only to its RM/Portfolio Manager (see
+      // permissions.js), so the only eligible target at that stage is the
+      // Portfolio Manager (the Service Manager can't see it yet; a
       // notification linking to a record they're blocked from opening would
-      // just be broken). Insurance prospects are unaffected — no
-      // Pre-Qualified stage, keep notifying the RM + Service Manager as
-      // before (Service Manager owns changeStage on those and could always
-      // see them). Deduped so the same person holding both roles (or being
-      // the creator) isn't notified twice / about themself.
+      // just be broken). Insurance prospects have no Pre-Qualified stage —
+      // notify the Service Manager, who owns changeStage on those and could
+      // always see them.
       const isPreQualified = ev.module === 'investmentProspects' && rec.stage === 'Pre-Qualified';
-      const targets = isPreQualified
-        ? [rec.assignedTo || rec.relationshipManager, rec.portfolioManager]
-        : [rec.assignedTo || rec.relationshipManager, rec.serviceManager];
-      const seen = new Set();
-      for (const target of targets) {
-        if (!target || target === ev.actorId || seen.has(target)) continue;
-        seen.add(target);
+      const target = isPreQualified ? rec.portfolioManager : rec.serviceManager;
+      if (target && target !== ev.actorId) {
         items.push({
           userId: target, type: NOTIF.PROSPECT_ASSIGNED,
           title: 'Business prospect assigned to you', body: prospectLabel(rec),
@@ -242,18 +237,12 @@ export async function notifyFromEvents(prisma, events) {
         });
       }
     } else if (ev.type === 'STAGE_CHANGE' && ev.module === 'investmentProspects' && ev.to === 'Qualified') {
-      // Someone (often the Portfolio Manager/Internal Manager/Service
-      // Manager, all of whom also hold changeStage) moved it out of
-      // Pre-Qualified — tell the RM their prospect progressed, AND the
-      // Service Manager, since Qualified is the exact moment they gain
-      // visibility into it (see permissions.js). Deduped, actor excluded.
-      const targets = [rec.assignedTo || rec.relationshipManager, rec.serviceManager];
-      const seen = new Set();
-      for (const target of targets) {
-        if (!target || target === ev.actorId || seen.has(target)) continue;
-        seen.add(target);
+      // Tell the Service Manager, since Qualified is the exact moment they
+      // gain visibility into it (see permissions.js). RM deliberately not
+      // notified — see the CREATE case above.
+      if (rec.serviceManager && rec.serviceManager !== ev.actorId) {
         items.push({
-          userId: target, type: NOTIF.PROSPECT_ASSIGNED,
+          userId: rec.serviceManager, type: NOTIF.PROSPECT_ASSIGNED,
           title: 'Prospect moved to Qualified', body: prospectLabel(rec),
           link: { view: 'prospects', id: rec.id },
         });
