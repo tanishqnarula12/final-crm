@@ -78,6 +78,23 @@ const MARINE_DOC_CATEGORIES = [
   { key: 'claimHistoryDeclaration', label: 'Claim History / Declaration, as applicable' },
   { key: 'paymentProof', label: 'Payment Proof, as applicable' },
 ];
+// Motor Insurance's own document checklist — same additive pattern as
+// Travel/Marine above, shown whenever the prospect includes a Motor
+// Insurance proposal. 'KYC – PAN/Aadhaar/Other Valid ID' is skipped as its
+// own category since BASE_DOC_CATEGORIES already always requires Aadhaar +
+// PAN Card; reuses 'proposalForm' / 'paymentProof' where the concept overlaps.
+const MOTOR_DOC_CATEGORIES = [
+  { key: 'rcCopy', label: 'RC Copy' },
+  { key: 'previousInsurancePolicy', label: 'Previous Insurance Policy Copy' },
+  { key: 'vehicleInvoice', label: 'Vehicle Invoice, for new vehicle' },
+  { key: 'addressProof', label: 'Address Proof, if required' },
+  { key: 'pucCertificate', label: 'PUC Certificate, where applicable' },
+  { key: 'vehicleInspectionReport', label: 'Vehicle Inspection / Survey Report, if applicable' },
+  { key: 'loanHypothecationDetails', label: 'Loan / Hypothecation Details, if applicable' },
+  { key: 'ncbProof', label: 'NCB Proof, if required' },
+  { key: 'proposalForm', label: 'Proposal Form' },
+  { key: 'paymentProof', label: 'Payment Proof' },
+];
 
 // Comprehensive document type list for the smart doc-upload picker.
 // key = storage key, label = display name, group = <optgroup> heading.
@@ -744,6 +761,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
 
   const hasTravelItem = items.some(it => it.proposalType === 'Travel Insurance');
   const hasMarineItem = items.some(it => it.proposalType === 'Marine Insurance');
+  const hasMotorItem = items.some(it => it.proposalType === 'Motor Insurance');
 
   const requiredDocCategories = useMemo(() => {
     if (!hasInsuranceItem) return [];
@@ -752,15 +770,17 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
       : [];
     const travel = hasTravelItem ? TRAVEL_DOC_CATEGORIES : [];
     const marine = hasMarineItem ? MARINE_DOC_CATEGORIES : [];
-    // De-dupe by key — Travel/Marine reuse passport/proposalForm/
-    // previousPolicy, which could already be present via BASE/extra/each other.
+    const motor = hasMotorItem ? MOTOR_DOC_CATEGORIES : [];
+    // De-dupe by key — Travel/Marine/Motor reuse passport/proposalForm/
+    // previousPolicy/paymentProof, which could already be present via
+    // BASE/extra/each other.
     const seen = new Set();
-    return [...BASE_DOC_CATEGORIES, ...extra, ...travel, ...marine].filter(cat => {
+    return [...BASE_DOC_CATEGORIES, ...extra, ...travel, ...marine, ...motor].filter(cat => {
       if (seen.has(cat.key)) return false;
       seen.add(cat.key);
       return true;
     });
-  }, [hasInsuranceItem, hasTravelItem, hasMarineItem, kyc.occupation]);
+  }, [hasInsuranceItem, hasTravelItem, hasMarineItem, hasMotorItem, kyc.occupation]);
 
 
 

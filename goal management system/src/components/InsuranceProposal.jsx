@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, CoolSelect } from './UI';
-import { Plus, Trash2, Shield, Heart, Briefcase, FileText, Printer, ArrowLeft, CheckCircle2, AlertCircle, Save, Plane, Ship } from 'lucide-react';
+import { Plus, Trash2, Shield, Heart, Briefcase, FileText, Printer, ArrowLeft, CheckCircle2, AlertCircle, Save, Plane, Ship, Car } from 'lucide-react';
 import { LOGO_DATA_URI } from '../assets/logoBase64';
 import { RELATIONS } from '../utils/team';
 import { uid, DOB_MIN, dobMax } from '../utils/calc';
@@ -10,8 +10,8 @@ import { ProspectModal } from './BusinessProspects';
 
 // New insurance lines of business — shown as disabled "Coming Soon" pills
 // until their field sets are defined and each gets its own proposal section.
-// Travel and Marine graduated to real sections below.
-const COMING_SOON_TYPES = ['Motor', 'Home', 'Fire', 'Indemnity'];
+// Travel, Marine and Motor graduated to real sections below.
+const COMING_SOON_TYPES = ['Home', 'Fire', 'Indemnity'];
 
 // One empty Travel entry — Card layout mirrors the CRM Data Fields spec
 // (Traveller Name / DOB-Age / Passport / Nationality / Mobile / Email /
@@ -43,6 +43,23 @@ const EMPTY_MARINE_POLICY = {
 const MARINE_COVER_TYPES = ['Marine Cargo', 'Marine Hull'];
 const MARINE_TRANSPORT_MODES = ['Sea', 'Air', 'Road', 'Rail'];
 
+// One empty Motor entry — field grouping mirrors the CRM Data Fields spec's
+// own two tables: a primary vehicle/policy set and a secondary
+// identification/issuance set (Engine No. / Chassis No. / Premium / Policy
+// No.). `idv`/`premium` are amount fields (see AMOUNT_KEYS below). IDV is
+// only "Mandatory for Comprehensive/OD" per the spec (not universally
+// Mandatory like Travel/Marine's Sum Insured), but since Premium is
+// explicitly "After issuance", IDV is still the only up-front figure
+// available to size the prospect's deal amount — see openCreateProspect.
+const EMPTY_MOTOR_POLICY = {
+  vehicleOwnerName: '', vehicleRegistrationNumber: '', makeModel: '', variant: '',
+  manufacturingYear: '', registrationDate: '', vehicleType: '', fuelType: '', idv: '',
+  policyType: '', previousPolicyNumber: '', previousInsurer: '', previousPolicyExpiryDate: '',
+  ncbPercent: '', claimHistory: '', hypothecationDetails: '', rcDetails: '',
+  engineNumber: '', chassisNumber: '', premium: '', policyNumber: '',
+};
+const MOTOR_POLICY_TYPES = ['Comprehensive', 'TP', 'OD'];
+
 export default function InsuranceProposal({ client, isViewer }) {
   const getSavedVal = (subKey, defaultVal) => {
     try {
@@ -67,6 +84,7 @@ export default function InsuranceProposal({ client, isViewer }) {
     accidental: false,
     travel: false,
     marine: false,
+    motor: false,
   }));
 
   // Applicants List
@@ -154,6 +172,11 @@ export default function InsuranceProposal({ client, isViewer }) {
     { ...EMPTY_MARINE_POLICY }
   ]));
 
+  // Motor State
+  const [motorPolicies, setMotorPolicies] = useState(() => getSavedVal('motorPolicies', [
+    { ...EMPTY_MOTOR_POLICY }
+  ]));
+
   // Preview Mode
   const [isPreview, setIsPreview] = useState(false);
   const [syncStatus, setSyncStatus] = useState(''); // '', 'syncing', 'done', 'error'
@@ -224,6 +247,7 @@ export default function InsuranceProposal({ client, isViewer }) {
         if (parsed.accidentalPolicies !== undefined) setAccidentalPolicies(parsed.accidentalPolicies);
         if (parsed.travelPolicies !== undefined) setTravelPolicies(parsed.travelPolicies);
         if (parsed.marinePolicies !== undefined) setMarinePolicies(parsed.marinePolicies);
+        if (parsed.motorPolicies !== undefined) setMotorPolicies(parsed.motorPolicies);
         return; // loaded draft successfully, skip defaults
       } catch (e) {
         console.error('Error loading insurance proposal draft:', e);
@@ -291,6 +315,7 @@ export default function InsuranceProposal({ client, isViewer }) {
       accidental: false,
       travel: false,
       marine: false,
+      motor: false,
     });
     setIsPort(false);
     setPortDate('');
@@ -305,6 +330,7 @@ export default function InsuranceProposal({ client, isViewer }) {
     ]);
     setTravelPolicies([{ ...EMPTY_TRAVEL_POLICY }]);
     setMarinePolicies([{ ...EMPTY_MARINE_POLICY }]);
+    setMotorPolicies([{ ...EMPTY_MOTOR_POLICY }]);
   }, [client]);
 
   // Save draft on updates
@@ -325,10 +351,11 @@ export default function InsuranceProposal({ client, isViewer }) {
       termGroups,
       accidentalPolicies,
       travelPolicies,
-      marinePolicies
+      marinePolicies,
+      motorPolicies
     };
     localStorage.setItem(key, JSON.stringify(draft));
-  }, [client, proposer, types, applicants, isPort, portDate, basePolicies, topupPolicies, termGroups, accidentalPolicies, travelPolicies, marinePolicies]);
+  }, [client, proposer, types, applicants, isPort, portDate, basePolicies, topupPolicies, termGroups, accidentalPolicies, travelPolicies, marinePolicies, motorPolicies]);
 
   // Checkbox Toggle Helpers
   const handleTypeChange = (key) => {
@@ -484,6 +511,20 @@ export default function InsuranceProposal({ client, isViewer }) {
     setMarinePolicies(prev => prev.map((p, i) => i === index ? { ...p, [key]: v } : p));
   };
 
+  // Add/Remove Motor Entries
+  const addMotorPolicy = () => {
+    setMotorPolicies(prev => [...prev, { ...EMPTY_MOTOR_POLICY }]);
+  };
+
+  const removeMotorPolicy = (index) => {
+    setMotorPolicies(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateMotorPolicy = (index, key, value) => {
+    const v = AMOUNT_KEYS.includes(key) ? fmtAmt(value) : value;
+    setMotorPolicies(prev => prev.map((p, i) => i === index ? { ...p, [key]: v } : p));
+  };
+
   // Format Helper
   const fmt = (v) => v || '—';
   
@@ -503,7 +544,7 @@ export default function InsuranceProposal({ client, isViewer }) {
     const digits = String(v == null ? '' : v).replace(/[^0-9]/g, '');
     return digits ? Number(digits).toLocaleString('en-IN') : '';
   };
-  const AMOUNT_KEYS = ['sum', 'premium', 'invoiceValue'];
+  const AMOUNT_KEYS = ['sum', 'premium', 'invoiceValue', 'idv'];
 
   // Google Sheets Sync
   const syncToGoogleSheets = async () => {
@@ -538,16 +579,22 @@ export default function InsuranceProposal({ client, isViewer }) {
       marinePolicies.forEach(p => totalMarine += parseNum(p.premium));
     }
 
+    let totalMotor = 0;
+    if (types.motor) {
+      motorPolicies.forEach(p => totalMotor += parseNum(p.premium));
+    }
+
     const payload = {
       proposerName: proposer,
       clientsCount: applicants.length,
-      types: [types.medical && 'Medical', types.term && 'Term', types.accidental && 'Accidental', types.travel && 'Travel', types.marine && 'Marine'].filter(Boolean).join(' + '),
+      types: [types.medical && 'Medical', types.term && 'Term', types.accidental && 'Accidental', types.travel && 'Travel', types.marine && 'Marine', types.motor && 'Motor'].filter(Boolean).join(' + '),
       totalMedical,
       totalTerm,
       totalAccidental,
       totalTravel,
       totalMarine,
-      totalPremium: totalMedical + totalTerm + totalAccidental + totalTravel + totalMarine,
+      totalMotor,
+      totalPremium: totalMedical + totalTerm + totalAccidental + totalTravel + totalMarine + totalMotor,
       date: new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' }),
       isPort: types.medical ? (isPort ? 'Yes' : 'No') : 'N/A',
       portDate: types.medical && isPort && portDate ? new Date(portDate).toLocaleDateString('en-IN') : ''
@@ -633,6 +680,7 @@ export default function InsuranceProposal({ client, isViewer }) {
       accidental: false,
       travel: false,
       marine: false,
+      motor: false,
     });
     setIsPort(false);
     setPortDate('');
@@ -647,10 +695,11 @@ export default function InsuranceProposal({ client, isViewer }) {
     ]);
     setTravelPolicies([{ ...EMPTY_TRAVEL_POLICY }]);
     setMarinePolicies([{ ...EMPTY_MARINE_POLICY }]);
+    setMotorPolicies([{ ...EMPTY_MOTOR_POLICY }]);
   };
 
   const handleGenerate = () => {
-    if (!types.medical && !types.term && !types.accidental && !types.travel && !types.marine) {
+    if (!types.medical && !types.term && !types.accidental && !types.travel && !types.marine && !types.motor) {
       alert('Please select at least one proposal type.');
       return;
     }
@@ -659,7 +708,7 @@ export default function InsuranceProposal({ client, isViewer }) {
   };
 
   const getProposalTypesLabel = () => {
-    return [types.medical && 'Medical', types.term && 'Term', types.accidental && 'Accidental', types.travel && 'Travel', types.marine && 'Marine']
+    return [types.medical && 'Medical', types.term && 'Term', types.accidental && 'Accidental', types.travel && 'Travel', types.marine && 'Marine', types.motor && 'Motor']
       .filter(Boolean)
       .join(' + ');
   };
@@ -751,6 +800,29 @@ export default function InsuranceProposal({ client, isViewer }) {
         },
       });
     }
+    if (types.motor) {
+      const vehicles = (motorPolicies || []).filter(p => p.vehicleOwnerName || p.vehicleRegistrationNumber || p.idv || p.premium);
+      // Motor's Premium/Policy Number are explicitly "After issuance", and
+      // IDV is only "Mandatory for Comprehensive/OD" rather than universally
+      // required — but it's still the only up-front figure available, so
+      // (like Travel/Marine's Sum Insured) it's what the prospect's
+      // deal-size amount is based on.
+      drafts.push({
+        proposalType: 'Motor Insurance',
+        proposalCategory: 'insurance',
+        amount: (motorPolicies || []).reduce((s, p) => s + parseNum(p.idv), 0),
+        table: {
+          cols: ['Vehicle Owner', 'Registration No.', 'Make & Model', 'IDV', 'Premium'],
+          rows: vehicles.map(p => [
+            p.vehicleOwnerName || '—',
+            p.vehicleRegistrationNumber || '—',
+            p.makeModel || '—',
+            p.idv ? '₹ ' + p.idv : '—',
+            p.premium ? '₹ ' + p.premium : '—',
+          ]),
+        },
+      });
+    }
 
     // Block empty proposals up front — a prospect can't be created without a
     // premium amount entered for every selected insurance type.
@@ -832,6 +904,7 @@ export default function InsuranceProposal({ client, isViewer }) {
       types.accidental && 'Accidental',
       types.travel && 'Travel',
       types.marine && 'Marine',
+      types.motor && 'Motor',
     ].filter(Boolean);
     const who = proposer || client?.name || 'Client';
     const prevTitle = document.title;
@@ -979,6 +1052,15 @@ export default function InsuranceProposal({ client, isViewer }) {
                       className="rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-750"
                     />
                     Marine
+                  </label>
+                  <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 text-xs font-semibold text-slate-700 dark:text-slate-350 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={types.motor}
+                      onChange={() => handleTypeChange('motor')}
+                      className="rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-750"
+                    />
+                    Motor
                   </label>
                   {COMING_SOON_TYPES.map(label => (
                     <label
@@ -1830,7 +1912,154 @@ export default function InsuranceProposal({ client, isViewer }) {
             </Card>
           )}
 
-          {/* Card 8: Actions */}
+          {/* Card 8: Motor Insurance Section */}
+          {types.motor && (
+            <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-md rounded-[20px] space-y-6">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/60">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-orange-50/50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center border border-orange-100/40 dark:border-orange-900/30">
+                    <Car size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">🚗 Motor Insurance</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium font-sans">Cover for one vehicle / policy per entry</p>
+                  </div>
+                </div>
+                <button onClick={addMotorPolicy} className={btnSecondary + ' py-1.5 px-3 text-xs'}>
+                  <Plus size={12} /> Add Vehicle
+                </button>
+              </div>
+
+              <div className="space-y-6 max-h-[600px] overflow-y-auto pr-1">
+                {motorPolicies.length === 0 ? (
+                  <div className="text-center py-6 text-sm text-slate-400 dark:text-slate-500 italic">No vehicles added. Click "Add Vehicle" to start.</div>
+                ) : (
+                  motorPolicies.map((p, i) => (
+                    <div key={i} className="p-5 rounded-2xl bg-orange-50/20 dark:bg-slate-950/20 border border-orange-100/50 dark:border-slate-805 space-y-5 relative">
+                      <button
+                        onClick={() => removeMotorPolicy(i)}
+                        disabled={motorPolicies.length === 1}
+                        className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 disabled:opacity-30 disabled:hover:text-slate-400 transition-colors"
+                        title="Remove Vehicle"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+
+                      {/* Vehicle Details */}
+                      <div className="space-y-3 pr-8">
+                        <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider pl-1.5 border-l-2 border-orange-500 leading-none">Vehicle Details</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Vehicle Owner Name *</label>
+                            <input type="text" value={p.vehicleOwnerName} onChange={(e) => updateMotorPolicy(i, 'vehicleOwnerName', e.target.value)} placeholder="e.g. Rohan Mehta" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Vehicle Registration Number *</label>
+                            <input type="text" value={p.vehicleRegistrationNumber} onChange={(e) => updateMotorPolicy(i, 'vehicleRegistrationNumber', e.target.value)} placeholder="e.g. MH12AB1234" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Make &amp; Model *</label>
+                            <input type="text" value={p.makeModel} onChange={(e) => updateMotorPolicy(i, 'makeModel', e.target.value)} placeholder="e.g. Maruti Swift" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Variant</label>
+                            <input type="text" value={p.variant} onChange={(e) => updateMotorPolicy(i, 'variant', e.target.value)} placeholder="As applicable" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Manufacturing Year *</label>
+                            <input type="text" value={p.manufacturingYear} onChange={(e) => updateMotorPolicy(i, 'manufacturingYear', e.target.value)} placeholder="e.g. 2022" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Registration Date *</label>
+                            <input type="date" value={p.registrationDate} onChange={(e) => updateMotorPolicy(i, 'registrationDate', e.target.value)} className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Vehicle Type *</label>
+                            <input type="text" value={p.vehicleType} onChange={(e) => updateMotorPolicy(i, 'vehicleType', e.target.value)} placeholder="e.g. Private Car / Two-wheeler" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Fuel Type *</label>
+                            <input type="text" value={p.fuelType} onChange={(e) => updateMotorPolicy(i, 'fuelType', e.target.value)} placeholder="e.g. Petrol / Diesel / EV" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">IDV (Rs) — for Comprehensive/OD</label>
+                            <input type="text" value={p.idv} onChange={(e) => updateMotorPolicy(i, 'idv', e.target.value)} placeholder="e.g. 5,50,000" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950 text-right tabular-nums font-semibold'} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Policy & Renewal Details */}
+                      <div className="space-y-3">
+                        <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider pl-1.5 border-l-2 border-orange-500 leading-none">Policy &amp; Renewal Details</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Policy Type *</label>
+                            <select value={p.policyType} onChange={(e) => updateMotorPolicy(i, 'policyType', e.target.value)} className={selectCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'}>
+                              <option value="">Select…</option>
+                              {MOTOR_POLICY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Previous Policy Number</label>
+                            <input type="text" value={p.previousPolicyNumber} onChange={(e) => updateMotorPolicy(i, 'previousPolicyNumber', e.target.value)} placeholder="For renewal" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Previous Insurer</label>
+                            <input type="text" value={p.previousInsurer} onChange={(e) => updateMotorPolicy(i, 'previousInsurer', e.target.value)} placeholder="For renewal" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Previous Policy Expiry Date</label>
+                            <input type="date" value={p.previousPolicyExpiryDate} onChange={(e) => updateMotorPolicy(i, 'previousPolicyExpiryDate', e.target.value)} className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">NCB %</label>
+                            <input type="text" value={p.ncbPercent} onChange={(e) => updateMotorPolicy(i, 'ncbPercent', e.target.value)} placeholder="Renewal, if applicable" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Claim History</label>
+                            <input type="text" value={p.claimHistory} onChange={(e) => updateMotorPolicy(i, 'claimHistory', e.target.value)} placeholder="Renewal, if applicable" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Hypothecation / Financier Details</label>
+                            <input type="text" value={p.hypothecationDetails} onChange={(e) => updateMotorPolicy(i, 'hypothecationDetails', e.target.value)} placeholder="If applicable" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">RC Details *</label>
+                            <input type="text" value={p.rcDetails} onChange={(e) => updateMotorPolicy(i, 'rcDetails', e.target.value)} placeholder="e.g. RC number / owner details" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Identification & Issuance Details */}
+                      <div className="space-y-3">
+                        <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider pl-1.5 border-l-2 border-orange-500 leading-none">Identification &amp; Issuance Details</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Engine Number *</label>
+                            <input type="text" value={p.engineNumber} onChange={(e) => updateMotorPolicy(i, 'engineNumber', e.target.value)} placeholder="e.g. G12B1234567" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Chassis Number *</label>
+                            <input type="text" value={p.chassisNumber} onChange={(e) => updateMotorPolicy(i, 'chassisNumber', e.target.value)} placeholder="e.g. MA3ERLF1S00123456" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Premium (Rs)</label>
+                            <input type="text" value={p.premium} onChange={(e) => updateMotorPolicy(i, 'premium', e.target.value)} placeholder="After issuance" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950 text-right tabular-nums font-semibold'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Policy Number</label>
+                            <input type="text" value={p.policyNumber} onChange={(e) => updateMotorPolicy(i, 'policyNumber', e.target.value)} placeholder="After issuance" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </Card>
+          )}
+
+          {/* Card 9: Actions */}
           <div className="flex items-center justify-end gap-3 pt-2">
             <button onClick={handleGenerate} className={btnPrimary}>
               <Plus size={14} /> Generate Proposal
@@ -2319,6 +2548,109 @@ export default function InsuranceProposal({ client, isViewer }) {
                 </div>
               )}
 
+              {types.motor && (
+                <div style={{ marginTop: '28px' }}>
+                  <div className="psec-title">🚗 Motor Insurance</div>
+                  {motorPolicies.filter(p => p.vehicleOwnerName || p.vehicleRegistrationNumber || p.idv || p.premium).length > 0 && (
+                    <>
+                      <div>
+                        <div className="psub-label psub-motor">Vehicle Details</div>
+                        <div className="ptable-wrap">
+                          <table className="ptable">
+                            <thead>
+                              <tr>
+                                <th>#</th>
+                                <th>Vehicle Owner</th>
+                                <th>Registration No.</th>
+                                <th>Make &amp; Model</th>
+                                <th>Mfg Year</th>
+                                <th>Vehicle Type</th>
+                                <th>Fuel Type</th>
+                                <th>IDV</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {motorPolicies.filter(p => p.vehicleOwnerName || p.vehicleRegistrationNumber || p.idv || p.premium).map((p, i) => (
+                                <tr key={i}>
+                                  <td>{i + 1}</td>
+                                  <td style={{ fontWeight: 600, color: '#0d2a5e' }}>{fmt(p.vehicleOwnerName)}</td>
+                                  <td>{fmt(p.vehicleRegistrationNumber)}</td>
+                                  <td>{fmt(p.makeModel)}{p.variant ? ` (${p.variant})` : ''}</td>
+                                  <td>{fmt(p.manufacturingYear)}</td>
+                                  <td>{fmt(p.vehicleType)}</td>
+                                  <td>{fmt(p.fuelType)}</td>
+                                  <td>{p.idv ? '₹ ' + fmtINR(p.idv) : '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: '18px' }}>
+                        <div className="psub-label psub-motor">Policy &amp; Renewal Details</div>
+                        <div className="ptable-wrap">
+                          <table className="ptable">
+                            <thead>
+                              <tr>
+                                <th>#</th>
+                                <th>Policy Type</th>
+                                <th>Previous Insurer</th>
+                                <th>Previous Policy No.</th>
+                                <th>NCB %</th>
+                                <th>Claim History</th>
+                                <th>RC Details</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {motorPolicies.filter(p => p.vehicleOwnerName || p.vehicleRegistrationNumber || p.idv || p.premium).map((p, i) => (
+                                <tr key={i}>
+                                  <td>{i + 1}</td>
+                                  <td style={{ fontWeight: 600 }}>{fmt(p.policyType)}</td>
+                                  <td>{fmt(p.previousInsurer)}</td>
+                                  <td>{fmt(p.previousPolicyNumber)}</td>
+                                  <td>{fmt(p.ncbPercent)}</td>
+                                  <td style={{ fontSize: '12px' }}>{fmt(p.claimHistory)}</td>
+                                  <td style={{ fontSize: '12px' }}>{fmt(p.rcDetails)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: '18px' }}>
+                        <div className="psub-label psub-motor">Identification &amp; Issuance Details</div>
+                        <div className="ptable-wrap">
+                          <table className="ptable">
+                            <thead>
+                              <tr>
+                                <th>#</th>
+                                <th>Engine No.</th>
+                                <th>Chassis No.</th>
+                                <th>Premium</th>
+                                <th>Policy No.</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {motorPolicies.filter(p => p.vehicleOwnerName || p.vehicleRegistrationNumber || p.idv || p.premium).map((p, i) => (
+                                <tr key={i}>
+                                  <td>{i + 1}</td>
+                                  <td>{fmt(p.engineNumber)}</td>
+                                  <td>{fmt(p.chassisNumber)}</td>
+                                  <td>{p.premium ? '₹ ' + fmtINR(p.premium) : 'Pending issuance'}</td>
+                                  <td>{p.policyNumber || 'Pending issuance'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               <div className="prop-footer">
                 <div className="prop-footer-note">This proposal is prepared for discussion purposes only. Final premiums are subject to underwriting and insurer approval. All amounts are in Indian Rupees (₹). Terms and conditions of respective insurers apply.</div>
                 <div className="prop-footer-brand">Team Fintness</div>
@@ -2374,6 +2706,8 @@ const INSURANCE_PRINT_STYLES = `
     --travel-light: #cffafe;
     --marine: #0369a1;
     --marine-light: #e0f2fe;
+    --motor: #c2410c;
+    --motor-light: #ffedd5;
     --danger: #dc2626;
     --radius: 12px;
     --shadow: 0 4px 24px rgba(13,42,94,0.09);
@@ -2486,6 +2820,7 @@ const INSURANCE_PRINT_STYLES = `
   .psub-topup { background:var(--topup-light); color:var(--topup); }
   .psub-travel { background:var(--travel-light); color:var(--travel); }
   .psub-marine { background:var(--marine-light); color:var(--marine); }
+  .psub-motor { background:var(--motor-light); color:var(--motor); }
 
   .ptable {
     width:100%; border-collapse:collapse; margin-bottom:6px; font-size:13px;
