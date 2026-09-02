@@ -3,7 +3,7 @@ import {
   TrendingUp, TrendingDown, PiggyBank, ArrowDownLeft, ArrowUpRight, Repeat,
   Shield, HeartPulse, Activity, FileBadge, Users, UserPlus, UserCheck, Skull, Clock,
   CalendarCheck, ListChecks, Briefcase, Landmark, Coins, Sparkles, PauseCircle,
-  Calendar, CheckSquare, ExternalLink, AlertCircle, Video, Target
+  Calendar, CheckSquare, ExternalLink, AlertCircle, Video, Target, Plane, Ship, Car
 } from 'lucide-react';
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip
@@ -16,6 +16,7 @@ import { loadTasks, TASK_STAGES, STAGE_THEME } from '../utils/tasks';
 import { loadMeetings, MEETING_STATUSES } from '../utils/meetings';
 import { hasAllocation, allocationTotals } from '../utils/assets';
 import { isPolicy } from '../utils/cobrModules';
+import { isCobrTask, cobrTotals } from '../utils/cobr';
 
 // Parse "₹ 50,000" / "50000" / numbers → number
 const num = (v) => Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
@@ -123,18 +124,50 @@ export default function DashboardView({
     const term = premiumOf('Term Insurance');
     const medical = premiumOf('Medical Insurance');
     const accidental = premiumOf('Accidental Insurance');
+    // Travel/Marine/Motor Insurance are real proposal types too (see
+    // InsuranceProposal.jsx) — they were missing here, which silently
+    // dropped their premium from every dashboard insurance total.
+    const travel = premiumOf('Travel Insurance');
+    const marine = premiumOf('Marine Insurance');
+    const motor = premiumOf('Motor Insurance');
     const issued = items.filter(p => p.stage === 'Policy Issued').length;
     const rejectedAmt = items.filter(p => p.stage === 'Policy Rejected').reduce((s, p) => s + num(p.amount), 0);
     const types = [
       { label: 'Term', count: countOf('Term Insurance'), color: '#3b82f6' },
       { label: 'Medical', count: countOf('Medical Insurance'), color: '#10b981' },
       { label: 'Accidental', count: countOf('Accidental Insurance'), color: '#8b5cf6' },
+      { label: 'Travel', count: countOf('Travel Insurance'), color: '#0e7490' },
+      { label: 'Marine', count: countOf('Marine Insurance'), color: '#0369a1' },
+      { label: 'Motor', count: countOf('Motor Insurance'), color: '#c2410c' },
     ];
     const stageMap = {};
     items.forEach(p => { const s = p.stage || 'Qualified'; stageMap[s] = (stageMap[s] || 0) + 1; });
-    const totalPremium = term + medical + accidental;
-    return { term, medical, accidental, totalPremium, netFlow: totalPremium - rejectedAmt, rejectedAmt, issued, types, stages: stageMap, count: items.length };
+    const totalPremium = term + medical + accidental + travel + marine + motor;
+    return { term, medical, accidental, travel, marine, motor, totalPremium, netFlow: totalPremium - rejectedAmt, rejectedAmt, issued, types, stages: stageMap, count: items.length };
   }, [prospects]);
+
+  // 2b. COBR (Change of Broker) flow — COBR IN vs COBR OUT volume, from the
+  // dedicated COBR task register (utils/cobr.js — a COBR record is a Task,
+  // not a Prospect). Same in-minus-out netting convention as Net SIP Volume
+  // / Net Lumpsum Flow above. Row totals are summed regardless of stage —
+  // cobrTotals' own contract computes them the same way at every stage.
+  const cobr = useMemo(() => {
+    const items = tasks.filter(isCobrTask);
+    const sumOf = (type) => items.filter(t => t.cobrType === type).reduce((s, t) => s + cobrTotals(t.cobrEntries).total, 0);
+    const cobrIn = sumOf('COBR IN');
+    const cobrOut = sumOf('COBR OUT');
+    return { in: cobrIn, out: cobrOut, net: cobrIn - cobrOut, count: items.length };
+  }, [tasks]);
+
+  // 2c. "Other Proposals" breakdown, extended with COBR IN/OUT so the list
+  // genuinely covers every transaction type outside SIP/Lumpsum/Insurance —
+  // not just the investment-prospect ones.
+  const otherAndCobr = useMemo(() => {
+    const rows = [...inv.otherByType];
+    if (cobr.in > 0) rows.push({ type: 'COBR IN', amount: cobr.in });
+    if (cobr.out > 0) rows.push({ type: 'COBR OUT', amount: cobr.out });
+    return rows.sort((a, b) => b.amount - a.amount);
+  }, [inv.otherByType, cobr]);
 
   // 3. Client metrics calculations
   const cli = useMemo(() => {
@@ -371,11 +404,12 @@ export default function DashboardView({
 
           {/* Business Overview */}
           <section className="space-y-3.5">
-            <SectionHeader icon={TrendingUp} accent="cyan" title="Business Overview" subtitle="Net new business flow across SIP, lumpsum & insurance this month" />
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <SectionHeader icon={TrendingUp} accent="cyan" title="Business Overview" subtitle="Net new business flow across SIP, lumpsum, insurance & COBR this month" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <HeroKpi icon={TrendingUp} accent="blue" label="Net SIP Volume" value={fmtINR(inv.netSip)} hint="Monthly registrations − cancellations" signed={inv.netSip} />
               <HeroKpi icon={Coins} accent="cyan" label="New Lumpsum Flow" value={fmtINR(inv.netLump)} hint="Monthly lumpsum − redemptions" signed={inv.netLump} />
               <HeroKpi icon={HeartPulse} accent="emerald" label="Net Insurance Flow" value={fmtINR(ins.netFlow)} hint="Premium booked − rejected policies" signed={ins.netFlow} />
+              <HeroKpi icon={Repeat} accent="violet" label="Net COBR Flow" value={fmtINR(cobr.net)} hint="COBR IN − COBR OUT this period" signed={cobr.net} />
             </div>
           </section>
 
@@ -393,51 +427,38 @@ export default function DashboardView({
                 inRow={{ icon: ArrowUpRight, label: 'Lumpsum Investment', value: inv.lump }}
                 outRow={{ icon: ArrowDownLeft, label: 'Redemption Flow', value: inv.redeem }}
               />
-              <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl flex flex-col justify-between bg-white dark:bg-slate-900">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-550 flex items-center justify-center shadow-sm"><Repeat size={14} /></span>
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Other Proposals</h4>
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Pause, STP, SWP, Switches</p>
-                  </div>
-                </div>
-                <div className="flex items-end gap-3 mt-6">
-                  <div>
-                    <div className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums tracking-tight">{inv.otherCount}</div>
-                    <div className="text-[9px] text-slate-450 dark:text-slate-500 font-extrabold uppercase tracking-wider mt-0.5">Active proposals</div>
-                  </div>
-                  <div className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-50 dark:bg-slate-800 text-slate-650 dark:text-slate-350 text-[10px] font-bold border border-slate-200/40 dark:border-slate-700">
-                    {fmtINR(inv.otherAmt)}
-                  </div>
-                </div>
-              </Card>
+              <FlowCard
+                title="Net COBR Flow" net={cobr.net}
+                inRow={{ icon: ArrowUpRight, label: 'COBR IN', value: cobr.in }}
+                outRow={{ icon: ArrowDownLeft, label: 'COBR OUT', value: cobr.out }}
+              />
             </div>
 
-            {/* Other Proposals — grouped by transaction type */}
+            {/* Other Proposals — grouped by transaction type, including COBR */}
             <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900">
               <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
                 <div>
                   <h4 className="text-xs font-bold text-slate-850 dark:text-slate-200 uppercase tracking-wider">Other Proposals</h4>
-                  <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Transaction types outside SIP & Lumpsum flows</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Transaction types outside SIP & Lumpsum flows, plus COBR</p>
                 </div>
                 <Repeat size={15} className="text-slate-400 dark:text-slate-500" />
               </div>
-              {inv.otherByType.length > 0 ? (
+              {otherAndCobr.length > 0 ? (
                 <>
                   <div className="space-y-3">
-                    {(showAllOther ? inv.otherByType : inv.otherByType.slice(0, 5)).map((t) => (
+                    {(showAllOther ? otherAndCobr : otherAndCobr.slice(0, 5)).map((t) => (
                       <div key={t.type} className="flex items-center justify-between gap-3 text-xs font-bold">
                         <span className="text-slate-650 dark:text-slate-350 truncate">{t.type}</span>
                         <span className="text-slate-900 dark:text-white tabular-nums shrink-0">{fmtINR(t.amount)}</span>
                       </div>
                     ))}
                   </div>
-                  {inv.otherByType.length > 5 && (
+                  {otherAndCobr.length > 5 && (
                     <button
                       onClick={() => setShowAllOther(v => !v)}
                       className="w-full mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800 text-center text-[11px] font-bold text-blue-600 dark:text-blue-450 hover:underline cursor-pointer"
                     >
-                      {showAllOther ? 'Show Less' : `View All (${inv.otherByType.length})`}
+                      {showAllOther ? 'Show Less' : `View All (${otherAndCobr.length})`}
                     </button>
                   )}
                 </>
@@ -662,6 +683,9 @@ export default function DashboardView({
                     <PremiumRow icon={Shield} label="Term Life" value={ins.term} />
                     <PremiumRow icon={HeartPulse} label="Medical Health" value={ins.medical} />
                     <PremiumRow icon={Activity} label="Accidental" value={ins.accidental} />
+                    <PremiumRow icon={Plane} label="Travel" value={ins.travel} />
+                    <PremiumRow icon={Ship} label="Marine" value={ins.marine} />
+                    <PremiumRow icon={Car} label="Motor" value={ins.motor} />
                   </div>
                 </div>
                 <div className="pt-3.5 mt-4 border-t border-slate-105 dark:border-slate-800 flex items-center justify-between">
@@ -979,6 +1003,7 @@ const ICON_THEMES = {
   emerald: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400',
   blue: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400',
   cyan: 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400',
+  violet: 'bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400',
 };
 
 function HeroKpi({ icon: Icon, accent, label, value, hint, signed }) {
