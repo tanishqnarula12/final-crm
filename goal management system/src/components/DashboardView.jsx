@@ -431,6 +431,10 @@ export default function DashboardView({
                 title="Net COBR Flow" net={cobr.net}
                 inRow={{ icon: ArrowUpRight, label: 'COBR IN', value: cobr.in }}
                 outRow={{ icon: ArrowDownLeft, label: 'COBR OUT', value: cobr.out }}
+                extraRows={[
+                  { icon: PiggyBank, label: 'SIP Registration', value: inv.sipIn },
+                  { icon: Coins, label: 'Lumpsum Investment', value: inv.lump },
+                ]}
               />
             </div>
 
@@ -1011,9 +1015,9 @@ function HeroKpi({ icon: Icon, accent, label, value, hint, signed }) {
   return (
     <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 transition-colors shadow-sm shadow-slate-100/50 dark:shadow-none">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10.5px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none">{label}</p>
-          <p className={`text-2xl sm:text-3xl font-black tracking-tight tabular-nums mt-3.5 leading-none ${trendColor || 'text-slate-900 dark:text-white'}`}>{value}</p>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10.5px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide leading-tight">{label}</p>
+          <p className={`text-xl sm:text-2xl font-black tracking-tight tabular-nums mt-3.5 leading-none whitespace-nowrap ${trendColor || 'text-slate-900 dark:text-white'}`}>{value}</p>
           {hint && <p className="text-xs text-slate-400 dark:text-slate-500 mt-3 font-medium truncate leading-none">{hint}</p>}
         </div>
         <span className={`shrink-0 w-9.5 h-9.5 rounded-xl flex items-center justify-center ${ICON_THEMES[accent] || 'bg-slate-50 text-slate-500'}`}>
@@ -1024,7 +1028,11 @@ function HeroKpi({ icon: Icon, accent, label, value, hint, signed }) {
   );
 }
 
-function FlowCard({ title, net, inRow, outRow }) {
+// extraRows (optional): additional reference-only line items shown below the
+// netted in/out pair — e.g. Net COBR Flow also surfacing SIP Registration &
+// Lumpsum Investment for a quick combined view. Styled neutrally (slate, not
+// green/red) since they don't feed into `net` above.
+function FlowCard({ title, net, inRow, outRow, extraRows }) {
   const InIcon = inRow.icon, OutIcon = outRow.icon;
   return (
     <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl flex flex-col justify-between bg-white dark:bg-slate-900 transition-colors">
@@ -1033,19 +1041,33 @@ function FlowCard({ title, net, inRow, outRow }) {
           <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">{title}</h4>
           {net < 0 ? <TrendingDown size={14} className="text-rose-500 shrink-0" /> : <TrendingUp size={14} className="text-emerald-500 shrink-0" />}
         </div>
-        <div className={`text-2xl font-bold tabular-nums tracking-tight leading-none ${net < 0 ? 'text-rose-600 dark:text-rose-455' : 'text-slate-900 dark:text-white'}`}>{fmtINR(net)}</div>
+        <div className={`text-2xl font-bold tabular-nums tracking-tight leading-none whitespace-nowrap ${net < 0 ? 'text-rose-600 dark:text-rose-455' : 'text-slate-900 dark:text-white'}`}>{fmtINR(net)}</div>
       </div>
       <div className="space-y-2 mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-850">
         <div className="flex items-center gap-2">
           <span className="w-6.5 h-6.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-450 flex items-center justify-center shrink-0"><InIcon size={12} /></span>
-          <span className="text-xs font-bold text-slate-500">{inRow.label}</span>
-          <span className="ml-auto text-xs font-black text-emerald-600 dark:text-emerald-450 tabular-nums">{fmtINR(inRow.value)}</span>
+          <span className="text-xs font-bold text-slate-500 truncate">{inRow.label}</span>
+          <span className="ml-auto text-xs font-black text-emerald-600 dark:text-emerald-450 tabular-nums shrink-0">{fmtINR(inRow.value)}</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-6.5 h-6.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-450 flex items-center justify-center shrink-0"><OutIcon size={12} /></span>
-          <span className="text-xs font-bold text-slate-500">{outRow.label}</span>
-          <span className="ml-auto text-xs font-black text-rose-600 dark:text-rose-450 tabular-nums">{fmtINR(outRow.value)}</span>
+          <span className="text-xs font-bold text-slate-500 truncate">{outRow.label}</span>
+          <span className="ml-auto text-xs font-black text-rose-600 dark:text-rose-450 tabular-nums shrink-0">{fmtINR(outRow.value)}</span>
         </div>
+        {extraRows && extraRows.length > 0 && (
+          <div className="space-y-2 pt-2 mt-1 border-t border-dashed border-slate-150 dark:border-slate-800">
+            {extraRows.map((r) => {
+              const RowIcon = r.icon;
+              return (
+                <div key={r.label} className="flex items-center gap-2">
+                  <span className="w-6.5 h-6.5 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center shrink-0"><RowIcon size={12} /></span>
+                  <span className="text-xs font-bold text-slate-500 truncate">{r.label}</span>
+                  <span className="ml-auto text-xs font-black text-slate-700 dark:text-slate-300 tabular-nums shrink-0">{fmtINR(r.value)}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </Card>
   );
