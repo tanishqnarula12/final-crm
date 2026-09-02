@@ -75,6 +75,8 @@ const MARINE_DOC_CATEGORIES = [
   { key: 'gstCertificate', label: 'GST Certificate' },
   { key: 'iecCertificate', label: 'IEC Certificate, for international trade where applicable' },
   { key: 'previousPolicy', label: 'Previous Policy Copy' },
+  { key: 'claimHistoryDeclaration', label: 'Claim History / Declaration, as applicable' },
+  { key: 'paymentProof', label: 'Payment Proof, as applicable' },
 ];
 
 // Comprehensive document type list for the smart doc-upload picker.
