@@ -1036,8 +1036,8 @@ function HeroKpi({ icon: Icon, accent, label, value, hint, signed }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-[10.5px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide leading-tight">{label}</p>
-          <p className={`text-xl sm:text-2xl font-black tracking-tight tabular-nums mt-3.5 leading-none whitespace-nowrap ${trendColor || 'text-slate-900 dark:text-white'}`}>{value}</p>
-          {hint && <p className="text-xs text-slate-400 dark:text-slate-500 mt-3 font-medium truncate leading-none">{hint}</p>}
+          <p className={`text-xl sm:text-2xl font-black tracking-tight tabular-nums mt-2.5 leading-none whitespace-nowrap ${trendColor || 'text-slate-900 dark:text-white'}`}>{value}</p>
+          {hint && <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-2 font-medium leading-snug">{hint}</p>}
         </div>
         <span className={`shrink-0 w-9.5 h-9.5 rounded-xl flex items-center justify-center ${ICON_THEMES[accent] || 'bg-slate-50 text-slate-500'}`}>
           <Icon size={17} />
