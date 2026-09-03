@@ -1041,7 +1041,7 @@ function HeroKpi({ icon: Icon, accent, label, value, hint, signed }) {
     <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 transition-colors shadow-sm shadow-slate-100/50 dark:shadow-none">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[10.5px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide leading-tight">{label}</p>
+          <p className="text-[10.5px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide leading-tight min-h-[2.5em]">{label}</p>
           <p className={`text-xl sm:text-2xl font-black tracking-tight tabular-nums mt-2.5 leading-none whitespace-nowrap ${trendColor || 'text-slate-900 dark:text-white'}`}>{value}</p>
           {hint && <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-2 font-medium leading-snug">{hint}</p>}
         </div>
