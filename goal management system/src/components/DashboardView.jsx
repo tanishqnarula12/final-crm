@@ -404,7 +404,7 @@ export default function DashboardView({
 
           {/* Business Overview */}
           <section className="space-y-3.5">
-            <SectionHeader icon={TrendingUp} accent="cyan" title="Business Overview" subtitle="Net new business flow across SIP, lumpsum, insurance & COBR this month" />
+            <SectionHeader icon={TrendingUp} accent="cyan" title="Business Overview" subtitle="Net new business flow across SIP, lumpsum, insurance & COBR this month" tag="Yearly" />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <HeroKpi icon={TrendingUp} accent="blue" label="Net SIP Volume" value={fmtINR(inv.netSip)} hint="Monthly registrations − cancellations" signed={inv.netSip} />
               <HeroKpi icon={Coins} accent="cyan" label="New Lumpsum Flow" value={fmtINR(inv.netLump)} hint="Monthly lumpsum − redemptions" signed={inv.netLump} />
@@ -416,7 +416,7 @@ export default function DashboardView({
           {/* Investments Section */}
           <section className="space-y-3.5">
             <SectionHeader icon={TrendingUp} accent="emerald" title="Investment Operations" subtitle="SIP, lumpsum & redemption flows from active proposals" />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
               <FlowCard
                 title="Net SIP Book" net={inv.netSip}
                 inRow={{ icon: ArrowUpRight, label: 'SIP Registration', value: inv.sipIn }}
@@ -660,16 +660,30 @@ export default function DashboardView({
                 ) : null}
               </Card>
 
-              {/* New Group Leaders This Month */}
+              {/* New Group Leaders & Applicants This Month — Group Leaders is
+                  the count of new client groups; Applicants is the total
+                  people this adds (each leader + their family members). */}
               <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl md:col-span-1 flex flex-col justify-between bg-white dark:bg-slate-900">
                 <div>
-                  <h4 className="text-xs font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider mb-4">New Group Leaders</h4>
-                  <div className="flex items-center gap-3">
-                    <span className="w-9.5 h-9.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0"><UserPlus size={17} /></span>
-                    <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">{cli.newLeads}</p>
+                  <h4 className="text-xs font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider mb-4">New This Month</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-2.5">
+                      <span className="w-9.5 h-9.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0"><UserPlus size={17} /></span>
+                      <div>
+                        <p className="text-2xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">{cli.newLeads}</p>
+                        <p className="text-[9px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wide mt-1.5 leading-tight">Group Leaders</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2.5">
+                      <span className="w-9.5 h-9.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0"><Users size={17} /></span>
+                      <div>
+                        <p className="text-2xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">{cli.newApplicants}</p>
+                        <p className="text-[9px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wide mt-1.5 leading-tight">Applicants Total</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <p className="text-[10px] text-slate-450 dark:text-slate-500 font-bold mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800">Group Leaders Added This Month</p>
+                <p className="text-[10px] text-slate-450 dark:text-slate-500 font-bold mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800">New group leaders & their total applicants this month</p>
               </Card>
             </div>
           </section>
@@ -986,7 +1000,7 @@ export default function DashboardView({
 }
 
 // ---------------------------------------------------------------------------
-function SectionHeader({ icon: Icon, title, subtitle }) {
+function SectionHeader({ icon: Icon, title, subtitle, tag }) {
   return (
     <div className="flex items-center gap-3">
       {Icon && (
@@ -995,7 +1009,12 @@ function SectionHeader({ icon: Icon, title, subtitle }) {
         </span>
       )}
       <div>
-        <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white uppercase tracking-wider leading-none">{title}</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white uppercase tracking-wider leading-none">{title}</h2>
+          {tag && (
+            <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-550 dark:text-slate-350 text-[9px] font-black uppercase tracking-wide leading-none">{tag}</span>
+          )}
+        </div>
         <p className="text-xs text-slate-450 dark:text-slate-500 font-medium mt-1.5">{subtitle}</p>
       </div>
     </div>
