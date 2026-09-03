@@ -418,22 +418,26 @@ export default function DashboardView({
             <SectionHeader icon={TrendingUp} accent="emerald" title="Investment Operations" subtitle="SIP, lumpsum & redemption flows from active proposals" />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
               <FlowCard
-                title="Net SIP Book" net={inv.netSip}
-                inRow={{ icon: ArrowUpRight, label: 'SIP Registration', value: inv.sipIn }}
-                outRow={{ icon: ArrowDownLeft, label: 'SIP Cancellation', value: inv.sipOut }}
+                title="Net SIP Book" net={inv.netSip} icon={TrendingUp} accent="blue"
+                rows={[
+                  { icon: ArrowUpRight, label: 'SIP Registration', value: inv.sipIn, tone: 'in' },
+                  { icon: ArrowDownLeft, label: 'SIP Cancellation', value: inv.sipOut, tone: 'out' },
+                ]}
               />
               <FlowCard
-                title="Net Lumpsum Flow" net={inv.netLump}
-                inRow={{ icon: ArrowUpRight, label: 'Lumpsum Investment', value: inv.lump }}
-                outRow={{ icon: ArrowDownLeft, label: 'Redemption Flow', value: inv.redeem }}
+                title="Net Lumpsum Flow" net={inv.netLump} icon={Coins} accent="cyan"
+                rows={[
+                  { icon: ArrowUpRight, label: 'Lumpsum Investment', value: inv.lump, tone: 'in' },
+                  { icon: ArrowDownLeft, label: 'Redemption Flow', value: inv.redeem, tone: 'out' },
+                ]}
               />
               <FlowCard
-                title="Net COBR Flow" net={cobr.net}
-                inRow={{ icon: ArrowUpRight, label: 'COBR IN', value: cobr.in }}
-                outRow={{ icon: ArrowDownLeft, label: 'COBR OUT', value: cobr.out }}
-                extraRows={[
-                  { icon: PiggyBank, label: 'SIP Registration', value: inv.sipIn },
-                  { icon: Coins, label: 'Lumpsum Investment', value: inv.lump },
+                title="Net COBR Flow" net={cobr.net} icon={Repeat} accent="violet" grid
+                rows={[
+                  { icon: ArrowUpRight, label: 'COBR IN', value: cobr.in, tone: 'in' },
+                  { icon: ArrowDownLeft, label: 'COBR OUT', value: cobr.out, tone: 'out' },
+                  { icon: PiggyBank, label: 'SIP Reg.', value: inv.sipIn },
+                  { icon: Coins, label: 'Lumpsum Inv.', value: inv.lump },
                 ]}
               />
             </div>
@@ -1047,46 +1051,57 @@ function HeroKpi({ icon: Icon, accent, label, value, hint, signed }) {
   );
 }
 
-// extraRows (optional): additional reference-only line items shown below the
-// netted in/out pair — e.g. Net COBR Flow also surfacing SIP Registration &
-// Lumpsum Investment for a quick combined view. Styled neutrally (slate, not
-// green/red) since they don't feed into `net` above.
-function FlowCard({ title, net, inRow, outRow, extraRows }) {
-  const InIcon = inRow.icon, OutIcon = outRow.icon;
+const FLOW_ACCENT = {
+  blue: { badge: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400', bar: 'bg-blue-500' },
+  cyan: { badge: 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400', bar: 'bg-cyan-500' },
+  violet: { badge: 'bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400', bar: 'bg-violet-500' },
+};
+const FLOW_ROW_TONE = {
+  in: { badge: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-450', text: 'text-emerald-600 dark:text-emerald-450' },
+  out: { badge: 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-450', text: 'text-rose-600 dark:text-rose-450' },
+  ref: { badge: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400', text: 'text-slate-700 dark:text-slate-300' },
+};
+
+// title/icon/accent header row sits level (icon+title left, net value+trend
+// right) so every card in a row lines up the same way regardless of how many
+// rows it holds below. `rows`: [{ icon, label, value, tone: 'in'|'out'|undefined }].
+// `grid`: true renders rows as a compact tile grid (for 4+ items, e.g. Net
+// COBR Flow) instead of a stacked dotted-leader list (for 2 items) — keeps
+// card heights consistent across a row instead of one card growing much
+// taller than its siblings.
+function FlowCard({ title, net, icon: TitleIcon, accent = 'blue', rows, grid }) {
+  const theme = FLOW_ACCENT[accent] || FLOW_ACCENT.blue;
   return (
-    <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl flex flex-col justify-between bg-white dark:bg-slate-900 transition-colors">
-      <div>
-        <div className="flex items-center justify-between mb-3.5">
-          <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">{title}</h4>
-          {net < 0 ? <TrendingDown size={14} className="text-rose-500 shrink-0" /> : <TrendingUp size={14} className="text-emerald-500 shrink-0" />}
-        </div>
-        <div className={`text-2xl font-bold tabular-nums tracking-tight leading-none whitespace-nowrap ${net < 0 ? 'text-rose-600 dark:text-rose-455' : 'text-slate-900 dark:text-white'}`}>{fmtINR(net)}</div>
+    <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 transition-colors overflow-hidden relative">
+      <span className={`absolute left-0 top-0 bottom-0 w-1 ${theme.bar}`} />
+      <div className="flex items-center gap-2.5">
+        <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${theme.badge}`}>
+          <TitleIcon size={15} />
+        </span>
+        <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide leading-tight">{title}</h4>
       </div>
-      <div className="space-y-2 mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-850">
-        <div className="flex items-center gap-2">
-          <span className="w-6.5 h-6.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-450 flex items-center justify-center shrink-0"><InIcon size={12} /></span>
-          <span className="text-xs font-bold text-slate-500 truncate">{inRow.label}</span>
-          <span className="ml-auto text-xs font-black text-emerald-600 dark:text-emerald-450 tabular-nums shrink-0">{fmtINR(inRow.value)}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-6.5 h-6.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-450 flex items-center justify-center shrink-0"><OutIcon size={12} /></span>
-          <span className="text-xs font-bold text-slate-500 truncate">{outRow.label}</span>
-          <span className="ml-auto text-xs font-black text-rose-600 dark:text-rose-450 tabular-nums shrink-0">{fmtINR(outRow.value)}</span>
-        </div>
-        {extraRows && extraRows.length > 0 && (
-          <div className="space-y-2 pt-2 mt-1 border-t border-dashed border-slate-150 dark:border-slate-800">
-            {extraRows.map((r) => {
-              const RowIcon = r.icon;
-              return (
-                <div key={r.label} className="flex items-center gap-2">
-                  <span className="w-6.5 h-6.5 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center shrink-0"><RowIcon size={12} /></span>
-                  <span className="text-xs font-bold text-slate-500 truncate">{r.label}</span>
-                  <span className="ml-auto text-xs font-black text-slate-700 dark:text-slate-300 tabular-nums shrink-0">{fmtINR(r.value)}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
+      <div className="flex items-center gap-1.5 mt-2.5 pl-10.5">
+        <span className={`text-xl font-black tabular-nums tracking-tight whitespace-nowrap ${net < 0 ? 'text-rose-600 dark:text-rose-455' : 'text-slate-900 dark:text-white'}`}>{fmtINR(net)}</span>
+        {net < 0 ? <TrendingDown size={14} className="text-rose-500 shrink-0" /> : <TrendingUp size={14} className="text-emerald-500 shrink-0" />}
+      </div>
+      <div className={`mt-4 p-3 rounded-xl bg-slate-50/70 dark:bg-slate-950/30 border border-slate-100 dark:border-slate-850 ${grid ? 'grid grid-cols-2 sm:grid-cols-4 gap-3' : 'space-y-2.5'}`}>
+        {rows.map((r) => {
+          const tone = FLOW_ROW_TONE[r.tone] || FLOW_ROW_TONE.ref;
+          return grid ? (
+            <div key={r.label} className="flex flex-col items-center text-center gap-1.5">
+              <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${tone.badge}`}><r.icon size={13} /></span>
+              <span className="text-[9.5px] font-bold text-slate-500 dark:text-slate-400 leading-tight">{r.label}</span>
+              <span className={`text-[11px] font-black tabular-nums whitespace-nowrap ${tone.text}`}>{fmtINR(r.value)}</span>
+            </div>
+          ) : (
+            <div key={r.label} className="flex items-center gap-2">
+              <span className={`w-6.5 h-6.5 rounded-lg flex items-center justify-center shrink-0 ${tone.badge}`}><r.icon size={12} /></span>
+              <span className="text-xs font-bold text-slate-500 whitespace-nowrap">{r.label}</span>
+              <span className="flex-1 border-b border-dashed border-slate-250 dark:border-slate-750 mx-1 mb-1" />
+              <span className={`text-xs font-black tabular-nums shrink-0 ${tone.text}`}>{fmtINR(r.value)}</span>
+            </div>
+          );
+        })}
       </div>
     </Card>
   );
