@@ -416,7 +416,7 @@ export default function DashboardView({
           {/* Investments Section */}
           <section className="space-y-5">
             <SectionHeader icon={TrendingUp} accent="emerald" title="Investment Operations" subtitle="SIP, lumpsum & redemption flows from active proposals" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <FlowCard
                 title="Net SIP Book" net={inv.netSip} icon={TrendingUp} accent="blue"
                 rows={[
@@ -431,15 +431,17 @@ export default function DashboardView({
                   { icon: ArrowDownLeft, label: 'Redemption Flow', value: inv.redeem, tone: 'out' },
                 ]}
               />
-              <FlowCard
-                title="Net COBR Flow" net={cobr.net} icon={Repeat} accent="violet" grid
-                rows={[
-                  { icon: ArrowUpRight, label: 'COBR IN', value: cobr.in, tone: 'in' },
-                  { icon: ArrowDownLeft, label: 'COBR OUT', value: cobr.out, tone: 'out' },
-                  { icon: PiggyBank, label: 'SIP Reg.', value: inv.sipIn },
-                  { icon: Coins, label: 'Lumpsum', value: inv.lump },
-                ]}
-              />
+              <div className="sm:col-span-2">
+                <FlowCard
+                  title="Net COBR Flow" net={cobr.net} icon={Repeat} accent="violet" grid wide
+                  rows={[
+                    { icon: ArrowUpRight, label: 'COBR IN', value: cobr.in, tone: 'in' },
+                    { icon: ArrowDownLeft, label: 'COBR OUT', value: cobr.out, tone: 'out' },
+                    { icon: PiggyBank, label: 'SIP Reg.', value: inv.sipIn },
+                    { icon: Coins, label: 'Lumpsum', value: inv.lump },
+                  ]}
+                />
+              </div>
             </div>
 
             {/* Other Proposals — grouped by transaction type, including COBR */}
@@ -1069,7 +1071,7 @@ const FLOW_ROW_TONE = {
 // rows as a 2x2 tile grid (Net COBR Flow's 4 metrics) instead of a stacked
 // label/value list (the 2-item cards) — keeps every card in the row the
 // same visual weight instead of one growing cramped or lopsided.
-function FlowCard({ title, net, icon: TitleIcon, accent = 'blue', rows, grid }) {
+function FlowCard({ title, net, icon: TitleIcon, accent = 'blue', rows, grid, wide }) {
   const badge = FLOW_ACCENT[accent] || FLOW_ACCENT.blue;
   const negative = net < 0;
   return (
@@ -1092,7 +1094,7 @@ function FlowCard({ title, net, icon: TitleIcon, accent = 'blue', rows, grid }) 
 
       <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex-1">
         {grid ? (
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className={`grid grid-cols-2 ${wide ? 'sm:grid-cols-4' : ''} gap-2.5`}>
             {rows.map((r) => {
               const tone = FLOW_ROW_TONE[r.tone] || FLOW_ROW_TONE.ref;
               return (
