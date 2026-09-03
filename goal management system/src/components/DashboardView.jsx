@@ -414,9 +414,9 @@ export default function DashboardView({
           </section>
 
           {/* Investments Section */}
-          <section className="space-y-3.5">
+          <section className="space-y-5">
             <SectionHeader icon={TrendingUp} accent="emerald" title="Investment Operations" subtitle="SIP, lumpsum & redemption flows from active proposals" />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               <FlowCard
                 title="Net SIP Book" net={inv.netSip} icon={TrendingUp} accent="blue"
                 rows={[
@@ -437,7 +437,7 @@ export default function DashboardView({
                   { icon: ArrowUpRight, label: 'COBR IN', value: cobr.in, tone: 'in' },
                   { icon: ArrowDownLeft, label: 'COBR OUT', value: cobr.out, tone: 'out' },
                   { icon: PiggyBank, label: 'SIP Reg.', value: inv.sipIn },
-                  { icon: Coins, label: 'Lumpsum Inv.', value: inv.lump },
+                  { icon: Coins, label: 'Lumpsum', value: inv.lump },
                 ]}
               />
             </div>
@@ -1052,55 +1052,76 @@ function HeroKpi({ icon: Icon, accent, label, value, hint, signed }) {
 }
 
 const FLOW_ACCENT = {
-  blue: { badge: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400', border: 'border-l-blue-500' },
-  cyan: { badge: 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400', border: 'border-l-cyan-500' },
-  violet: { badge: 'bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400', border: 'border-l-violet-500' },
+  blue: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400',
+  cyan: 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400',
+  violet: 'bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400',
 };
 const FLOW_ROW_TONE = {
-  in: { badge: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-450', text: 'text-emerald-600 dark:text-emerald-450' },
-  out: { badge: 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-450', text: 'text-rose-600 dark:text-rose-450' },
-  ref: { badge: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400', text: 'text-slate-700 dark:text-slate-300' },
+  in: { icon: 'text-emerald-500 dark:text-emerald-450', text: 'text-emerald-700 dark:text-emerald-450' },
+  out: { icon: 'text-rose-400 dark:text-rose-450', text: 'text-rose-600 dark:text-rose-450' },
+  ref: { icon: 'text-slate-400 dark:text-slate-500', text: 'text-slate-700 dark:text-slate-300' },
 };
 
-// title/icon/accent header row sits level (icon+title left, net value+trend
-// right) so every card in a row lines up the same way regardless of how many
-// rows it holds below. `rows`: [{ icon, label, value, tone: 'in'|'out'|undefined }].
-// `grid`: true renders rows as a compact tile grid (for 4+ items, e.g. Net
-// COBR Flow) instead of a stacked dotted-leader list (for 2 items) — keeps
-// card heights consistent across a row instead of one card growing much
-// taller than its siblings.
+// Premium/minimal card: icon+title header, the net value as the dominant
+// figure, then a lightweight flow breakdown below a single hairline divider
+// — no boxed sub-containers, no dashed connectors, no heavy borders. `rows`:
+// [{ icon, label, value, tone: 'in'|'out'|undefined }]. `grid`: true renders
+// rows as a 2x2 tile grid (Net COBR Flow's 4 metrics) instead of a stacked
+// label/value list (the 2-item cards) — keeps every card in the row the
+// same visual weight instead of one growing cramped or lopsided.
 function FlowCard({ title, net, icon: TitleIcon, accent = 'blue', rows, grid }) {
-  const theme = FLOW_ACCENT[accent] || FLOW_ACCENT.blue;
+  const badge = FLOW_ACCENT[accent] || FLOW_ACCENT.blue;
+  const negative = net < 0;
   return (
-    <Card className={`p-4 border border-slate-200/60 dark:border-slate-800/80 border-l-4 ${theme.border} rounded-2xl bg-white dark:bg-slate-900 transition-colors`}>
-      <div className="flex items-center gap-2">
-        <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${theme.badge}`}>
-          <TitleIcon size={14} />
+    <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none transition-colors h-full flex flex-col">
+      <div className="flex items-center gap-2.5">
+        <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${badge}`}>
+          <TitleIcon size={15} />
         </span>
-        <h4 className="text-[11px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide leading-tight">{title}</h4>
+        <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">{title}</h4>
       </div>
-      <div className="flex items-center gap-1.5 mt-2.5 pl-9">
-        <span className={`text-xl font-black tabular-nums tracking-tight whitespace-nowrap ${net < 0 ? 'text-rose-600 dark:text-rose-455' : 'text-slate-900 dark:text-white'}`}>{fmtINR(net)}</span>
-        {net < 0 ? <TrendingDown size={14} className="text-rose-500 shrink-0" /> : <TrendingUp size={14} className="text-emerald-500 shrink-0" />}
+
+      <div className="flex items-baseline gap-2 mt-5">
+        <span className={`text-[26px] font-bold tabular-nums tracking-tight whitespace-nowrap ${negative ? 'text-rose-600/90 dark:text-rose-400' : 'text-slate-800 dark:text-white'}`}>
+          {fmtINR(net)}
+        </span>
+        {negative
+          ? <TrendingDown size={14} className="text-slate-400 dark:text-slate-500 shrink-0" />
+          : <TrendingUp size={14} className="text-slate-400 dark:text-slate-500 shrink-0" />}
       </div>
-      <div className={`mt-3.5 p-2.5 rounded-xl bg-slate-50/70 dark:bg-slate-950/30 border border-slate-100 dark:border-slate-850 ${grid ? 'grid grid-cols-2 sm:grid-cols-4 gap-2.5' : 'space-y-2.5'}`}>
-        {rows.map((r) => {
-          const tone = FLOW_ROW_TONE[r.tone] || FLOW_ROW_TONE.ref;
-          return grid ? (
-            <div key={r.label} className="flex flex-col items-center text-center gap-1.5">
-              <span className={`w-6.5 h-6.5 rounded-lg flex items-center justify-center shrink-0 ${tone.badge}`}><r.icon size={12} /></span>
-              <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 leading-tight min-h-[2.1em] flex items-center justify-center">{r.label}</span>
-              <span className={`text-[10.5px] font-black tabular-nums whitespace-nowrap ${tone.text}`}>{fmtINR(r.value)}</span>
-            </div>
-          ) : (
-            <div key={r.label} className="flex items-center gap-1.5 min-w-0">
-              <span className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${tone.badge}`}><r.icon size={11} /></span>
-              <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">{r.label}</span>
-              <span className="flex-1 min-w-[8px] border-b border-dashed border-slate-250 dark:border-slate-750 mx-1 mb-1" />
-              <span className={`text-[11px] font-black tabular-nums shrink-0 ${tone.text}`}>{fmtINR(r.value)}</span>
-            </div>
-          );
-        })}
+
+      <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex-1">
+        {grid ? (
+          <div className="grid grid-cols-2 gap-2.5">
+            {rows.map((r) => {
+              const tone = FLOW_ROW_TONE[r.tone] || FLOW_ROW_TONE.ref;
+              return (
+                <div key={r.label} className="rounded-xl bg-slate-50/80 dark:bg-slate-950/30 px-3 py-2.5 min-w-0">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <r.icon size={12} className={`shrink-0 ${tone.icon}`} />
+                    <span className="min-w-0 text-[9.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide leading-tight">{r.label}</span>
+                  </div>
+                  <div className={`text-[13px] font-bold tabular-nums mt-1.5 whitespace-nowrap ${tone.text}`}>{fmtINR(r.value)}</div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {rows.map((r) => {
+              const tone = FLOW_ROW_TONE[r.tone] || FLOW_ROW_TONE.ref;
+              return (
+                <div key={r.label} className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <r.icon size={13} className={`shrink-0 ${tone.icon}`} />
+                    <span className="text-[12.5px] font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">{r.label}</span>
+                  </div>
+                  <span className={`text-[12.5px] font-bold tabular-nums shrink-0 ${tone.text}`}>{fmtINR(r.value)}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </Card>
   );
