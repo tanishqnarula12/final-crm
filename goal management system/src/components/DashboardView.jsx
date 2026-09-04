@@ -730,35 +730,9 @@ export default function DashboardView({
                 </div>
               </Card>
 
-              {/* Policy Types Booked Donut — donut leads, legend follows */}
-              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] flex flex-col items-center gap-5 bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
-                {policyTypesData.length > 0 && (
-                  <div className="relative w-[120px] h-[120px] flex items-center justify-center shrink-0">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={policyTypesData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={38}
-                          outerRadius={50}
-                          paddingAngle={3.5}
-                          dataKey="value"
-                        >
-                          {policyTypesData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip content={<ChartTooltip />} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="absolute flex flex-col items-center justify-center text-center">
-                      <span className="text-lg font-bold text-slate-800 dark:text-white tabular-nums leading-none">{ins.count}</span>
-                      <span className="text-[8px] uppercase tracking-wide text-slate-400 font-semibold mt-1">Total</span>
-                    </div>
-                  </div>
-                )}
-                <div className="flex-1 w-full min-w-0">
+              {/* Policy Types Booked */}
+              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] flex flex-col justify-between bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
+                <div>
                   <div className="flex items-center gap-2.5 mb-4">
                     <span className="w-7 h-7 rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0"><FileBadge size={14} /></span>
                     <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Types Booked</h4>
@@ -775,6 +749,10 @@ export default function DashboardView({
                   {policyTypesData.length === 0 && (
                     <p className="text-xs italic text-slate-400 mt-2">None booked.</p>
                   )}
+                </div>
+                <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-500">Total Booked</span>
+                  <span className="text-xs font-bold text-slate-800 dark:text-white tabular-nums">{ins.count}</span>
                 </div>
               </Card>
 
