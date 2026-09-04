@@ -610,10 +610,10 @@ export default function DashboardView({
           {/* Clients & Distribution */}
           <section className="space-y-5">
             <SectionHeader icon={Users} title="Clients & Distribution" subtitle="Group structure, account tiers & active status mix" />
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-8 gap-5">
 
               {/* Client Tiers */}
-              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] md:col-span-1 flex flex-col justify-between bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
+              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] md:col-span-3 flex flex-col justify-between bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
                 <div>
                   <div className="flex items-center gap-2.5 mb-5">
                     <span className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0"><Users size={14} /></span>
@@ -700,7 +700,7 @@ export default function DashboardView({
               {/* New Group Leaders & Applicants This Month — Group Leaders is
                   the count of new client groups; Applicants is the total
                   people this adds (each leader + their family members). */}
-              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] md:col-span-1 flex flex-col justify-between bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
+              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] md:col-span-3 flex flex-col justify-between bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
                 <div>
                   <div className="flex items-center gap-2.5 mb-5">
                     <span className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0"><UserPlus size={14} /></span>
