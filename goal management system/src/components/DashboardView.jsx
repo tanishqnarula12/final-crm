@@ -28,8 +28,13 @@ const normalizeUrl = (url) => {
   return /^https?:\/\//i.test(u) ? u : `https://${u}`;
 };
 
-// Investment proposalType buckets
-const SIP_IN_TYPES = ['Purchase with SIP', 'Special SIP', 'SIP Registration'];
+// Investment proposalType buckets — ONLY the exact 4 types that back the
+// Net SIP Book / Net Lumpsum Flow cards. Every other proposal type
+// ("Purchase with SIP", "Special SIP", "SIP Pause", "STP/SWP Proposal",
+// "STP/SWP Cancelation", etc.) must fall through to the dynamic "Other
+// Proposals" breakdown as its own line item — not get silently merged into
+// one of these 4 buckets.
+const SIP_IN_TYPES = ['SIP Registration'];
 const SIP_OUT_TYPES = ['SIP Cancellation'];
 const LUMP_TYPES = ['Lumpsum Investment'];
 const REDEEM_TYPES = ['Redemption Proposal'];
