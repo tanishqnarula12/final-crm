@@ -583,20 +583,23 @@ export default function DashboardView({
           </section>
 
           {/* Clients & Distribution */}
-          <section className="space-y-3.5">
+          <section className="space-y-5">
             <SectionHeader icon={Users} title="Clients & Distribution" subtitle="Group structure, account tiers & active status mix" />
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
 
               {/* Client Tiers */}
-              <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl md:col-span-1 flex flex-col justify-between bg-white dark:bg-slate-900">
+              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] md:col-span-1 flex flex-col justify-between bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
                 <div>
-                  <h4 className="text-xs font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider mb-4">Client Tiers</h4>
-                  <div className="space-y-3.5">
+                  <div className="flex items-center gap-2.5 mb-5">
+                    <span className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0"><Users size={14} /></span>
+                    <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Client Tiers</h4>
+                  </div>
+                  <div className="space-y-4">
                     {tierData.map((tier) => (
-                      <div key={tier.name} className="space-y-1">
-                        <div className="flex justify-between items-center text-xs font-bold">
-                          <span className="text-slate-650 dark:text-slate-350">{tier.name}</span>
-                          <span className="text-slate-900 dark:text-white tabular-nums">{tier.value} <span className="text-[9px] text-slate-455 font-medium">({tier.pct}%)</span></span>
+                      <div key={tier.name} className="space-y-1.5">
+                        <div className="flex justify-between items-center text-xs font-semibold">
+                          <span className="text-slate-600 dark:text-slate-350">{tier.name}</span>
+                          <span className="text-slate-800 dark:text-white tabular-nums">{tier.value} <span className="text-[10px] text-slate-400 font-medium">({tier.pct}%)</span></span>
                         </div>
                         <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                           <div className={`h-full rounded-full ${tier.color}`} style={{ width: `${tier.pct}%` }} />
@@ -605,49 +608,34 @@ export default function DashboardView({
                     ))}
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-1 mt-5 pt-3.5 border-t border-slate-100 dark:border-slate-800 text-center">
+                <div className="grid grid-cols-3 gap-1 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 text-center">
                   <div>
-                    <p className="text-xs font-black text-slate-900 dark:text-white tabular-nums">{cli.total}</p>
-                    <p className="text-[9px] text-slate-450 font-bold">Groups</p>
+                    <p className="text-sm font-bold text-slate-800 dark:text-white tabular-nums">{cli.total}</p>
+                    <p className="text-[9px] text-slate-450 font-semibold uppercase tracking-wide mt-0.5">Groups</p>
                   </div>
                   <div>
-                    <p className="text-xs font-black text-slate-900 dark:text-white tabular-nums">{cli.applicants}</p>
-                    <p className="text-[9px] text-slate-450 font-bold">People</p>
+                    <p className="text-sm font-bold text-slate-800 dark:text-white tabular-nums">{cli.applicants}</p>
+                    <p className="text-[9px] text-slate-450 font-semibold uppercase tracking-wide mt-0.5">People</p>
                   </div>
                   <div>
-                    <p className="text-xs font-black text-emerald-600 dark:text-emerald-400 tabular-nums">+{cli.newLeads}</p>
-                    <p className="text-[9px] text-slate-455 font-bold">New</p>
+                    <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">+{cli.newLeads}</p>
+                    <p className="text-[9px] text-slate-450 font-semibold uppercase tracking-wide mt-0.5">New</p>
                   </div>
                 </div>
               </Card>
 
-              {/* Status Mix Donut */}
-              <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl md:col-span-2 flex flex-col md:flex-row items-center justify-between gap-5 bg-white dark:bg-slate-900">
-                <div className="flex-1 space-y-3 w-full">
-                  <h4 className="text-xs font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider">Client Status Mix</h4>
-                  <div className="space-y-2.5 mt-4">
-                    {statusData.map((s) => (
-                      <div key={s.name} className="flex items-center gap-2.5 text-xs font-bold">
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
-                        <span className="text-slate-650 dark:text-slate-350">{s.name} Clients</span>
-                        <span className="ml-auto text-slate-900 dark:text-white tabular-nums">{s.value}</span>
-                      </div>
-                    ))}
-                    {statusData.length === 0 && (
-                      <p className="text-xs italic text-slate-400">No client status mix available.</p>
-                    )}
-                  </div>
-                </div>
-                {statusData.length > 0 ? (
-                  <div className="relative w-[110px] h-[110px] flex items-center justify-center shrink-0">
+              {/* Status Mix Donut — donut leads (primary visual), legend follows */}
+              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] md:col-span-2 flex flex-col items-center gap-5 bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
+                {statusData.length > 0 && (
+                  <div className="relative w-[120px] h-[120px] flex items-center justify-center shrink-0">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
                           data={statusData}
                           cx="50%"
                           cy="50%"
-                          innerRadius={32}
-                          outerRadius={43}
+                          innerRadius={38}
+                          outerRadius={50}
                           paddingAngle={3.5}
                           dataKey="value"
                         >
@@ -659,19 +647,40 @@ export default function DashboardView({
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="absolute flex flex-col items-center justify-center text-center">
-                      <span className="text-sm font-black text-slate-900 dark:text-white tabular-nums leading-none">{cli.total}</span>
-                      <span className="text-[7.5px] uppercase tracking-wider text-slate-400 font-extrabold mt-0.5">Total</span>
+                      <span className="text-lg font-bold text-slate-800 dark:text-white tabular-nums leading-none">{cli.total}</span>
+                      <span className="text-[8px] uppercase tracking-wide text-slate-400 font-semibold mt-1">Total</span>
                     </div>
                   </div>
-                ) : null}
+                )}
+                <div className="flex-1 w-full min-w-0">
+                  <div className="flex items-center gap-2.5 mb-4">
+                    <span className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0"><UserCheck size={14} /></span>
+                    <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Client Status Mix</h4>
+                  </div>
+                  <div className="space-y-3">
+                    {statusData.map((s) => (
+                      <div key={s.name} className="flex items-center gap-2.5 text-xs font-semibold">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                        <span className="text-slate-600 dark:text-slate-350 min-w-0">{s.name} Clients</span>
+                        <span className="ml-auto text-slate-800 dark:text-white tabular-nums font-bold shrink-0">{s.value}</span>
+                      </div>
+                    ))}
+                    {statusData.length === 0 && (
+                      <p className="text-xs italic text-slate-400">No client status mix available.</p>
+                    )}
+                  </div>
+                </div>
               </Card>
 
               {/* New Group Leaders & Applicants This Month — Group Leaders is
                   the count of new client groups; Applicants is the total
                   people this adds (each leader + their family members). */}
-              <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl md:col-span-1 flex flex-col justify-between bg-white dark:bg-slate-900">
+              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] md:col-span-1 flex flex-col justify-between bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
                 <div>
-                  <h4 className="text-xs font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider mb-4">New This Month</h4>
+                  <div className="flex items-center gap-2.5 mb-5">
+                    <span className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0"><UserPlus size={14} /></span>
+                    <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">New This Month</h4>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-2.5">
                       <span className="w-9.5 h-9.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0"><UserPlus size={17} /></span>
@@ -689,20 +698,23 @@ export default function DashboardView({
                     </div>
                   </div>
                 </div>
-                <p className="text-[10px] text-slate-450 dark:text-slate-500 font-bold mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800">New group leaders & their total applicants this month</p>
+                <p className="text-[10px] text-slate-450 dark:text-slate-500 font-semibold mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 leading-snug">New group leaders &amp; their total applicants this month</p>
               </Card>
             </div>
           </section>
 
           {/* Insurance Segment & Policy Details */}
-          <section className="space-y-3.5">
+          <section className="space-y-5">
             <SectionHeader icon={Shield} title="Insurance Pipeline" subtitle="Premiums booked & policies lifecycle pipeline" />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+
               {/* Premium Booked Card */}
-              <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl flex flex-col justify-between bg-white dark:bg-slate-900">
+              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] flex flex-col justify-between bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
                 <div>
-                  <h4 className="text-xs font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider mb-3">Premium Booked</h4>
+                  <div className="flex items-center gap-2.5 mb-4">
+                    <span className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0"><Shield size={14} /></span>
+                    <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Premium Booked</h4>
+                  </div>
                   <div className="space-y-3">
                     <PremiumRow icon={Shield} label="Term Life" value={ins.term} />
                     <PremiumRow icon={HeartPulse} label="Medical Health" value={ins.medical} />
@@ -712,36 +724,24 @@ export default function DashboardView({
                     <PremiumRow icon={Car} label="Motor" value={ins.motor} />
                   </div>
                 </div>
-                <div className="pt-3.5 mt-4 border-t border-slate-105 dark:border-slate-800 flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-500">Total Premium</span>
-                  <span className="text-xs font-black text-slate-900 dark:text-white tabular-nums">{fmtINR(ins.totalPremium)}</span>
+                <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-500">Total Premium</span>
+                  <span className="text-xs font-bold text-slate-800 dark:text-white tabular-nums">{fmtINR(ins.totalPremium)}</span>
                 </div>
               </Card>
 
-              {/* Policy Types Booked Donut */}
-              <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900">
-                <div className="flex-1 w-full space-y-2">
-                  <h4 className="text-xs font-bold text-slate-455 dark:text-slate-500 uppercase tracking-wider">Types Booked</h4>
-                  <div className="space-y-1.5 mt-3">
-                    {ins.types.map(t => (
-                      <div key={t.label} className="flex items-center gap-2 text-xs font-bold">
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: t.color }} />
-                        <span className="text-slate-650 dark:text-slate-355">{t.label}</span>
-                        <span className="ml-auto text-slate-950 dark:text-white tabular-nums">{t.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {policyTypesData.length > 0 ? (
-                  <div className="relative w-[110px] h-[110px] flex items-center justify-center shrink-0">
+              {/* Policy Types Booked Donut — donut leads, legend follows */}
+              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] flex flex-col items-center gap-5 bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
+                {policyTypesData.length > 0 && (
+                  <div className="relative w-[120px] h-[120px] flex items-center justify-center shrink-0">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
                           data={policyTypesData}
                           cx="50%"
                           cy="50%"
-                          innerRadius={30}
-                          outerRadius={41}
+                          innerRadius={38}
+                          outerRadius={50}
                           paddingAngle={3.5}
                           dataKey="value"
                         >
@@ -753,18 +753,37 @@ export default function DashboardView({
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="absolute flex flex-col items-center justify-center text-center">
-                      <span className="text-sm font-black text-slate-900 dark:text-white tabular-nums leading-none">{ins.count}</span>
-                      <span className="text-[7.5px] uppercase tracking-wider text-slate-400 font-extrabold mt-0.5">Total</span>
+                      <span className="text-lg font-bold text-slate-800 dark:text-white tabular-nums leading-none">{ins.count}</span>
+                      <span className="text-[8px] uppercase tracking-wide text-slate-400 font-semibold mt-1">Total</span>
                     </div>
                   </div>
-                ) : (
-                  <div className="text-[10px] italic text-slate-400 dark:text-slate-500">None booked.</div>
                 )}
+                <div className="flex-1 w-full min-w-0">
+                  <div className="flex items-center gap-2.5 mb-4">
+                    <span className="w-7 h-7 rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0"><FileBadge size={14} /></span>
+                    <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Types Booked</h4>
+                  </div>
+                  <div className="space-y-2.5">
+                    {ins.types.map(t => (
+                      <div key={t.label} className="flex items-center gap-2.5 text-xs font-semibold">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
+                        <span className="text-slate-600 dark:text-slate-350 min-w-0">{t.label}</span>
+                        <span className="ml-auto text-slate-800 dark:text-white tabular-nums font-bold shrink-0">{t.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {policyTypesData.length === 0 && (
+                    <p className="text-xs italic text-slate-400 mt-2">None booked.</p>
+                  )}
+                </div>
               </Card>
 
               {/* Policy Stages List */}
-              <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900">
-                <h4 className="text-xs font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider mb-3">Policy Stages</h4>
+              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <span className="w-7 h-7 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0"><ListChecks size={14} /></span>
+                  <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Policy Stages</h4>
+                </div>
                 <StageList map={ins.stages} order={['Qualified', 'Document Pending', 'Proposal Submitted', 'Payment Done', 'Waiting for Underwriter', 'Policy Issued', 'Policy Rejected']} emptyText="No insurance prospects." />
               </Card>
 
@@ -1158,7 +1177,7 @@ function StageList({ map, order, emptyText }) {
       {rows.map(r => (
         <div key={r.label} className="flex items-center gap-2">
           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STAGE_DOT[r.label] || 'bg-slate-400'}`} />
-          <span className="text-[11px] font-bold text-slate-650 dark:text-slate-350 truncate flex-1">{r.label}</span>
+          <span className="text-[11px] font-bold text-slate-650 dark:text-slate-350 leading-snug flex-1 min-w-0">{r.label}</span>
           <div className="w-16 h-1 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0">
             <div className={`h-full rounded-full ${STAGE_DOT[r.label] || 'bg-slate-400'}`} style={{ width: `${(r.value / max) * 100}%` }} />
           </div>
