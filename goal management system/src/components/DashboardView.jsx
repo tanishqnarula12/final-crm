@@ -15,7 +15,7 @@ import { loadProspects, ALL_STAGE_THEME } from '../utils/prospects';
 import { loadTasks, TASK_STAGES, STAGE_THEME } from '../utils/tasks';
 import { loadMeetings, MEETING_STATUSES } from '../utils/meetings';
 import { hasAllocation, allocationTotals } from '../utils/assets';
-import { isPolicy } from '../utils/cobrModules';
+import { isPolicy, isRenewal, isClaim, isFd, RENEWAL_STAGES, CLAIM_STAGES, FD_STAGES, POLICY_STAGES } from '../utils/cobrModules';
 import { isCobrTask, cobrTotals } from '../utils/cobr';
 
 // Parse "₹ 50,000" / "50000" / numbers → number
@@ -173,6 +173,26 @@ export default function DashboardView({
     if (cobr.out > 0) rows.push({ type: 'COBR OUT', amount: cobr.out });
     return rows.sort((a, b) => b.amount - a.amount);
   }, [inv.otherByType, cobr]);
+
+  // 2d. Servicing — the COBR workspace's sibling registers (Renewals, Claims,
+  // Fixed Deposits, Other Insurance Policies). Each is a Task row tagged by
+  // `relatedTo`, with its own amount field and stage taxonomy (see
+  // utils/cobrModules.js).
+  const servicing = useMemo(() => {
+    const sumBy = (list, key) => list.reduce((s, t) => s + num(t[key]), 0);
+    const stageMapOf = (list) => {
+      const m = {};
+      list.forEach(t => { const s = t.stage || 'Qualified'; m[s] = (m[s] || 0) + 1; });
+      return m;
+    };
+    const build = (list, amountKey) => ({ count: list.length, amount: sumBy(list, amountKey), stages: stageMapOf(list) });
+    return {
+      renewal: build(tasks.filter(isRenewal), 'premiumAmount'),
+      claim: build(tasks.filter(isClaim), 'claimAmount'),
+      fd: build(tasks.filter(isFd), 'maturityAmount'),
+      policy: build(tasks.filter(isPolicy), 'premiumAmount'),
+    };
+  }, [tasks]);
 
   // 3. Client metrics calculations
   const cli = useMemo(() => {
@@ -773,6 +793,48 @@ export default function DashboardView({
             </div>
           </section>
 
+          {/* Servicing — Renewals, Claims, Fixed Deposits & Other Insurance
+              Policies (the COBR workspace's sibling registers). */}
+          <section className="space-y-5">
+            <SectionHeader icon={Briefcase} title="Servicing" subtitle="Renewals, claims, fixed deposits & other policies under service" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              <HeroKpi icon={CalendarCheck} accent="blue" label="Renewal Premium" value={fmtINR(servicing.renewal.amount)} hint={`${servicing.renewal.count} active renewal${servicing.renewal.count === 1 ? '' : 's'}`} />
+              <HeroKpi icon={AlertCircle} accent="cyan" label="Claims Amount" value={fmtINR(servicing.claim.amount)} hint={`${servicing.claim.count} active claim${servicing.claim.count === 1 ? '' : 's'}`} />
+              <HeroKpi icon={Landmark} accent="violet" label="FD Maturity Value" value={fmtINR(servicing.fd.amount)} hint={`${servicing.fd.count} FD${servicing.fd.count === 1 ? '' : 's'} tracked`} />
+              <HeroKpi icon={Shield} accent="emerald" label="Other Policies Premium" value={fmtINR(servicing.policy.amount)} hint={`${servicing.policy.count} polic${servicing.policy.count === 1 ? 'y' : 'ies'}`} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <span className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0"><CalendarCheck size={14} /></span>
+                  <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Renewals</h4>
+                </div>
+                <StageList map={servicing.renewal.stages} order={RENEWAL_STAGES} emptyText="No renewals yet." />
+              </Card>
+              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <span className="w-7 h-7 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0"><AlertCircle size={14} /></span>
+                  <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Claims</h4>
+                </div>
+                <StageList map={servicing.claim.stages} order={CLAIM_STAGES} emptyText="No claims yet." />
+              </Card>
+              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <span className="w-7 h-7 rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0"><Landmark size={14} /></span>
+                  <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Fixed Deposits</h4>
+                </div>
+                <StageList map={servicing.fd.stages} order={FD_STAGES} emptyText="No fixed deposits yet." />
+              </Card>
+              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <span className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0"><Shield size={14} /></span>
+                  <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Other Policies</h4>
+                </div>
+                <StageList map={servicing.policy.stages} order={POLICY_STAGES} emptyText="No other policies yet." />
+              </Card>
+            </div>
+          </section>
+
           {/* Operational Activities Breakdown */}
           <section className="space-y-3.5">
             <SectionHeader icon={Sparkles} title="Operational Breakdown" subtitle="Aggregate system pipelines tracked by lifecycle stages" />
@@ -1158,10 +1220,10 @@ function StageList({ map, order, emptyText }) {
   return (
     <div className="space-y-2.5">
       {rows.map(r => (
-        <div key={r.label} className="flex items-center gap-2">
-          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STAGE_DOT[r.label] || 'bg-slate-400'}`} />
-          <span className="text-[11px] font-bold text-slate-650 dark:text-slate-350 leading-snug flex-1 min-w-0">{r.label}</span>
-          <div className="w-16 h-1 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0">
+        <div key={r.label} className="flex items-start gap-2">
+          <span className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1 ${STAGE_DOT[r.label] || 'bg-slate-400'}`} />
+          <span className="text-[11px] font-bold text-slate-650 dark:text-slate-350 leading-snug flex-1 min-w-0 pt-px">{r.label}</span>
+          <div className="w-16 h-1 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 mt-1.5">
             <div className={`h-full rounded-full ${STAGE_DOT[r.label] || 'bg-slate-400'}`} style={{ width: `${(r.value / max) * 100}%` }} />
           </div>
           <span className="text-[11px] font-black text-slate-850 dark:text-slate-205 tabular-nums w-4 text-right shrink-0">{r.value}</span>
