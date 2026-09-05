@@ -701,10 +701,10 @@ export default function DashboardView({
           {/* Clients & Distribution */}
           <section className="space-y-5">
             <SectionHeader icon={Users} title="Clients & Distribution" subtitle="Group structure, account tiers & active status mix" />
-            <div className="grid grid-cols-1 md:grid-cols-8 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-[3fr_2.3fr_3fr] gap-5">
 
               {/* Client Tiers */}
-              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] md:col-span-3 flex flex-col justify-between bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
+              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] flex flex-col justify-between bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
                 <div>
                   <div className="flex items-center gap-2.5 mb-5">
                     <span className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0"><Users size={14} /></span>
@@ -741,7 +741,7 @@ export default function DashboardView({
               </Card>
 
               {/* Status Mix Donut — donut leads (primary visual), legend follows */}
-              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] md:col-span-2 flex flex-col items-center gap-5 bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
+              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] flex flex-col items-center gap-5 bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
                 {statusData.length > 0 && (
                   <div className="relative w-[120px] h-[120px] flex items-center justify-center shrink-0">
                     <ResponsiveContainer width="100%" height="100%">
@@ -793,7 +793,7 @@ export default function DashboardView({
                   adds (each leader + their family members). Own Monthly/
                   Yearly(FY) toggle, independent of Client Tiers' always-
                   monthly "+N New" stat. */}
-              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] md:col-span-3 flex flex-col justify-between bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
+              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] flex flex-col justify-between bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
                 <div>
                   <div className="flex items-center gap-2.5 mb-3">
                     <span className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0"><UserPlus size={14} /></span>
@@ -1289,14 +1289,14 @@ function HeroKpi({ icon: Icon, accent, label, value, hint, signed }) {
   const trendColor = signed === undefined ? '' : signed < 0 ? 'text-rose-600 dark:text-rose-455' : 'text-emerald-600 dark:text-emerald-455';
   return (
     <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 transition-colors shadow-sm shadow-slate-100/50 dark:shadow-none">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-[10.5px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide leading-tight min-h-[2.5em]">{label}</p>
+          <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-normal leading-tight min-h-[2.5em]">{label}</p>
           <p className={`text-xl sm:text-2xl font-black tracking-tight tabular-nums mt-2.5 leading-none whitespace-nowrap ${trendColor || 'text-slate-900 dark:text-white'}`}>{value}</p>
           {hint && <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-2 font-medium leading-snug">{hint}</p>}
         </div>
-        <span className={`shrink-0 w-9.5 h-9.5 rounded-xl flex items-center justify-center ${ICON_THEMES[accent] || 'bg-slate-50 text-slate-500'}`}>
-          <Icon size={17} />
+        <span className={`shrink-0 w-7 h-7 rounded-xl flex items-center justify-center ${ICON_THEMES[accent] || 'bg-slate-50 text-slate-500'}`}>
+          <Icon size={13} />
         </span>
       </div>
     </Card>
