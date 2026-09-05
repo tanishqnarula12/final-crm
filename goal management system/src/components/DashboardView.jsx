@@ -1,9 +1,9 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import {
   TrendingUp, TrendingDown, PiggyBank, ArrowDownLeft, ArrowUpRight, Repeat,
   Shield, HeartPulse, Activity, FileBadge, Users, UserPlus, UserCheck, Skull, Clock,
   CalendarCheck, ListChecks, Briefcase, Landmark, Coins, Sparkles, PauseCircle,
-  Calendar, CheckSquare, ExternalLink, AlertCircle, Video, Target, Plane, Ship, Car
+  Calendar, CheckSquare, ExternalLink, AlertCircle, Video, Target, Plane, Ship, Car, ChevronDown
 } from 'lucide-react';
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip
@@ -63,29 +63,47 @@ const isThisMonth = (iso) => {
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
 };
 
-// Indian financial year: 1 April – 31 March. Computed once at module load —
-// the dashboard is a live SPA session, so a stale FY boundary only matters in
-// the ~seconds around midnight on 31 March, an acceptable tradeoff for not
-// recomputing this on every render.
-function fyRangeFor(d) {
-  const y = d.getFullYear();
-  const startYear = d.getMonth() >= 3 ? y : y - 1; // April = month index 3
-  const start = new Date(startYear, 3, 1, 0, 0, 0, 0);
-  const end = new Date(startYear + 1, 2, 31, 23, 59, 59, 999);
-  const label = `FY ${startYear}-${String((startYear + 1) % 100).padStart(2, '0')}`;
-  return { start, end, label };
-}
-const CURRENT_FY = fyRangeFor(new Date());
-const isThisFY = (iso) => {
-  if (!iso) return false;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return false;
-  return d >= CURRENT_FY.start && d <= CURRENT_FY.end;
-};
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-// period: 'month' -> current calendar month, 'year' -> current financial year
-const filterByPeriod = (list, period, dateField = 'createdAt') =>
-  list.filter((item) => (period === 'month' ? isThisMonth(item[dateField]) : isThisFY(item[dateField])));
+// Indian financial year: 1 April – 31 March. "Now" is computed once at
+// module load — the dashboard is a live SPA session, so a stale boundary
+// only matters in the ~seconds around midnight on 31 March/the 1st of a
+// month, an acceptable tradeoff for not recomputing this on every render.
+const NOW = new Date();
+const fyStartYearFor = (d) => (d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1); // April = index 3
+const fyLabel = (startYear) => `FY ${startYear}-${String((startYear + 1) % 100).padStart(2, '0')}`;
+const CURRENT_FY = { startYear: fyStartYearFor(NOW), label: fyLabel(fyStartYearFor(NOW)) };
+
+// A period filter is either { mode: 'month', month, year } or
+// { mode: 'year', fyStartYear } — every section gets the exact same picker,
+// just seeded with a different default mode. "Clear Filter" resets back to
+// whatever defaultFilter(mode) produces for that section's own default mode.
+const defaultFilter = (mode) => ({
+  mode,
+  month: NOW.getMonth(),
+  year: NOW.getFullYear(),
+  fyStartYear: CURRENT_FY.startYear,
+});
+const isDefaultFilter = (filter) =>
+  filter.mode === 'year'
+    ? filter.fyStartYear === CURRENT_FY.startYear
+    : filter.month === NOW.getMonth() && filter.year === NOW.getFullYear();
+const filterLabel = (filter) => (filter.mode === 'year' ? fyLabel(filter.fyStartYear) : `${MONTH_NAMES[filter.month]} ${filter.year}`);
+const rangeForFilter = (filter) => {
+  if (filter.mode === 'year') {
+    return { start: new Date(filter.fyStartYear, 3, 1, 0, 0, 0, 0), end: new Date(filter.fyStartYear + 1, 2, 31, 23, 59, 59, 999) };
+  }
+  return { start: new Date(filter.year, filter.month, 1, 0, 0, 0, 0), end: new Date(filter.year, filter.month + 1, 0, 23, 59, 59, 999) };
+};
+const filterByFilter = (list, filter, dateField = 'createdAt') => {
+  const { start, end } = rangeForFilter(filter);
+  return list.filter((item) => {
+    const iso = item[dateField];
+    if (!iso) return false;
+    const d = new Date(iso);
+    return !Number.isNaN(d.getTime()) && d >= start && d <= end;
+  });
+};
 
 // ---- Pure computations, parametrized by an already period-filtered list ---
 // (so each section can drive the same math off its own Monthly/Yearly toggle
@@ -198,37 +216,39 @@ export default function DashboardView({
     };
   }, []);
 
-  // Per-section Monthly/Yearly(FY) period toggles. Business Overview has no
-  // toggle — it's always the fixed current-FY window (see invFY/insFY/cobrFY
-  // below). Goal & Asset Tracking has no period concept at all (unchanged).
-  const [invPeriod, setInvPeriod] = useState('month');
-  const [insPeriod, setInsPeriod] = useState('month');
-  const [servicingPeriod, setServicingPeriod] = useState('month');
-  const [clientsPeriod, setClientsPeriod] = useState('month');
+  // Per-section period filters — each is independent and supports jumping to
+  // ANY past month or financial year (not just "current"), plus a "Clear
+  // Filter" reset back to its own default. Goal & Asset Tracking has no
+  // period concept at all (unchanged).
+  const [bizFilter, setBizFilter] = useState(() => defaultFilter('year'));
+  const [invFilter, setInvFilter] = useState(() => defaultFilter('month'));
+  const [insFilter, setInsFilter] = useState(() => defaultFilter('month'));
+  const [servicingFilter, setServicingFilter] = useState(() => defaultFilter('month'));
+  const [clientsFilter, setClientsFilter] = useState(() => defaultFilter('month'));
 
-  // Business Overview — always the current financial year, regardless of
-  // what any section's own toggle is set to.
-  const prospectsFY = useMemo(() => filterByPeriod(prospects, 'year'), [prospects]);
-  const tasksFY = useMemo(() => filterByPeriod(tasks, 'year'), [tasks]);
-  const invFY = useMemo(() => computeInv(prospectsFY), [prospectsFY]);
-  const insFY = useMemo(() => computeIns(prospectsFY), [prospectsFY]);
-  const cobrFY = useMemo(() => computeCobr(tasksFY), [tasksFY]);
+  // Business Overview — defaults to the current financial year but can be
+  // pointed at any past month/FY via its own picker.
+  const prospectsForBiz = useMemo(() => filterByFilter(prospects, bizFilter), [prospects, bizFilter]);
+  const tasksForBiz = useMemo(() => filterByFilter(tasks, bizFilter), [tasks, bizFilter]);
+  const bizInv = useMemo(() => computeInv(prospectsForBiz), [prospectsForBiz]);
+  const bizIns = useMemo(() => computeIns(prospectsForBiz), [prospectsForBiz]);
+  const bizCobr = useMemo(() => computeCobr(tasksForBiz), [tasksForBiz]);
 
-  // 1. Investment Operations — Monthly by default, Yearly (FY) on toggle.
-  const prospectsForInv = useMemo(() => filterByPeriod(prospects, invPeriod), [prospects, invPeriod]);
-  const tasksForInv = useMemo(() => filterByPeriod(tasks, invPeriod), [tasks, invPeriod]);
+  // 1. Investment Operations — defaults to this month, own picker.
+  const prospectsForInv = useMemo(() => filterByFilter(prospects, invFilter), [prospects, invFilter]);
+  const tasksForInv = useMemo(() => filterByFilter(tasks, invFilter), [tasks, invFilter]);
   const inv = useMemo(() => computeInv(prospectsForInv), [prospectsForInv]);
   const cobr = useMemo(() => computeCobr(tasksForInv), [tasksForInv]);
 
-  // 2. Insurance Pipeline — Monthly by default, Yearly (FY) on toggle,
-  // independent of Investment Operations' own toggle.
-  const prospectsForIns = useMemo(() => filterByPeriod(prospects, insPeriod), [prospects, insPeriod]);
+  // 2. Insurance Pipeline — defaults to this month, own picker independent
+  // of Investment Operations'.
+  const prospectsForIns = useMemo(() => filterByFilter(prospects, insFilter), [prospects, insFilter]);
   const ins = useMemo(() => computeIns(prospectsForIns), [prospectsForIns]);
 
   // 2c. "Other Proposals" breakdown, extended with COBR IN/OUT so the list
   // genuinely covers every transaction type outside SIP/Lumpsum/Insurance —
   // not just the investment-prospect ones. Follows Investment Operations'
-  // own period toggle since it's rendered inside that section.
+  // own period filter since it's rendered inside that section.
   const otherAndCobr = useMemo(() => {
     const rows = [...inv.otherByType];
     if (cobr.in > 0) rows.push({ type: 'COBR IN', amount: cobr.in });
@@ -239,8 +259,8 @@ export default function DashboardView({
   // 2d. Servicing — the COBR workspace's sibling registers (Renewals, Claims,
   // Fixed Deposits, Other Insurance Policies). Each is a Task row tagged by
   // `relatedTo`, with its own amount field and stage taxonomy (see
-  // utils/cobrModules.js). Monthly by default, Yearly (FY) on toggle.
-  const tasksForServicing = useMemo(() => filterByPeriod(tasks, servicingPeriod), [tasks, servicingPeriod]);
+  // utils/cobrModules.js). Defaults to this month, own picker.
+  const tasksForServicing = useMemo(() => filterByFilter(tasks, servicingFilter), [tasks, servicingFilter]);
   const servicing = useMemo(() => computeServicing(tasksForServicing), [tasksForServicing]);
 
   // 3. Client metrics calculations
@@ -256,22 +276,22 @@ export default function DashboardView({
       else if (status === 'Inactive') inactive++;
       else dead++;
       // Always this-month, independent of the "New This Month/Year" card's
-      // own toggle below — feeds Client Tiers' small "+N New" footer stat.
+      // own filter below — feeds Client Tiers' small "+N New" footer stat.
       if (isThisMonth(c.createdAt)) { newLeads++; newApplicants += 1 + fam; }
     });
     return { total, applicants, active, inactive, dead, newLeads, newApplicants };
   }, [clients]);
 
-  // 3b. "New This Month/Year" card — its own Monthly/Yearly(FY) toggle,
-  // independent of Client Tiers' always-monthly "+N New" stat above.
+  // 3b. "New This Month/Year" card — its own period picker, independent of
+  // Client Tiers' always-monthly "+N New" stat above.
   const newClientStats = useMemo(() => {
     let newLeads = 0, newApplicants = 0;
-    filterByPeriod(clients, clientsPeriod).forEach(c => {
+    filterByFilter(clients, clientsFilter).forEach(c => {
       const fam = Array.isArray(c.clientDetails?.familyDetails) ? c.clientDetails.familyDetails.length : 0;
       newLeads++; newApplicants += 1 + fam;
     });
     return { newLeads, newApplicants };
-  }, [clients, clientsPeriod]);
+  }, [clients, clientsFilter]);
 
   // 4. Revenue/AUM calculations
   const rev = useMemo(() => {
@@ -491,24 +511,26 @@ export default function DashboardView({
             </div>
           </section>
 
-          {/* Business Overview — always the current financial year (invFY /
-              insFY / cobrFY), independent of any other section's own
-              Monthly/Yearly toggle. */}
+          {/* Business Overview — defaults to the current financial year, own
+              period picker independent of every other section's. */}
           <section className="space-y-3.5">
-            <SectionHeader icon={TrendingUp} accent="cyan" title="Business Overview" subtitle={`Net new business flow across SIP, lumpsum, insurance & COBR — ${CURRENT_FY.label}`} tag={CURRENT_FY.label} />
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <SectionHeader icon={TrendingUp} accent="cyan" title="Business Overview" subtitle={`Net new business flow across SIP, lumpsum, insurance & COBR — ${filterLabel(bizFilter)}`} tag={filterLabel(bizFilter)} />
+              <PeriodFilter filter={bizFilter} onChange={setBizFilter} defaultMode="year" />
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <HeroKpi icon={TrendingUp} accent="blue" label="Net SIP Volume" value={fmtINR(invFY.netSip)} signed={invFY.netSip} />
-              <HeroKpi icon={Coins} accent="cyan" label="New Lumpsum Flow" value={fmtINR(invFY.netLump)} signed={invFY.netLump} />
-              <HeroKpi icon={HeartPulse} accent="emerald" label="Net Insurance Flow" value={fmtINR(insFY.netFlow)} signed={insFY.netFlow} />
-              <HeroKpi icon={Repeat} accent="violet" label="Net COBR Flow" value={fmtINR(cobrFY.net)} signed={cobrFY.net} />
+              <HeroKpi icon={TrendingUp} accent="blue" label="Net SIP Volume" value={fmtINR(bizInv.netSip)} signed={bizInv.netSip} />
+              <HeroKpi icon={Coins} accent="cyan" label="New Lumpsum Flow" value={fmtINR(bizInv.netLump)} signed={bizInv.netLump} />
+              <HeroKpi icon={HeartPulse} accent="emerald" label="Net Insurance Flow" value={fmtINR(bizIns.netFlow)} signed={bizIns.netFlow} />
+              <HeroKpi icon={Repeat} accent="violet" label="Net COBR Flow" value={fmtINR(bizCobr.net)} signed={bizCobr.net} />
             </div>
           </section>
 
           {/* Investments Section */}
           <section className="space-y-5">
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <SectionHeader icon={TrendingUp} accent="emerald" title="Investment Operations" subtitle={`SIP, lumpsum & redemption flows from active proposals — ${invPeriod === 'month' ? 'this month' : CURRENT_FY.label}`} />
-              <PeriodToggle value={invPeriod} onChange={setInvPeriod} />
+              <SectionHeader icon={TrendingUp} accent="emerald" title="Investment Operations" subtitle={`SIP, lumpsum & redemption flows from active proposals — ${filterLabel(invFilter)}`} />
+              <PeriodFilter filter={invFilter} onChange={setInvFilter} defaultMode="month" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <FlowCard
@@ -775,10 +797,10 @@ export default function DashboardView({
                 <div>
                   <div className="flex items-center gap-2.5 mb-3">
                     <span className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0"><UserPlus size={14} /></span>
-                    <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">{clientsPeriod === 'month' ? 'New This Month' : 'New This Year'}</h4>
+                    <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">New Clients</h4>
                   </div>
                   <div className="mb-5">
-                    <PeriodToggle value={clientsPeriod} onChange={setClientsPeriod} />
+                    <PeriodFilter filter={clientsFilter} onChange={setClientsFilter} defaultMode="month" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-2.5">
@@ -797,7 +819,7 @@ export default function DashboardView({
                     </div>
                   </div>
                 </div>
-                <p className="text-[10px] text-slate-450 dark:text-slate-500 font-semibold mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 leading-snug">New group leaders &amp; their total applicants {clientsPeriod === 'month' ? 'this month' : CURRENT_FY.label}</p>
+                <p className="text-[10px] text-slate-450 dark:text-slate-500 font-semibold mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 leading-snug">New group leaders &amp; their total applicants — {filterLabel(clientsFilter)}</p>
               </Card>
             </div>
           </section>
@@ -805,8 +827,8 @@ export default function DashboardView({
           {/* Insurance Segment & Policy Details */}
           <section className="space-y-5">
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <SectionHeader icon={Shield} title="Insurance Pipeline" subtitle={`Premiums booked & policies lifecycle pipeline — ${insPeriod === 'month' ? 'this month' : CURRENT_FY.label}`} />
-              <PeriodToggle value={insPeriod} onChange={setInsPeriod} />
+              <SectionHeader icon={Shield} title="Insurance Pipeline" subtitle={`Premiums booked & policies lifecycle pipeline — ${filterLabel(insFilter)}`} />
+              <PeriodFilter filter={insFilter} onChange={setInsFilter} defaultMode="month" />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
 
@@ -874,8 +896,8 @@ export default function DashboardView({
               Policies (the COBR workspace's sibling registers). */}
           <section className="space-y-5">
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <SectionHeader icon={Briefcase} title="Servicing" subtitle={`Renewals, claims, fixed deposits & other policies — ${servicingPeriod === 'month' ? 'this month' : CURRENT_FY.label}`} />
-              <PeriodToggle value={servicingPeriod} onChange={setServicingPeriod} />
+              <SectionHeader icon={Briefcase} title="Servicing" subtitle={`Renewals, claims, fixed deposits & other policies — ${filterLabel(servicingFilter)}`} />
+              <PeriodFilter filter={servicingFilter} onChange={setServicingFilter} defaultMode="month" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
               <HeroKpi icon={CalendarCheck} accent="blue" label="Renewal Premium" value={fmtINR(servicing.renewal.amount)} hint={`${servicing.renewal.count} active renewal${servicing.renewal.count === 1 ? '' : 's'}`} />
@@ -1171,26 +1193,86 @@ function SectionHeader({ icon: Icon, title, subtitle, tag }) {
   );
 }
 
-// Monthly / Yearly(FY) segmented toggle — used by every section whose data
-// is period-scoped (Investment Operations, Insurance Pipeline, Servicing,
-// the "New This Month/Year" card). "Yearly" always means the current
-// financial year (see CURRENT_FY), not the calendar year.
-function PeriodToggle({ value, onChange }) {
+// Advanced period picker — used by every section whose data is period-
+// scoped (Business Overview, Investment Operations, Insurance Pipeline,
+// Servicing, the "New This Month/Year" card). Lets the user jump to ANY
+// past month or financial year, not just the current one — a compact button
+// showing the selected label opens a popover with a Monthly/Yearly mode
+// switch, the actual month+year (or FY) selects, and a "Clear Filter" reset
+// back to that section's own default (shown only once the selection has
+// actually moved away from default, so it doesn't clutter the common case).
+function PeriodFilter({ filter, onChange, defaultMode }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  const years = Array.from({ length: 7 }, (_, i) => NOW.getFullYear() - i);
+  const fyOptions = Array.from({ length: 7 }, (_, i) => CURRENT_FY.startYear - i);
+  const isDefault = filter.mode === defaultMode && isDefaultFilter(filter);
+
+  const selectCls = 'flex-1 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-200 px-2 py-1.5 cursor-pointer';
+
   return (
-    <div className="inline-flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 gap-0.5 shrink-0">
-      {[['month', 'Monthly'], ['year', 'Yearly']].map(([p, label]) => (
-        <button
-          key={p}
-          onClick={() => onChange(p)}
-          className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-colors cursor-pointer ${
-            value === p
-              ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm'
-              : 'text-slate-450 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
-          }`}
-        >
-          {label}
-        </button>
-      ))}
+    <div className="relative shrink-0" ref={ref}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold whitespace-nowrap transition-colors cursor-pointer ${
+          isDefault
+            ? 'border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-650'
+            : 'border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400'
+        }`}
+      >
+        <Calendar size={12} className="shrink-0" />
+        {filterLabel(filter)}
+        <ChevronDown size={11} className={`shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-2 z-30 w-64 p-3 rounded-xl border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 shadow-lg shadow-slate-200/60 dark:shadow-none">
+          <div className="flex p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 gap-0.5 mb-3">
+            {[['month', 'Monthly'], ['year', 'Yearly']].map(([m, label]) => (
+              <button
+                key={m}
+                onClick={() => onChange({ ...filter, mode: m })}
+                className={`flex-1 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide transition-colors cursor-pointer ${
+                  filter.mode === m
+                    ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm'
+                    : 'text-slate-450 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {filter.mode === 'month' ? (
+            <div className="flex gap-2">
+              <select value={filter.month} onChange={(e) => onChange({ ...filter, month: Number(e.target.value) })} className={selectCls}>
+                {MONTH_NAMES.map((m, i) => <option key={m} value={i}>{m}</option>)}
+              </select>
+              <select value={filter.year} onChange={(e) => onChange({ ...filter, year: Number(e.target.value) })} className={`${selectCls} flex-none w-20`}>
+                {years.map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+          ) : (
+            <select value={filter.fyStartYear} onChange={(e) => onChange({ ...filter, fyStartYear: Number(e.target.value) })} className={selectCls}>
+              {fyOptions.map((y) => <option key={y} value={y}>{fyLabel(y)}</option>)}
+            </select>
+          )}
+          {!isDefault && (
+            <button
+              onClick={() => onChange(defaultFilter(defaultMode))}
+              className="w-full mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-center text-[10px] font-bold uppercase tracking-wide text-rose-600 dark:text-rose-450 hover:underline cursor-pointer"
+            >
+              Clear Filter
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
