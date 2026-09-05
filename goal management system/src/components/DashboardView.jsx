@@ -63,6 +63,105 @@ const isThisMonth = (iso) => {
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
 };
 
+// Indian financial year: 1 April – 31 March. Computed once at module load —
+// the dashboard is a live SPA session, so a stale FY boundary only matters in
+// the ~seconds around midnight on 31 March, an acceptable tradeoff for not
+// recomputing this on every render.
+function fyRangeFor(d) {
+  const y = d.getFullYear();
+  const startYear = d.getMonth() >= 3 ? y : y - 1; // April = month index 3
+  const start = new Date(startYear, 3, 1, 0, 0, 0, 0);
+  const end = new Date(startYear + 1, 2, 31, 23, 59, 59, 999);
+  const label = `FY ${startYear}-${String((startYear + 1) % 100).padStart(2, '0')}`;
+  return { start, end, label };
+}
+const CURRENT_FY = fyRangeFor(new Date());
+const isThisFY = (iso) => {
+  if (!iso) return false;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  return d >= CURRENT_FY.start && d <= CURRENT_FY.end;
+};
+
+// period: 'month' -> current calendar month, 'year' -> current financial year
+const filterByPeriod = (list, period, dateField = 'createdAt') =>
+  list.filter((item) => (period === 'month' ? isThisMonth(item[dateField]) : isThisFY(item[dateField])));
+
+// ---- Pure computations, parametrized by an already period-filtered list ---
+// (so each section can drive the same math off its own Monthly/Yearly toggle
+// state, or off a fixed FY window for Business Overview, without duplicating
+// the aggregation logic.)
+function computeInv(prospectsInPeriod) {
+  const items = prospectsInPeriod.filter(p => p.proposalCategory === 'investment');
+  const sumOf = (types) => items.filter(p => types.includes(p.proposalType)).reduce((s, p) => s + num(p.amount), 0);
+  const sipIn = sumOf(SIP_IN_TYPES);
+  const sipOut = sumOf(SIP_OUT_TYPES);
+  const lump = sumOf(LUMP_TYPES);
+  const redeem = sumOf(REDEEM_TYPES);
+  const knownTypes = [...SIP_IN_TYPES, ...SIP_OUT_TYPES, ...LUMP_TYPES, ...REDEEM_TYPES];
+  const other = items.filter(p => !knownTypes.includes(p.proposalType));
+  const otherAmt = other.reduce((s, p) => s + num(p.amount), 0);
+  const otherByTypeMap = {};
+  other.forEach(p => {
+    const t = p.proposalType || 'Other';
+    otherByTypeMap[t] = (otherByTypeMap[t] || 0) + num(p.amount);
+  });
+  const otherByType = Object.entries(otherByTypeMap)
+    .map(([type, amount]) => ({ type, amount }))
+    .sort((a, b) => b.amount - a.amount);
+  return { sipIn, sipOut, netSip: sipIn - sipOut, lump, redeem, netLump: lump - redeem, other, otherByType, otherCount: other.length, otherAmt, count: items.length };
+}
+
+function computeIns(prospectsInPeriod) {
+  const items = prospectsInPeriod.filter(p => p.proposalCategory === 'insurance');
+  const premiumOf = (label) => items.filter(p => p.proposalType === label).reduce((s, p) => s + num(p.amount), 0);
+  const countOf = (label) => items.filter(p => p.proposalType === label).length;
+  const term = premiumOf('Term Insurance');
+  const medical = premiumOf('Medical Insurance');
+  const accidental = premiumOf('Accidental Insurance');
+  const travel = premiumOf('Travel Insurance');
+  const marine = premiumOf('Marine Insurance');
+  const motor = premiumOf('Motor Insurance');
+  const issued = items.filter(p => p.stage === 'Policy Issued').length;
+  const rejectedAmt = items.filter(p => p.stage === 'Policy Rejected').reduce((s, p) => s + num(p.amount), 0);
+  const types = [
+    { label: 'Term', count: countOf('Term Insurance'), color: '#3b82f6' },
+    { label: 'Medical', count: countOf('Medical Insurance'), color: '#10b981' },
+    { label: 'Accidental', count: countOf('Accidental Insurance'), color: '#8b5cf6' },
+    { label: 'Travel', count: countOf('Travel Insurance'), color: '#0e7490' },
+    { label: 'Marine', count: countOf('Marine Insurance'), color: '#0369a1' },
+    { label: 'Motor', count: countOf('Motor Insurance'), color: '#c2410c' },
+  ];
+  const stageMap = {};
+  items.forEach(p => { const s = p.stage || 'Qualified'; stageMap[s] = (stageMap[s] || 0) + 1; });
+  const totalPremium = term + medical + accidental + travel + marine + motor;
+  return { term, medical, accidental, travel, marine, motor, totalPremium, netFlow: totalPremium - rejectedAmt, rejectedAmt, issued, types, stages: stageMap, count: items.length };
+}
+
+function computeCobr(tasksInPeriod) {
+  const items = tasksInPeriod.filter(isCobrTask);
+  const sumOf = (type) => items.filter(t => t.cobrType === type).reduce((s, t) => s + cobrTotals(t.cobrEntries).total, 0);
+  const cobrIn = sumOf('COBR IN');
+  const cobrOut = sumOf('COBR OUT');
+  return { in: cobrIn, out: cobrOut, net: cobrIn - cobrOut, count: items.length };
+}
+
+function computeServicing(tasksInPeriod) {
+  const sumBy = (list, key) => list.reduce((s, t) => s + num(t[key]), 0);
+  const stageMapOf = (list) => {
+    const m = {};
+    list.forEach(t => { const s = t.stage || 'Qualified'; m[s] = (m[s] || 0) + 1; });
+    return m;
+  };
+  const build = (list, amountKey) => ({ count: list.length, amount: sumBy(list, amountKey), stages: stageMapOf(list) });
+  return {
+    renewal: build(tasksInPeriod.filter(isRenewal), 'premiumAmount'),
+    claim: build(tasksInPeriod.filter(isClaim), 'claimAmount'),
+    fd: build(tasksInPeriod.filter(isFd), 'maturityAmount'),
+    policy: build(tasksInPeriod.filter(isPolicy), 'premiumAmount'),
+  };
+}
+
 export default function DashboardView({
   clients = [],
   advisorName = '',
@@ -99,74 +198,37 @@ export default function DashboardView({
     };
   }, []);
 
-  // 1. Investments calculations
-  const inv = useMemo(() => {
-    const items = prospects.filter(p => p.proposalCategory === 'investment');
-    const sumOf = (types) => items.filter(p => types.includes(p.proposalType)).reduce((s, p) => s + num(p.amount), 0);
-    const sipIn = sumOf(SIP_IN_TYPES);
-    const sipOut = sumOf(SIP_OUT_TYPES);
-    const lump = sumOf(LUMP_TYPES);
-    const redeem = sumOf(REDEEM_TYPES);
-    const knownTypes = [...SIP_IN_TYPES, ...SIP_OUT_TYPES, ...LUMP_TYPES, ...REDEEM_TYPES];
-    const other = items.filter(p => !knownTypes.includes(p.proposalType));
-    const otherAmt = other.reduce((s, p) => s + num(p.amount), 0);
-    const otherByTypeMap = {};
-    other.forEach(p => {
-      const t = p.proposalType || 'Other';
-      otherByTypeMap[t] = (otherByTypeMap[t] || 0) + num(p.amount);
-    });
-    const otherByType = Object.entries(otherByTypeMap)
-      .map(([type, amount]) => ({ type, amount }))
-      .sort((a, b) => b.amount - a.amount);
-    return { sipIn, sipOut, netSip: sipIn - sipOut, lump, redeem, netLump: lump - redeem, other, otherByType, otherCount: other.length, otherAmt, count: items.length };
-  }, [prospects]);
+  // Per-section Monthly/Yearly(FY) period toggles. Business Overview has no
+  // toggle — it's always the fixed current-FY window (see invFY/insFY/cobrFY
+  // below). Goal & Asset Tracking has no period concept at all (unchanged).
+  const [invPeriod, setInvPeriod] = useState('month');
+  const [insPeriod, setInsPeriod] = useState('month');
+  const [servicingPeriod, setServicingPeriod] = useState('month');
+  const [clientsPeriod, setClientsPeriod] = useState('month');
 
-  // 2. Insurance calculations
-  const ins = useMemo(() => {
-    const items = prospects.filter(p => p.proposalCategory === 'insurance');
-    const premiumOf = (label) => items.filter(p => p.proposalType === label).reduce((s, p) => s + num(p.amount), 0);
-    const countOf = (label) => items.filter(p => p.proposalType === label).length;
-    const term = premiumOf('Term Insurance');
-    const medical = premiumOf('Medical Insurance');
-    const accidental = premiumOf('Accidental Insurance');
-    // Travel/Marine/Motor Insurance are real proposal types too (see
-    // InsuranceProposal.jsx) — they were missing here, which silently
-    // dropped their premium from every dashboard insurance total.
-    const travel = premiumOf('Travel Insurance');
-    const marine = premiumOf('Marine Insurance');
-    const motor = premiumOf('Motor Insurance');
-    const issued = items.filter(p => p.stage === 'Policy Issued').length;
-    const rejectedAmt = items.filter(p => p.stage === 'Policy Rejected').reduce((s, p) => s + num(p.amount), 0);
-    const types = [
-      { label: 'Term', count: countOf('Term Insurance'), color: '#3b82f6' },
-      { label: 'Medical', count: countOf('Medical Insurance'), color: '#10b981' },
-      { label: 'Accidental', count: countOf('Accidental Insurance'), color: '#8b5cf6' },
-      { label: 'Travel', count: countOf('Travel Insurance'), color: '#0e7490' },
-      { label: 'Marine', count: countOf('Marine Insurance'), color: '#0369a1' },
-      { label: 'Motor', count: countOf('Motor Insurance'), color: '#c2410c' },
-    ];
-    const stageMap = {};
-    items.forEach(p => { const s = p.stage || 'Qualified'; stageMap[s] = (stageMap[s] || 0) + 1; });
-    const totalPremium = term + medical + accidental + travel + marine + motor;
-    return { term, medical, accidental, travel, marine, motor, totalPremium, netFlow: totalPremium - rejectedAmt, rejectedAmt, issued, types, stages: stageMap, count: items.length };
-  }, [prospects]);
+  // Business Overview — always the current financial year, regardless of
+  // what any section's own toggle is set to.
+  const prospectsFY = useMemo(() => filterByPeriod(prospects, 'year'), [prospects]);
+  const tasksFY = useMemo(() => filterByPeriod(tasks, 'year'), [tasks]);
+  const invFY = useMemo(() => computeInv(prospectsFY), [prospectsFY]);
+  const insFY = useMemo(() => computeIns(prospectsFY), [prospectsFY]);
+  const cobrFY = useMemo(() => computeCobr(tasksFY), [tasksFY]);
 
-  // 2b. COBR (Change of Broker) flow — COBR IN vs COBR OUT volume, from the
-  // dedicated COBR task register (utils/cobr.js — a COBR record is a Task,
-  // not a Prospect). Same in-minus-out netting convention as Net SIP Volume
-  // / Net Lumpsum Flow above. Row totals are summed regardless of stage —
-  // cobrTotals' own contract computes them the same way at every stage.
-  const cobr = useMemo(() => {
-    const items = tasks.filter(isCobrTask);
-    const sumOf = (type) => items.filter(t => t.cobrType === type).reduce((s, t) => s + cobrTotals(t.cobrEntries).total, 0);
-    const cobrIn = sumOf('COBR IN');
-    const cobrOut = sumOf('COBR OUT');
-    return { in: cobrIn, out: cobrOut, net: cobrIn - cobrOut, count: items.length };
-  }, [tasks]);
+  // 1. Investment Operations — Monthly by default, Yearly (FY) on toggle.
+  const prospectsForInv = useMemo(() => filterByPeriod(prospects, invPeriod), [prospects, invPeriod]);
+  const tasksForInv = useMemo(() => filterByPeriod(tasks, invPeriod), [tasks, invPeriod]);
+  const inv = useMemo(() => computeInv(prospectsForInv), [prospectsForInv]);
+  const cobr = useMemo(() => computeCobr(tasksForInv), [tasksForInv]);
+
+  // 2. Insurance Pipeline — Monthly by default, Yearly (FY) on toggle,
+  // independent of Investment Operations' own toggle.
+  const prospectsForIns = useMemo(() => filterByPeriod(prospects, insPeriod), [prospects, insPeriod]);
+  const ins = useMemo(() => computeIns(prospectsForIns), [prospectsForIns]);
 
   // 2c. "Other Proposals" breakdown, extended with COBR IN/OUT so the list
   // genuinely covers every transaction type outside SIP/Lumpsum/Insurance —
-  // not just the investment-prospect ones.
+  // not just the investment-prospect ones. Follows Investment Operations'
+  // own period toggle since it's rendered inside that section.
   const otherAndCobr = useMemo(() => {
     const rows = [...inv.otherByType];
     if (cobr.in > 0) rows.push({ type: 'COBR IN', amount: cobr.in });
@@ -177,22 +239,9 @@ export default function DashboardView({
   // 2d. Servicing — the COBR workspace's sibling registers (Renewals, Claims,
   // Fixed Deposits, Other Insurance Policies). Each is a Task row tagged by
   // `relatedTo`, with its own amount field and stage taxonomy (see
-  // utils/cobrModules.js).
-  const servicing = useMemo(() => {
-    const sumBy = (list, key) => list.reduce((s, t) => s + num(t[key]), 0);
-    const stageMapOf = (list) => {
-      const m = {};
-      list.forEach(t => { const s = t.stage || 'Qualified'; m[s] = (m[s] || 0) + 1; });
-      return m;
-    };
-    const build = (list, amountKey) => ({ count: list.length, amount: sumBy(list, amountKey), stages: stageMapOf(list) });
-    return {
-      renewal: build(tasks.filter(isRenewal), 'premiumAmount'),
-      claim: build(tasks.filter(isClaim), 'claimAmount'),
-      fd: build(tasks.filter(isFd), 'maturityAmount'),
-      policy: build(tasks.filter(isPolicy), 'premiumAmount'),
-    };
-  }, [tasks]);
+  // utils/cobrModules.js). Monthly by default, Yearly (FY) on toggle.
+  const tasksForServicing = useMemo(() => filterByPeriod(tasks, servicingPeriod), [tasks, servicingPeriod]);
+  const servicing = useMemo(() => computeServicing(tasksForServicing), [tasksForServicing]);
 
   // 3. Client metrics calculations
   const cli = useMemo(() => {
@@ -206,10 +255,23 @@ export default function DashboardView({
       if (status === 'Active') active++;
       else if (status === 'Inactive') inactive++;
       else dead++;
+      // Always this-month, independent of the "New This Month/Year" card's
+      // own toggle below — feeds Client Tiers' small "+N New" footer stat.
       if (isThisMonth(c.createdAt)) { newLeads++; newApplicants += 1 + fam; }
     });
     return { total, applicants, active, inactive, dead, newLeads, newApplicants };
   }, [clients]);
+
+  // 3b. "New This Month/Year" card — its own Monthly/Yearly(FY) toggle,
+  // independent of Client Tiers' always-monthly "+N New" stat above.
+  const newClientStats = useMemo(() => {
+    let newLeads = 0, newApplicants = 0;
+    filterByPeriod(clients, clientsPeriod).forEach(c => {
+      const fam = Array.isArray(c.clientDetails?.familyDetails) ? c.clientDetails.familyDetails.length : 0;
+      newLeads++; newApplicants += 1 + fam;
+    });
+    return { newLeads, newApplicants };
+  }, [clients, clientsPeriod]);
 
   // 4. Revenue/AUM calculations
   const rev = useMemo(() => {
@@ -417,9 +479,11 @@ export default function DashboardView({
         {/* Left Side: Charts & Analytics (Spans 2 columns) */}
         <div className="xl:col-span-2 space-y-6">
           
-          {/* Managed Portfolio */}
+          {/* Managed Portfolio — always the current-month snapshot of assets
+              under management (a running balance, not a period flow, so
+              there's nothing to toggle: it always reflects "now"). */}
           <section className="space-y-3.5">
-            <SectionHeader icon={Landmark} accent="indigo" title="Managed Portfolio" subtitle="Total assets, SIP book & insurance value under active service" />
+            <SectionHeader icon={Landmark} accent="indigo" title="Managed Portfolio" subtitle="Total assets, SIP book & insurance value under active service" tag="This Month" />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <HeroKpi icon={Landmark} accent="indigo" label="Total AUM Managed" value={fmtINR(rev.aum)} hint={`${clients.length} client groups · ${rev.withAlloc} mapped`} />
               <HeroKpi icon={PiggyBank} accent="emerald" label="Total SIP Book" value={fmtINR(rev.totalSip)} hint="Active monthly systematic volume" />
@@ -427,20 +491,25 @@ export default function DashboardView({
             </div>
           </section>
 
-          {/* Business Overview */}
+          {/* Business Overview — always the current financial year (invFY /
+              insFY / cobrFY), independent of any other section's own
+              Monthly/Yearly toggle. */}
           <section className="space-y-3.5">
-            <SectionHeader icon={TrendingUp} accent="cyan" title="Business Overview" subtitle="Net new business flow across SIP, lumpsum, insurance & COBR this month" tag="Yearly" />
+            <SectionHeader icon={TrendingUp} accent="cyan" title="Business Overview" subtitle={`Net new business flow across SIP, lumpsum, insurance & COBR — ${CURRENT_FY.label}`} tag={CURRENT_FY.label} />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <HeroKpi icon={TrendingUp} accent="blue" label="Net SIP Volume" value={fmtINR(inv.netSip)} signed={inv.netSip} />
-              <HeroKpi icon={Coins} accent="cyan" label="New Lumpsum Flow" value={fmtINR(inv.netLump)} signed={inv.netLump} />
-              <HeroKpi icon={HeartPulse} accent="emerald" label="Net Insurance Flow" value={fmtINR(ins.netFlow)} signed={ins.netFlow} />
-              <HeroKpi icon={Repeat} accent="violet" label="Net COBR Flow" value={fmtINR(cobr.net)} signed={cobr.net} />
+              <HeroKpi icon={TrendingUp} accent="blue" label="Net SIP Volume" value={fmtINR(invFY.netSip)} signed={invFY.netSip} />
+              <HeroKpi icon={Coins} accent="cyan" label="New Lumpsum Flow" value={fmtINR(invFY.netLump)} signed={invFY.netLump} />
+              <HeroKpi icon={HeartPulse} accent="emerald" label="Net Insurance Flow" value={fmtINR(insFY.netFlow)} signed={insFY.netFlow} />
+              <HeroKpi icon={Repeat} accent="violet" label="Net COBR Flow" value={fmtINR(cobrFY.net)} signed={cobrFY.net} />
             </div>
           </section>
 
           {/* Investments Section */}
           <section className="space-y-5">
-            <SectionHeader icon={TrendingUp} accent="emerald" title="Investment Operations" subtitle="SIP, lumpsum & redemption flows from active proposals" />
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <SectionHeader icon={TrendingUp} accent="emerald" title="Investment Operations" subtitle={`SIP, lumpsum & redemption flows from active proposals — ${invPeriod === 'month' ? 'this month' : CURRENT_FY.label}`} />
+              <PeriodToggle value={invPeriod} onChange={setInvPeriod} />
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <FlowCard
                 title="Net SIP Book" net={inv.netSip} icon={TrendingUp} accent="blue"
@@ -697,40 +766,48 @@ export default function DashboardView({
                 </div>
               </Card>
 
-              {/* New Group Leaders & Applicants This Month — Group Leaders is
-                  the count of new client groups; Applicants is the total
-                  people this adds (each leader + their family members). */}
+              {/* New Group Leaders & Applicants — Group Leaders is the count
+                  of new client groups; Applicants is the total people this
+                  adds (each leader + their family members). Own Monthly/
+                  Yearly(FY) toggle, independent of Client Tiers' always-
+                  monthly "+N New" stat. */}
               <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] md:col-span-3 flex flex-col justify-between bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
                 <div>
-                  <div className="flex items-center gap-2.5 mb-5">
+                  <div className="flex items-center gap-2.5 mb-3">
                     <span className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0"><UserPlus size={14} /></span>
-                    <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">New This Month</h4>
+                    <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">{clientsPeriod === 'month' ? 'New This Month' : 'New This Year'}</h4>
+                  </div>
+                  <div className="mb-5">
+                    <PeriodToggle value={clientsPeriod} onChange={setClientsPeriod} />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-2.5">
                       <span className="w-9.5 h-9.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0"><UserPlus size={17} /></span>
                       <div>
-                        <p className="text-2xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">{cli.newLeads}</p>
+                        <p className="text-2xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">{newClientStats.newLeads}</p>
                         <p className="text-[9px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wide mt-1.5 leading-tight">Group Leaders</p>
                       </div>
                     </div>
                     <div className="flex flex-col gap-2.5">
                       <span className="w-9.5 h-9.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0"><Users size={17} /></span>
                       <div>
-                        <p className="text-2xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">{cli.newApplicants}</p>
+                        <p className="text-2xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">{newClientStats.newApplicants}</p>
                         <p className="text-[9px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wide mt-1.5 leading-tight">Applicants Total</p>
                       </div>
                     </div>
                   </div>
                 </div>
-                <p className="text-[10px] text-slate-450 dark:text-slate-500 font-semibold mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 leading-snug">New group leaders &amp; their total applicants this month</p>
+                <p className="text-[10px] text-slate-450 dark:text-slate-500 font-semibold mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 leading-snug">New group leaders &amp; their total applicants {clientsPeriod === 'month' ? 'this month' : CURRENT_FY.label}</p>
               </Card>
             </div>
           </section>
 
           {/* Insurance Segment & Policy Details */}
           <section className="space-y-5">
-            <SectionHeader icon={Shield} title="Insurance Pipeline" subtitle="Premiums booked & policies lifecycle pipeline" />
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <SectionHeader icon={Shield} title="Insurance Pipeline" subtitle={`Premiums booked & policies lifecycle pipeline — ${insPeriod === 'month' ? 'this month' : CURRENT_FY.label}`} />
+              <PeriodToggle value={insPeriod} onChange={setInsPeriod} />
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
 
               {/* Premium Booked Card */}
@@ -796,7 +873,10 @@ export default function DashboardView({
           {/* Servicing — Renewals, Claims, Fixed Deposits & Other Insurance
               Policies (the COBR workspace's sibling registers). */}
           <section className="space-y-5">
-            <SectionHeader icon={Briefcase} title="Servicing" subtitle="Renewals, claims, fixed deposits & other policies under service" />
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <SectionHeader icon={Briefcase} title="Servicing" subtitle={`Renewals, claims, fixed deposits & other policies — ${servicingPeriod === 'month' ? 'this month' : CURRENT_FY.label}`} />
+              <PeriodToggle value={servicingPeriod} onChange={setServicingPeriod} />
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
               <HeroKpi icon={CalendarCheck} accent="blue" label="Renewal Premium" value={fmtINR(servicing.renewal.amount)} hint={`${servicing.renewal.count} active renewal${servicing.renewal.count === 1 ? '' : 's'}`} />
               <HeroKpi icon={AlertCircle} accent="cyan" label="Claims Amount" value={fmtINR(servicing.claim.amount)} hint={`${servicing.claim.count} active claim${servicing.claim.count === 1 ? '' : 's'}`} />
@@ -1087,6 +1167,30 @@ function SectionHeader({ icon: Icon, title, subtitle, tag }) {
         </div>
         <p className="text-xs text-slate-450 dark:text-slate-500 font-medium mt-1.5">{subtitle}</p>
       </div>
+    </div>
+  );
+}
+
+// Monthly / Yearly(FY) segmented toggle — used by every section whose data
+// is period-scoped (Investment Operations, Insurance Pipeline, Servicing,
+// the "New This Month/Year" card). "Yearly" always means the current
+// financial year (see CURRENT_FY), not the calendar year.
+function PeriodToggle({ value, onChange }) {
+  return (
+    <div className="inline-flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 gap-0.5 shrink-0">
+      {[['month', 'Monthly'], ['year', 'Yearly']].map(([p, label]) => (
+        <button
+          key={p}
+          onClick={() => onChange(p)}
+          className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-colors cursor-pointer ${
+            value === p
+              ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm'
+              : 'text-slate-450 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 }
