@@ -11,7 +11,7 @@ import { parseBody } from '../lib/validate.js';
 import { can } from '../lib/permissions.js';
 import { logActivity } from '../lib/activityLog.js';
 import { notifyLeaveApplied, notifyLeaveResponded } from '../lib/notify.js';
-import { postSystemNotice } from './notices.js';
+import { postSystemNotice, endOfDayExpiry } from './notices.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -20,6 +20,15 @@ const dateRe = /^\d{4}-\d{2}-\d{2}$/;
 const timeRe = /^\d{2}:\d{2}$/;
 const LEAVE_TYPES = ['Full Day', 'Half Day', 'Early Leave', 'Late Entry'];
 const HALF_DAY_SLOTS = ['First Half', 'Second Half'];
+
+// Mirrors notices.js's localDateKey exactly (same server-local-timezone
+// convention every date field in this app uses).
+const localDateKey = (d = new Date()) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 
 const applySchema = z.object({
   fromDate: z.string().regex(dateRe, 'Invalid date'),
@@ -166,27 +175,60 @@ router.post('/:id/respond', asyncHandler(async (req, res) => {
   });
   res.json({ leave: serialize(row) });
   notifyLeaveResponded(prisma, row).catch((err) => console.error('[notify] leave responded:', err));
-  if (decision === 'Approved' && row.leaveType === 'Full Day') {
+  if (decision === 'Approved') {
     postLeaveNotice(prisma, row).catch((err) => console.error('[notify] leave notice:', err));
   }
 }));
 
-// An approved Full Day leave gets its own Notice Board post — a genuine
-// whole-day absence, unlike Half Day/Early Leave/Late Entry (the person is
-// still in for part of the day, so "X is on leave" would be misleading).
-// A multi-day request states the whole range up front, right at approval —
-// nothing further happens on the actual start date.
+// Every approved leave request gets its own Notice Board post — Half Day,
+// Early Leave and Late Entry included; nothing in the actual leave policy
+// exempts them, so each gets wording that matches what's really happening
+// that day rather than the misleading blanket "is on leave". The title's
+// tense (today/future/past) is relative to the approval moment, since a
+// leave can be approved well ahead of — or after — its actual date. The
+// post expires at the end of the leave's last day (`endOfDayExpiry`, the
+// same helper manually-posted notices use for visibleForDays) so it stops
+// showing up once it's no longer relevant instead of sitting there forever.
 async function postLeaveNotice(prisma, row) {
   const requester = await prisma.user.findUnique({ where: { id: row.createdBy }, select: { name: true } });
   const name = requester?.name || 'A teammate';
-  const fmt = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const fmt = (d) => new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const todayKey = localDateKey();
+  const tense = row.fromDate === todayKey ? 'today' : row.fromDate > todayKey ? 'future' : 'past';
   const isMultiDay = row.toDate !== row.fromDate;
+
+  let title, message;
+  if (row.leaveType === 'Half Day') {
+    const slot = row.halfDaySlot || 'Half Day';
+    title = tense === 'today' ? `🌴 ${name} is on leave today (${slot})`
+      : tense === 'future' ? `🌴 ${name} will be on leave (${slot})`
+      : `🌴 ${name} was on leave (${slot})`;
+    message = `${name} will be away for the ${slot} on ${fmt(row.fromDate)}.`;
+  } else if (row.leaveType === 'Early Leave') {
+    title = tense === 'today' ? `🌴 ${name} is leaving early today`
+      : tense === 'future' ? `🌴 ${name} will leave early`
+      : `🌴 ${name} left early`;
+    message = `${name} will leave early (around ${row.timeValue}) on ${fmt(row.fromDate)}.`;
+  } else if (row.leaveType === 'Late Entry') {
+    title = tense === 'today' ? `🌴 ${name} will arrive late today`
+      : tense === 'future' ? `🌴 ${name} will arrive late`
+      : `🌴 ${name} arrived late`;
+    message = `${name} will arrive late (around ${row.timeValue}) on ${fmt(row.fromDate)}.`;
+  } else if (isMultiDay) {
+    title = `🌴 ${name} is on leave`;
+    message = `${name} will be on leave from ${fmt(row.fromDate)} to ${fmt(row.toDate)}.`;
+  } else {
+    title = tense === 'today' ? `🌴 ${name} is on leave today`
+      : tense === 'future' ? `🌴 ${name} will be on leave`
+      : `🌴 ${name} was on leave`;
+    message = `${name} is on leave on ${fmt(row.fromDate)}.`;
+  }
+
   await postSystemNotice(prisma, {
     type: 'LEAVE',
-    title: isMultiDay ? `🌴 ${name} is on leave` : `🌴 ${name} is on leave today`,
-    message: isMultiDay
-      ? `${name} will be on leave from ${fmt(row.fromDate)} to ${fmt(row.toDate)}.`
-      : `${name} is on leave on ${fmt(row.fromDate)}.`,
+    title,
+    message,
+    expiresAt: endOfDayExpiry(row.toDate, 1),
   });
 }
 
