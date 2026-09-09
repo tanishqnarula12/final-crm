@@ -549,7 +549,7 @@ export default function DashboardView({
               under management (a running balance, not a period flow, so
               there's nothing to toggle: it always reflects "now"). */}
           <section className="space-y-3.5">
-            <SectionHeader icon={Landmark} accent="indigo" title="Managed Portfolio" subtitle="Total assets, SIP book & insurance value under active service" tag="This Month" />
+            <SectionHeader icon={Landmark} accent="indigo" title="Managed Portfolio" subtitle="Total assets, SIP book & insurance value under active service" />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <HeroKpi
                 icon={Landmark} accent="indigo" label="Total AUM Managed" value={fmtINR(displayAum)}
@@ -558,7 +558,7 @@ export default function DashboardView({
               />
               <HeroKpi
                 icon={PiggyBank} accent="emerald" label="Total SIP Book" value={fmtINR(displaySip)}
-                hint={mpOverride?.sipAmount != null ? 'Manually set figure' : 'Active monthly systematic volume'}
+                hint={mpOverride?.sipAmount != null ? 'Manually set figure' : undefined}
                 onEdit={canEditSip ? () => setMpEditField('sip') : null}
               />
               <HeroKpi
@@ -1361,7 +1361,7 @@ function HeroKpi({ icon: Icon, accent, label, value, hint, signed, onEdit }) {
         <button
           onClick={onEdit}
           title="Edit this figure"
-          className="absolute top-2.5 right-2.5 w-5 h-5 rounded-md flex items-center justify-center text-slate-300 hover:text-blue-600 hover:bg-blue-50 dark:text-slate-600 dark:hover:text-blue-400 dark:hover:bg-blue-950/40 transition-colors cursor-pointer"
+          className="absolute bottom-2.5 right-2.5 w-5 h-5 rounded-md flex items-center justify-center text-slate-300 hover:text-blue-600 hover:bg-blue-50 dark:text-slate-600 dark:hover:text-blue-400 dark:hover:bg-blue-950/40 transition-colors cursor-pointer"
         >
           <Pencil size={11} />
         </button>
