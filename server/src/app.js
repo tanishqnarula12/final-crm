@@ -28,6 +28,7 @@ import permissionRoutes from './routes/permissions.js';
 import notificationRoutes from './routes/notifications.js';
 import pushRoutes from './routes/push.js';
 import noticeRoutes from './routes/notices.js';
+import managedPortfolioRoutes from './routes/managedPortfolio.js';
 
 export function createApp() {
   const app = express();
@@ -72,6 +73,7 @@ export function createApp() {
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/push', pushRoutes);
   app.use('/api/notices', noticeRoutes);
+  app.use('/api/managed-portfolio', managedPortfolioRoutes);
 
   app.use(notFound);
   app.use(errorHandler);

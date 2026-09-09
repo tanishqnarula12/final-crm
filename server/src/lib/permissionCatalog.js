@@ -54,6 +54,13 @@ export const MODULES = [
   { key: 'meetings', label: 'Meetings', actions: ['create', 'view', 'edit', 'delete'] },
   { key: 'queries', label: 'Queries', actions: ['create', 'view', 'editDetails', 'changeStage', 'editLog', 'delete'] },
   { key: 'leave', label: 'Leave', actions: ['create', 'view', 'editDetails', 'respond'] },
+  // The Dashboard's Managed Portfolio KPI row — Total AUM Managed, Total SIP
+  // Book and Managed Insurance are normally computed live, but each can be
+  // manually overridden (see ManagedPortfolioOverride in schema.prisma).
+  // Not a record-owned module (there's nothing to be "assigned" to — see the
+  // 'global' ownership kind below), so every action here is only ever ALL or
+  // NONE in practice.
+  { key: 'managedPortfolio', label: 'Managed Portfolio', actions: ['editAum', 'editSip', 'editInsurance'] },
 ];
 
 export const ACTION_LABELS = {
@@ -61,6 +68,7 @@ export const ACTION_LABELS = {
   editDetails: 'Edit Details', changeStage: 'Change Stage', editLog: 'Edit / Add Log',
   assignRm: 'Assign RM', convert: 'Convert', delete: 'Delete', upload: 'Upload',
   respond: 'Approve / Reject',
+  editAum: 'Edit Total AUM', editSip: 'Edit Total SIP Book', editInsurance: 'Edit Managed Insurance',
 };
 
 // How "owned / assigned" and "is RM of this record" are computed per module.
@@ -80,12 +88,15 @@ export const ACTION_LABELS = {
 //             isProspectAssignee() in permissions.js) — distinct from
 //             'client' because a prospect carries several parallel assignee
 //             fields, not just the client's RM.
+//   global  — no record at all (a singleton setting, not owned by anyone).
+//             ASSIGNED has nothing to resolve against and always denies,
+//             same as NONE — a role only gets in via ALL.
 export const OWNERSHIP = {
   leads: 'self', clients: 'self', tasks: 'task', cobr: 'task', queries: 'task', mom: 'self', meetings: 'meeting',
   renewals: 'task', claims: 'task', fixedDeposits: 'task', otherInsurancePolicies: 'task',
   goals: 'client', assetAllocation: 'client', investmentProposal: 'client', insuranceProposal: 'client',
   portfolioReview: 'client', policyReview: 'client', investmentProspects: 'prospect', insuranceProspects: 'prospect',
-  documents: 'client', leave: 'creator',
+  documents: 'client', leave: 'creator', managedPortfolio: 'global',
 };
 
 // Compact default scopes. `_` is the fallback for any role not listed.
@@ -159,6 +170,10 @@ const DEF = {
   // every ordinary role; only Internal Manager (+ Admin, which bypasses the
   // matrix entirely) may decide on ANY user's request, not just their own.
   leave: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S }, respond: { _: N, INTERNAL_MANAGER: A } },
+  // Admin-only out of the box (NONE for every matrix role — Admin always
+  // bypasses the matrix). An admin can widen a role to ALL here later; ALL
+  // is the only scope that means anything for a global, non-record setting.
+  managedPortfolio: { editAum: { _: N }, editSip: { _: N }, editInsurance: { _: N } },
 };
 
 export function defaultScope(role, module, action) {

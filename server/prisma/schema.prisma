@@ -479,6 +479,30 @@ model Notice {
   @@map("notices")
 }
 
+// Manual admin override for the Dashboard's "Managed Portfolio" KPIs — Total
+// AUM Managed, Total SIP Book and Managed Insurance are normally computed
+// live from client goals / policy tasks, but the real figure sometimes lives
+// outside the CRM (e.g. AUM confirmed against the custodian/RTA statement),
+// so an admin (or a role granted the managedPortfolio matrix permission) can
+// punch in a corrected number instead. A null field means "no override — use
+// the computed value"; each of the three fields is independent. Singleton
+// row (id is always "singleton"), upserted, never more than one row.
+model ManagedPortfolioOverride {
+  id                 String    @id @default("singleton")
+  aumAmount          Float?
+  aumAsOfDate        String? // YYYY-MM-DD — "figures accurate as of this date"
+  aumUpdatedBy       String?
+  aumUpdatedAt       DateTime?
+  sipAmount          Float?
+  sipUpdatedBy       String?
+  sipUpdatedAt       DateTime?
+  insuranceAmount    Float?
+  insuranceUpdatedBy String?
+  insuranceUpdatedAt DateTime?
+
+  @@map("managed_portfolio_overrides")
+}
+
 // Web Push subscriptions (one per browser/device the user granted notification
 // permission on). `endpoint` is globally unique per browser install, so
 // re-subscribing on the same device/browser (e.g. a different CRM user

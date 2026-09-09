@@ -22,6 +22,7 @@ const OWNERSHIP_GUIDE = {
   creator: 'this person created the record. Being assigned to it does not count here — only the original creator does.',
   task: 'this person assigned the task (they\'re the "Assigned By") OR the task is assigned to them (they\'re the "Assigned To"). Nobody else can see or edit the task at all.',
   client: 'this person is the Relationship Manager assigned to the client (or to the client the record belongs to, for Goals / Proposals / Reviews / Prospects / Documents), or they created it.',
+  global: 'nothing — this is a global setting, not tied to any record. "Assigned" behaves exactly like "None" here; only "All" grants access.',
 };
 
 export default function PermissionsMatrix() {

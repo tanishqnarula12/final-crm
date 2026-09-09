@@ -1,14 +1,16 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   TrendingUp, TrendingDown, PiggyBank, ArrowDownLeft, ArrowUpRight, Repeat,
   Shield, HeartPulse, Activity, FileBadge, Users, UserPlus, UserCheck, Skull, Clock,
   CalendarCheck, ListChecks, Briefcase, Landmark, Coins, Sparkles, PauseCircle,
-  Calendar, CheckSquare, ExternalLink, AlertCircle, Video, Target, Plane, Ship, Car, ChevronDown
+  Calendar, CheckSquare, ExternalLink, AlertCircle, Video, Target, Plane, Ship, Car, ChevronDown,
+  Pencil, X
 } from 'lucide-react';
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip
 } from 'recharts';
-import { Card, Avatar } from './UI';
+import { Card, Avatar, inputCls, selectCls, btnPrimary, btnSecondary } from './UI';
 import NoticeBoard from './NoticeBoard';
 import { fmtINR, GOAL_PRESETS, goalEmoji } from '../utils/calc';
 import { loadProspects, ALL_STAGE_THEME } from '../utils/prospects';
@@ -17,9 +19,35 @@ import { loadMeetings, MEETING_STATUSES } from '../utils/meetings';
 import { hasAllocation, allocationTotals } from '../utils/assets';
 import { isPolicy, isRenewal, isClaim, isFd, RENEWAL_STAGES, CLAIM_STAGES, FD_STAGES, POLICY_STAGES } from '../utils/cobrModules';
 import { isCobrTask, cobrTotals } from '../utils/cobr';
+import { can } from '../services/permissions';
+import { getManagedPortfolioOverride, setAumOverride, setSipOverride, setInsuranceOverride } from '../services/managedPortfolio';
 
 // Parse "₹ 50,000" / "50000" / numbers → number
 const num = (v) => Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
+
+// Local YYYY-MM-DD — never toISOString() (UTC-based; near midnight IST it
+// can report the wrong calendar day). Mirrors NoticeBoard.jsx's localDateStr.
+const localDateStr = (d = new Date()) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+const fmtAsOfDate = (dateStr) => {
+  if (!dateStr) return '';
+  const d = new Date(`${dateStr}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+// Amount-entry unit for the Managed Portfolio admin override — lets an admin
+// type "45" + "Cr" instead of "450000000".
+const AMOUNT_UNITS = { '₹': 1, 'L': 100000, 'Cr': 10000000 };
+const naturalUnit = (n) => {
+  if (n === null || n === undefined) return 'Cr';
+  const abs = Math.abs(n);
+  if (abs >= AMOUNT_UNITS.Cr) return 'Cr';
+  if (abs >= AMOUNT_UNITS.L) return 'L';
+  return '₹';
+};
 
 // Ensure a meeting link is a usable absolute URL before opening it.
 const normalizeUrl = (url) => {
@@ -200,6 +228,13 @@ export default function DashboardView({
   const [showAllOther, setShowAllOther] = useState(false);
   const [showAllGoals, setShowAllGoals] = useState(false);
 
+  // Managed Portfolio admin overrides (Total AUM / SIP Book / Managed
+  // Insurance) — null until loaded, each field independently nullable
+  // (null = no override, fall back to the computed figure below).
+  const [mpOverride, setMpOverride] = useState(null);
+  const [mpEditField, setMpEditField] = useState(null); // null | 'aum' | 'sip' | 'insurance'
+  useEffect(() => { getManagedPortfolioOverride().then(setMpOverride).catch(() => {}); }, []);
+
   // Live refresh whenever the underlying stores change
   useEffect(() => { setProspects(loadProspects()); }, [prospectsChangeCounter]);
   useEffect(() => { setTasks(loadTasks()); }, [tasksChangeCounter]);
@@ -311,6 +346,17 @@ export default function DashboardView({
   const managedInsurance = useMemo(() => {
     return tasks.filter(isPolicy).reduce((s, t) => s + num(t.premiumAmount), 0);
   }, [tasks]);
+
+  // Managed Portfolio's displayed figures — an active admin override (set via
+  // the pencil icon on each card, gated by the managedPortfolio.edit* matrix
+  // permission) replaces the computed value; otherwise the computed value
+  // stands exactly as before.
+  const displayAum = mpOverride?.aumAmount ?? rev.aum;
+  const displaySip = mpOverride?.sipAmount ?? rev.totalSip;
+  const displayInsurance = mpOverride?.insuranceAmount ?? managedInsurance;
+  const canEditAum = can('managedPortfolio', 'editAum');
+  const canEditSip = can('managedPortfolio', 'editSip');
+  const canEditInsurance = can('managedPortfolio', 'editInsurance');
 
   // 4c. Goal & Asset Tracking — average per-goal completion, client coverage,
   // goal-type distribution & a completion-range breakdown across all mapped goals
@@ -505,11 +551,33 @@ export default function DashboardView({
           <section className="space-y-3.5">
             <SectionHeader icon={Landmark} accent="indigo" title="Managed Portfolio" subtitle="Total assets, SIP book & insurance value under active service" tag="This Month" />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <HeroKpi icon={Landmark} accent="indigo" label="Total AUM Managed" value={fmtINR(rev.aum)} hint={`${clients.length} client groups · ${rev.withAlloc} mapped`} />
-              <HeroKpi icon={PiggyBank} accent="emerald" label="Total SIP Book" value={fmtINR(rev.totalSip)} hint="Active monthly systematic volume" />
-              <HeroKpi icon={Shield} accent="blue" label="Managed Insurance" value={fmtINR(managedInsurance)} hint="Premium value of policies under service" />
+              <HeroKpi
+                icon={Landmark} accent="indigo" label="Total AUM Managed" value={fmtINR(displayAum)}
+                hint={mpOverride?.aumAmount != null ? `As of ${fmtAsOfDate(mpOverride.aumAsOfDate)}` : `${clients.length} client groups · ${rev.withAlloc} mapped`}
+                onEdit={canEditAum ? () => setMpEditField('aum') : null}
+              />
+              <HeroKpi
+                icon={PiggyBank} accent="emerald" label="Total SIP Book" value={fmtINR(displaySip)}
+                hint={mpOverride?.sipAmount != null ? 'Manually set figure' : 'Active monthly systematic volume'}
+                onEdit={canEditSip ? () => setMpEditField('sip') : null}
+              />
+              <HeroKpi
+                icon={Shield} accent="blue" label="Managed Insurance" value={fmtINR(displayInsurance)}
+                hint={mpOverride?.insuranceAmount != null ? 'Manually set figure' : 'Premium value of policies under service'}
+                onEdit={canEditInsurance ? () => setMpEditField('insurance') : null}
+              />
             </div>
           </section>
+
+          {mpEditField && (
+            <ManagedPortfolioEditModal
+              field={mpEditField}
+              override={mpOverride}
+              computedValue={mpEditField === 'aum' ? rev.aum : mpEditField === 'sip' ? rev.totalSip : managedInsurance}
+              onClose={() => setMpEditField(null)}
+              onSaved={(updated) => { setMpOverride(updated); setMpEditField(null); }}
+            />
+          )}
 
           {/* Business Overview — defaults to the current financial year, own
               period picker independent of every other section's. */}
@@ -1285,10 +1353,19 @@ const ICON_THEMES = {
   violet: 'bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400',
 };
 
-function HeroKpi({ icon: Icon, accent, label, value, hint, signed }) {
+function HeroKpi({ icon: Icon, accent, label, value, hint, signed, onEdit }) {
   const trendColor = signed === undefined ? '' : signed < 0 ? 'text-rose-600 dark:text-rose-455' : 'text-emerald-600 dark:text-emerald-455';
   return (
-    <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 transition-colors shadow-sm shadow-slate-100/50 dark:shadow-none">
+    <Card className="relative p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 transition-colors shadow-sm shadow-slate-100/50 dark:shadow-none">
+      {onEdit && (
+        <button
+          onClick={onEdit}
+          title="Edit this figure"
+          className="absolute top-2.5 right-2.5 w-5 h-5 rounded-md flex items-center justify-center text-slate-300 hover:text-blue-600 hover:bg-blue-50 dark:text-slate-600 dark:hover:text-blue-400 dark:hover:bg-blue-950/40 transition-colors cursor-pointer"
+        >
+          <Pencil size={11} />
+        </button>
+      )}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-normal leading-tight min-h-[2.5em]">{label}</p>
@@ -1300,6 +1377,128 @@ function HeroKpi({ icon: Icon, accent, label, value, hint, signed }) {
         </span>
       </div>
     </Card>
+  );
+}
+
+const MP_FIELD_META = {
+  aum: { label: 'Total AUM Managed', hasDate: true },
+  sip: { label: 'Total SIP Book', hasDate: false },
+  insurance: { label: 'Managed Insurance', hasDate: false },
+};
+
+// Admin override editor for one Managed Portfolio KPI (AUM/SIP/Insurance) —
+// opened from the pencil icon HeroKpi renders when the signed-in user holds
+// the matching managedPortfolio.edit* permission. Amount is entered in
+// ₹ / Lakh / Crore for convenience and converted to raw rupees on save;
+// AUM additionally carries an "as of" date. Saving with a blank amount
+// clears the override (the dashboard reverts to the computed figure).
+function ManagedPortfolioEditModal({ field, override, computedValue, onClose, onSaved }) {
+  const meta = MP_FIELD_META[field];
+  const overrideAmount = field === 'aum' ? override?.aumAmount : field === 'sip' ? override?.sipAmount : override?.insuranceAmount;
+  const hasOverride = overrideAmount != null;
+  const baseline = overrideAmount ?? computedValue;
+  const [unit, setUnit] = useState(() => naturalUnit(baseline));
+  const [amountStr, setAmountStr] = useState(() => (baseline ? String(+(baseline / AMOUNT_UNITS[naturalUnit(baseline)]).toFixed(4)) : ''));
+  const [asOfDate, setAsOfDate] = useState(() => override?.aumAsOfDate || localDateStr());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const rupees = amountStr.trim() === '' ? null : Math.round(Number(amountStr) * AMOUNT_UNITS[unit]);
+
+  const save = async () => {
+    if (amountStr.trim() !== '' && (!Number.isFinite(rupees) || rupees < 0)) {
+      setError('Enter a valid, non-negative amount.');
+      return;
+    }
+    if (meta.hasDate && rupees !== null && !asOfDate) {
+      setError('Pick the "as of" date.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const updated = field === 'aum'
+        ? await setAumOverride(rupees, rupees === null ? null : asOfDate)
+        : field === 'sip'
+          ? await setSipOverride(rupees)
+          : await setInsuranceOverride(rupees);
+      onSaved(updated);
+    } catch (err) {
+      setError(err.message || 'Could not save this figure.');
+      setSaving(false);
+    }
+  };
+
+  const clear = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      const updated = field === 'aum'
+        ? await setAumOverride(null, null)
+        : field === 'sip'
+          ? await setSipOverride(null)
+          : await setInsuranceOverride(null);
+      onSaved(updated);
+    } catch (err) {
+      setError(err.message || 'Could not clear this override.');
+      setSaving(false);
+    }
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm flex flex-col shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
+          <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">Edit {meta.label}</h3>
+          <button onClick={onClose} className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">Amount</label>
+            <div className="flex gap-2">
+              <input
+                type="number" min="0" step="any" value={amountStr}
+                onChange={(e) => setAmountStr(e.target.value)}
+                placeholder="0" className={inputCls.replace('w-full', 'flex-1 min-w-0')}
+              />
+              <select value={unit} onChange={(e) => setUnit(e.target.value)} className={`${selectCls.replace('w-full', 'w-24')} flex-none`}>
+                {Object.keys(AMOUNT_UNITS).map((u) => <option key={u} value={u}>{u === '₹' ? '₹ (raw)' : u}</option>)}
+              </select>
+            </div>
+            {rupees !== null && <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5">= {fmtINR(rupees)}</p>}
+          </div>
+          {meta.hasDate && (
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">As Of Date</label>
+              <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} className={inputCls} />
+            </div>
+          )}
+          <p className="text-[10px] text-slate-400 dark:text-slate-500">
+            Clear the amount and save to remove the override and go back to the figure the CRM computes automatically.
+          </p>
+          {error && <p className="text-xs text-rose-600 dark:text-rose-450 font-bold">{error}</p>}
+        </div>
+        <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 rounded-b-2xl shrink-0 flex justify-between gap-2.5">
+          {hasOverride ? (
+            <button onClick={clear} disabled={saving} className={btnSecondary + ' text-rose-600 dark:text-rose-450' + (saving ? ' opacity-60 cursor-not-allowed' : '')}>
+              Remove Override
+            </button>
+          ) : <span />}
+          <div className="flex gap-2.5">
+            <button onClick={onClose} className={btnSecondary}>Cancel</button>
+            <button onClick={save} disabled={saving} className={btnPrimary + (saving ? ' opacity-60 cursor-not-allowed' : '')}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
