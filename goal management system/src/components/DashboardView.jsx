@@ -20,7 +20,7 @@ import { hasAllocation, allocationTotals } from '../utils/assets';
 import { isPolicy, isRenewal, isClaim, isFd, RENEWAL_STAGES, CLAIM_STAGES, FD_STAGES, POLICY_STAGES } from '../utils/cobrModules';
 import { isCobrTask, cobrTotals } from '../utils/cobr';
 import { can } from '../services/permissions';
-import { getManagedPortfolioOverride, setAumOverride, setSipOverride, setInsuranceOverride } from '../services/managedPortfolio';
+import { getManagedPortfolio, setAumOverride, setSipOverride, setInsuranceOverride } from '../services/managedPortfolio';
 
 // Parse "₹ 50,000" / "50000" / numbers → number
 const num = (v) => Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
@@ -228,12 +228,15 @@ export default function DashboardView({
   const [showAllOther, setShowAllOther] = useState(false);
   const [showAllGoals, setShowAllGoals] = useState(false);
 
-  // Managed Portfolio admin overrides (Total AUM / SIP Book / Managed
-  // Insurance) — null until loaded, each field independently nullable
-  // (null = no override, fall back to the computed figure below).
-  const [mpOverride, setMpOverride] = useState(null);
+  // Managed Portfolio — { override, computed }. `override` holds the manual
+  // entries (each independently nullable); `computed` holds the firm-wide
+  // figures the server totals over EVERY record, so this row reads the same
+  // for every user rather than following each one's record visibility.
+  const [mpData, setMpData] = useState(null);
   const [mpEditField, setMpEditField] = useState(null); // null | 'aum' | 'sip' | 'insurance'
-  useEffect(() => { getManagedPortfolioOverride().then(setMpOverride).catch(() => {}); }, []);
+  useEffect(() => { getManagedPortfolio().then(setMpData).catch(() => {}); }, []);
+  const mpOverride = mpData?.override;
+  const mpComputed = mpData?.computed;
 
   // Live refresh whenever the underlying stores change
   useEffect(() => { setProspects(loadProspects()); }, [prospectsChangeCounter]);
@@ -330,30 +333,41 @@ export default function DashboardView({
 
   // 4. Revenue/AUM calculations
   const rev = useMemo(() => {
-    let aum = 0, totalSip = 0, totalNetWorth = 0;
+    let aum = 0, totalNetWorth = 0;
     clients.forEach(c => {
-      (c.goals || []).forEach(g => { aum += num(g.currentInv); totalSip += num(g.currentSip); });
+      (c.goals || []).forEach(g => { aum += num(g.currentInv); });
       // Net worth = total assets − liabilities, from the client's Asset
       // Allocation record — a client with none configured contributes 0
       // (allocationTotals normalizes a missing/empty record safely).
       totalNetWorth += allocationTotals(c.assetAllocation).netWorth;
     });
     const withAlloc = clients.filter(c => hasAllocation(c)).length;
-    return { aum, totalSip, totalNetWorth, withAlloc };
+    return { aum, totalNetWorth, withAlloc };
   }, [clients]);
 
-  // 4b. Managed Insurance — total premium value of policies under active service (Policy sub-form)
-  const managedInsurance = useMemo(() => {
-    return tasks.filter(isPolicy).reduce((s, t) => s + num(t.premiumAmount), 0);
-  }, [tasks]);
+  // Managed Portfolio — always the CURRENT financial year, never any section's
+  // period filter: these are firm-level headline figures, so they must not move
+  // when someone changes what Business Overview or Investment Operations is
+  // looking at. The server sends the authoritative firm-wide totals; the local
+  // FY figures below are only a fallback for the moment before that lands (and
+  // if the call fails), computed off the same math over this user's own data.
+  const fixedFy = useMemo(() => defaultFilter('year'), []);
+  const localFyInv = useMemo(() => computeInv(filterByFilter(prospects, fixedFy)), [prospects, fixedFy]);
+  const localFyIns = useMemo(() => computeIns(filterByFilter(prospects, fixedFy)), [prospects, fixedFy]);
 
-  // Managed Portfolio's displayed figures — an active admin override (set via
-  // the pencil icon on each card, gated by the managedPortfolio.edit* matrix
-  // permission) replaces the computed value; otherwise the computed value
-  // stands exactly as before.
-  const displayAum = mpOverride?.aumAmount ?? rev.aum;
-  const displaySip = mpOverride?.sipAmount ?? rev.totalSip;
-  const displayInsurance = mpOverride?.insuranceAmount ?? managedInsurance;
+  const crmNetSip = mpComputed?.netSipFy ?? localFyInv.netSip;
+  const crmNetInsurance = mpComputed?.netInsuranceFy ?? localFyIns.netFlow;
+  const crmAum = mpComputed?.aum ?? rev.aum;
+  const crmClientGroups = mpComputed?.clientGroups ?? clients.length;
+  const crmMappedClients = mpComputed?.mappedClients ?? rev.withAlloc;
+
+  // AUM is a stated balance — the manual entry REPLACES the computed figure
+  // (it's the number confirmed against the custodian/RTA, as of a given date).
+  // SIP Book and Managed Insurance instead ADD the manual entry on top of what
+  // the CRM already booked this financial year.
+  const displayAum = mpOverride?.aumAmount ?? crmAum;
+  const displaySip = (mpOverride?.sipAmount ?? 0) + crmNetSip;
+  const displayInsurance = (mpOverride?.insuranceAmount ?? 0) + crmNetInsurance;
   const canEditAum = can('managedPortfolio', 'editAum');
   const canEditSip = can('managedPortfolio', 'editSip');
   const canEditInsurance = can('managedPortfolio', 'editInsurance');
@@ -545,25 +559,25 @@ export default function DashboardView({
         {/* Left Side: Charts & Analytics (Spans 2 columns) */}
         <div className="xl:col-span-2 space-y-6">
           
-          {/* Managed Portfolio — always the current-month snapshot of assets
-              under management (a running balance, not a period flow, so
-              there's nothing to toggle: it always reflects "now"). */}
+          {/* Managed Portfolio — firm-level running totals, identical for every
+              user (the server totals them over every record) and fixed to the
+              current financial year, so no period filter anywhere moves them. */}
           <section className="space-y-3.5">
             <SectionHeader icon={Landmark} accent="indigo" title="Managed Portfolio" subtitle="Total assets, SIP book & insurance value under active service" />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <HeroKpi
                 icon={Landmark} accent="indigo" label="Total AUM Managed" value={fmtINR(displayAum)}
-                hint={mpOverride?.aumAmount != null ? `As of ${fmtAsOfDate(mpOverride.aumAsOfDate)}` : `${clients.length} client groups · ${rev.withAlloc} mapped`}
+                hint={mpOverride?.aumAmount != null ? `As of ${fmtAsOfDate(mpOverride.aumAsOfDate)}` : `${crmClientGroups} client groups · ${crmMappedClients} mapped`}
                 onEdit={canEditAum ? () => setMpEditField('aum') : null}
               />
               <HeroKpi
                 icon={PiggyBank} accent="emerald" label="Total SIP Book" value={fmtINR(displaySip)}
-                hint={mpOverride?.sipAmount != null ? 'Manually set figure' : undefined}
+                hint="Active total systematic volume"
                 onEdit={canEditSip ? () => setMpEditField('sip') : null}
               />
               <HeroKpi
                 icon={Shield} accent="blue" label="Managed Insurance" value={fmtINR(displayInsurance)}
-                hint={mpOverride?.insuranceAmount != null ? 'Manually set figure' : 'Premium value of policies under service'}
+                hint="Premium value of policies under service"
                 onEdit={canEditInsurance ? () => setMpEditField('insurance') : null}
               />
             </div>
@@ -573,9 +587,9 @@ export default function DashboardView({
             <ManagedPortfolioEditModal
               field={mpEditField}
               override={mpOverride}
-              computedValue={mpEditField === 'aum' ? rev.aum : mpEditField === 'sip' ? rev.totalSip : managedInsurance}
+              crmValue={mpEditField === 'aum' ? crmAum : mpEditField === 'sip' ? crmNetSip : crmNetInsurance}
               onClose={() => setMpEditField(null)}
-              onSaved={(updated) => { setMpOverride(updated); setMpEditField(null); }}
+              onSaved={(updated) => { setMpData((prev) => ({ ...prev, override: updated })); setMpEditField(null); }}
             />
           )}
 
@@ -1380,23 +1394,27 @@ function HeroKpi({ icon: Icon, accent, label, value, hint, signed, onEdit }) {
   );
 }
 
+// `additive` fields (SIP Book, Managed Insurance) show manual entry + what the
+// CRM booked this financial year; AUM instead REPLACES the computed figure
+// with the stated balance, so it carries an "as of" date and no CRM addend.
 const MP_FIELD_META = {
-  aum: { label: 'Total AUM Managed', hasDate: true },
-  sip: { label: 'Total SIP Book', hasDate: false },
-  insurance: { label: 'Managed Insurance', hasDate: false },
+  aum: { label: 'Total AUM Managed', hasDate: true, additive: false, crmLabel: 'CRM-computed AUM' },
+  sip: { label: 'Total SIP Book', hasDate: false, additive: true, crmLabel: 'Net SIP Volume this FY' },
+  insurance: { label: 'Managed Insurance', hasDate: false, additive: true, crmLabel: 'Net Insurance Flow this FY' },
 };
 
 // Admin override editor for one Managed Portfolio KPI (AUM/SIP/Insurance) —
 // opened from the pencil icon HeroKpi renders when the signed-in user holds
 // the matching managedPortfolio.edit* permission. Amount is entered in
-// ₹ / Lakh / Crore for convenience and converted to raw rupees on save;
-// AUM additionally carries an "as of" date. Saving with a blank amount
-// clears the override (the dashboard reverts to the computed figure).
-function ManagedPortfolioEditModal({ field, override, computedValue, onClose, onSaved }) {
+// ₹ / Lakh / Crore for convenience and converted to raw rupees on save.
+// Clearing the amount removes the manual entry entirely.
+function ManagedPortfolioEditModal({ field, override, crmValue, onClose, onSaved }) {
   const meta = MP_FIELD_META[field];
   const overrideAmount = field === 'aum' ? override?.aumAmount : field === 'sip' ? override?.sipAmount : override?.insuranceAmount;
   const hasOverride = overrideAmount != null;
-  const baseline = overrideAmount ?? computedValue;
+  // Additive fields prefill with the manual entry alone (the CRM half is shown
+  // beside it); AUM prefills with whatever the card currently reads.
+  const baseline = meta.additive ? overrideAmount : (overrideAmount ?? crmValue);
   const [unit, setUnit] = useState(() => naturalUnit(baseline));
   const [amountStr, setAmountStr] = useState(() => (baseline ? String(+(baseline / AMOUNT_UNITS[naturalUnit(baseline)]).toFixed(4)) : ''));
   const [asOfDate, setAsOfDate] = useState(() => override?.aumAsOfDate || localDateStr());
@@ -1459,7 +1477,9 @@ function ManagedPortfolioEditModal({ field, override, computedValue, onClose, on
         </div>
         <div className="p-5 space-y-4">
           <div>
-            <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">Amount</label>
+            <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">
+              {meta.additive ? 'Manual Entry' : 'Amount'}
+            </label>
             <div className="flex gap-2">
               <input
                 type="number" min="0" step="any" value={amountStr}
@@ -1470,7 +1490,9 @@ function ManagedPortfolioEditModal({ field, override, computedValue, onClose, on
                 {Object.keys(AMOUNT_UNITS).map((u) => <option key={u} value={u}>{u === '₹' ? '₹ (raw)' : u}</option>)}
               </select>
             </div>
-            {rupees !== null && <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5">= {fmtINR(rupees)}</p>}
+            {rupees !== null && !meta.additive && (
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5">= {fmtINR(rupees)}</p>
+            )}
           </div>
           {meta.hasDate && (
             <div>
@@ -1478,15 +1500,33 @@ function ManagedPortfolioEditModal({ field, override, computedValue, onClose, on
               <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} className={inputCls} />
             </div>
           )}
+          {meta.additive && (
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/30 p-3 space-y-1.5">
+              <div className="flex items-center justify-between gap-3 text-[11px]">
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Manual entry</span>
+                <span className="font-bold tabular-nums text-slate-700 dark:text-slate-200">{fmtINR(rupees ?? 0)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3 text-[11px]">
+                <span className="text-slate-500 dark:text-slate-400 font-medium">{meta.crmLabel}</span>
+                <span className="font-bold tabular-nums text-slate-700 dark:text-slate-200">{fmtINR(crmValue)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3 text-xs pt-1.5 border-t border-slate-200 dark:border-slate-800">
+                <span className="text-slate-600 dark:text-slate-300 font-bold">Card total</span>
+                <span className="font-black tabular-nums text-slate-900 dark:text-white">{fmtINR((rupees ?? 0) + crmValue)}</span>
+              </div>
+            </div>
+          )}
           <p className="text-[10px] text-slate-400 dark:text-slate-500">
-            Clear the amount and save to remove the override and go back to the figure the CRM computes automatically.
+            {meta.additive
+              ? 'The CRM half updates itself from this financial year’s prospects. Clear the amount and save to drop the manual entry.'
+              : 'Clear the amount and save to remove the override and go back to the figure the CRM computes automatically.'}
           </p>
           {error && <p className="text-xs text-rose-600 dark:text-rose-450 font-bold">{error}</p>}
         </div>
         <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 rounded-b-2xl shrink-0 flex justify-between gap-2.5">
           {hasOverride ? (
             <button onClick={clear} disabled={saving} className={btnSecondary + ' text-rose-600 dark:text-rose-450' + (saving ? ' opacity-60 cursor-not-allowed' : '')}>
-              Remove Override
+              {meta.additive ? 'Clear Entry' : 'Remove Override'}
             </button>
           ) : <span />}
           <div className="flex gap-2.5">

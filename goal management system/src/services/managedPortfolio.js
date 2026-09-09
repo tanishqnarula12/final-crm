@@ -3,7 +3,10 @@
 // Dashboard renders this, so it just fetches on mount).
 import { api } from './api';
 
-export const getManagedPortfolioOverride = () => api.get('/managed-portfolio').then((d) => d.override);
+// Returns { override, computed } — the manual entries plus the firm-wide
+// figures they combine with (computed server-side over every record, so the
+// cards read identically for every user).
+export const getManagedPortfolio = () => api.get('/managed-portfolio');
 // amount: null clears the override (the dashboard reverts to the computed figure).
 export const setAumOverride = (amount, asOfDate) => api.put('/managed-portfolio/aum', { amount, asOfDate }).then((d) => d.override);
 export const setSipOverride = (amount) => api.put('/managed-portfolio/sip', { amount }).then((d) => d.override);
