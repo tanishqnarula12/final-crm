@@ -952,32 +952,32 @@ export default function DashboardView({
                   Mix donut in Clients & Distribution), full legend of all 6
                   types (incl. zero-count) follows so names always show. */}
               <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] flex flex-col items-center gap-5 bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
-                {policyTypesData.length > 0 && (
-                  <div className="relative w-[120px] h-[120px] flex items-center justify-center shrink-0">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={policyTypesData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={38}
-                          outerRadius={50}
-                          paddingAngle={3.5}
-                          dataKey="value"
-                        >
-                          {policyTypesData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip content={<ChartTooltip />} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="absolute flex flex-col items-center justify-center text-center">
-                      <span className="text-lg font-bold text-slate-800 dark:text-white tabular-nums leading-none">{ins.count}</span>
-                      <span className="text-[8px] uppercase tracking-wide text-slate-400 font-semibold mt-1">Booked</span>
-                    </div>
+                {/* Donut always renders — a flat neutral ring at zero data,
+                    same idea as Premium Booked's bars staying visible at 0%. */}
+                <div className="relative w-[120px] h-[120px] flex items-center justify-center shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={policyTypesData.length > 0 ? policyTypesData : [{ name: 'None', value: 1 }]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={38}
+                        outerRadius={50}
+                        paddingAngle={policyTypesData.length > 0 ? 3.5 : 0}
+                        dataKey="value"
+                      >
+                        {(policyTypesData.length > 0 ? policyTypesData : [{ color: '#e2e8f0' }]).map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      {policyTypesData.length > 0 && <Tooltip content={<ChartTooltip />} />}
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute flex flex-col items-center justify-center text-center">
+                    <span className="text-lg font-bold text-slate-800 dark:text-white tabular-nums leading-none">{ins.count}</span>
+                    <span className="text-[8px] uppercase tracking-wide text-slate-400 font-semibold mt-1">Booked</span>
                   </div>
-                )}
+                </div>
                 <div className="flex-1 w-full min-w-0">
                   <div className="flex items-center gap-2.5 mb-4">
                     <span className="w-7 h-7 rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0"><FileBadge size={14} /></span>
@@ -992,9 +992,6 @@ export default function DashboardView({
                       </div>
                     ))}
                   </div>
-                  {policyTypesData.length === 0 && (
-                    <p className="text-xs italic text-slate-400 mt-2">None booked.</p>
-                  )}
                 </div>
                 <div className="w-full pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-500">Total Booked</span>
@@ -1002,13 +999,15 @@ export default function DashboardView({
                 </div>
               </Card>
 
-              {/* Policy Stages List — clean dot + name + count, counts always shown */}
+              {/* Policy Stages List — every stage always listed (0 where empty),
+                  clean dot + name + count, same "always visible" idea as the
+                  other two cards. */}
               <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
                 <div className="flex items-center gap-2.5 mb-4">
                   <span className="w-7 h-7 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0"><ListChecks size={14} /></span>
                   <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Policy Stages</h4>
                 </div>
-                <SimpleStageList map={ins.stages} order={['Qualified', 'Document Pending', 'Proposal Submitted', 'Payment Done', 'Waiting for Underwriter', 'Policy Issued', 'Policy Rejected']} emptyText="No insurance prospects." />
+                <SimpleStageList map={ins.stages} order={['Qualified', 'Document Pending', 'Proposal Submitted', 'Payment Done', 'Waiting for Underwriter', 'Policy Issued', 'Policy Rejected']} />
               </Card>
 
             </div>
@@ -1681,10 +1680,11 @@ function PremiumRow({ icon: Icon, label, value, pct, color }) {
 // A clean dot + name + count list (no bars) — used only by Insurance
 // Pipeline's Policy Stages card. Distinct from the shared StageList (which
 // Servicing's four registers use) so this card's lighter look never affects
-// those. Only stages with a nonzero count are shown; counts always shown.
-function SimpleStageList({ map, order, emptyText }) {
-  const rows = order.filter(s => (map[s] || 0) > 0).map(s => ({ label: s, value: map[s] }));
-  if (rows.length === 0) return <p className="text-[10px] text-slate-400 dark:text-slate-500 italic font-bold py-2">{emptyText}</p>;
+// those. Every stage in `order` is always listed, 0 where there's no data —
+// same "always visible" idea as Premium Booked's rows and the Types Booked
+// donut/legend, so the card never collapses to a single empty-state line.
+function SimpleStageList({ map, order }) {
+  const rows = order.map(s => ({ label: s, value: map[s] || 0 }));
   return (
     <div className="space-y-3.5">
       {rows.map(r => (
