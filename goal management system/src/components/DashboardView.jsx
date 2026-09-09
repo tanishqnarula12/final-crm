@@ -474,6 +474,21 @@ export default function DashboardView({
     }));
   }, [ins]);
 
+  // 9b. Premium Booked breakdown — same 6 types/colors as the donut above,
+  // each row's bar length is its share of Total Premium (not of the max row).
+  const premiumBreakdown = useMemo(() => {
+    const rows = [
+      { label: 'Term Life', icon: Shield, value: ins.term, color: '#3b82f6' },
+      { label: 'Medical Health', icon: HeartPulse, value: ins.medical, color: '#10b981' },
+      { label: 'Accidental', icon: Activity, value: ins.accidental, color: '#8b5cf6' },
+      { label: 'Travel', icon: Plane, value: ins.travel, color: '#0e7490' },
+      { label: 'Marine', icon: Ship, value: ins.marine, color: '#0369a1' },
+      { label: 'Motor', icon: Car, value: ins.motor, color: '#c2410c' },
+    ];
+    const total = rows.reduce((s, r) => s + r.value, 0);
+    return rows.map(r => ({ ...r, pct: total ? Math.round((r.value / total) * 100) : 0 }));
+  }, [ins]);
+
   // 10. Filter next 3 scheduled meetings
   const upcomingMeetings = useMemo(() => {
     const now = new Date();
@@ -914,20 +929,17 @@ export default function DashboardView({
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
 
-              {/* Premium Booked Card */}
+              {/* Premium Booked Card — each row's bar is its share of Total Premium */}
               <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] flex flex-col justify-between bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
                 <div>
                   <div className="flex items-center gap-2.5 mb-4">
                     <span className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0"><Shield size={14} /></span>
                     <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Premium Booked</h4>
                   </div>
-                  <div className="space-y-3">
-                    <PremiumRow icon={Shield} label="Term Life" value={ins.term} />
-                    <PremiumRow icon={HeartPulse} label="Medical Health" value={ins.medical} />
-                    <PremiumRow icon={Activity} label="Accidental" value={ins.accidental} />
-                    <PremiumRow icon={Plane} label="Travel" value={ins.travel} />
-                    <PremiumRow icon={Ship} label="Marine" value={ins.marine} />
-                    <PremiumRow icon={Car} label="Motor" value={ins.motor} />
+                  <div className="space-y-3.5">
+                    {premiumBreakdown.map(r => (
+                      <PremiumRow key={r.label} icon={r.icon} label={r.label} value={r.value} pct={r.pct} color={r.color} />
+                    ))}
                   </div>
                 </div>
                 <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
@@ -936,9 +948,37 @@ export default function DashboardView({
                 </div>
               </Card>
 
-              {/* Policy Types Booked */}
-              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] flex flex-col justify-between bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
-                <div>
+              {/* Policy Types Booked — donut leads (mirrors the Client Status
+                  Mix donut in Clients & Distribution), full legend of all 6
+                  types (incl. zero-count) follows so names always show. */}
+              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] flex flex-col items-center gap-5 bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
+                {policyTypesData.length > 0 && (
+                  <div className="relative w-[120px] h-[120px] flex items-center justify-center shrink-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={policyTypesData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={38}
+                          outerRadius={50}
+                          paddingAngle={3.5}
+                          dataKey="value"
+                        >
+                          {policyTypesData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<ChartTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute flex flex-col items-center justify-center text-center">
+                      <span className="text-lg font-bold text-slate-800 dark:text-white tabular-nums leading-none">{ins.count}</span>
+                      <span className="text-[8px] uppercase tracking-wide text-slate-400 font-semibold mt-1">Booked</span>
+                    </div>
+                  </div>
+                )}
+                <div className="flex-1 w-full min-w-0">
                   <div className="flex items-center gap-2.5 mb-4">
                     <span className="w-7 h-7 rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0"><FileBadge size={14} /></span>
                     <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Types Booked</h4>
@@ -956,19 +996,19 @@ export default function DashboardView({
                     <p className="text-xs italic text-slate-400 mt-2">None booked.</p>
                   )}
                 </div>
-                <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div className="w-full pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-500">Total Booked</span>
                   <span className="text-xs font-bold text-slate-800 dark:text-white tabular-nums">{ins.count}</span>
                 </div>
               </Card>
 
-              {/* Policy Stages List */}
+              {/* Policy Stages List — clean dot + name + count, counts always shown */}
               <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
                 <div className="flex items-center gap-2.5 mb-4">
                   <span className="w-7 h-7 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0"><ListChecks size={14} /></span>
                   <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Policy Stages</h4>
                 </div>
-                <StageList map={ins.stages} order={['Qualified', 'Document Pending', 'Proposal Submitted', 'Payment Done', 'Waiting for Underwriter', 'Policy Issued', 'Policy Rejected']} emptyText="No insurance prospects." />
+                <SimpleStageList map={ins.stages} order={['Qualified', 'Document Pending', 'Proposal Submitted', 'Payment Done', 'Waiting for Underwriter', 'Policy Issued', 'Policy Rejected']} emptyText="No insurance prospects." />
               </Card>
 
             </div>
@@ -1618,12 +1658,42 @@ function FlowCard({ title, net, icon: TitleIcon, accent = 'blue', rows, grid, wi
   );
 }
 
-function PremiumRow({ icon: Icon, label, value }) {
+// A premium row with its share of Total Premium — icon + name, amount + (pct%),
+// and a colored bar below whose width is that percentage (matches the Client
+// Tiers bar pattern in Clients & Distribution).
+function PremiumRow({ icon: Icon, label, value, pct, color }) {
   return (
-    <div className="flex items-center gap-2.5">
-      <Icon size={14} className="text-slate-400 dark:text-slate-500 shrink-0" />
-      <span className="text-xs font-bold text-slate-650 dark:text-slate-350">{label}</span>
-      <span className="ml-auto text-xs font-black text-slate-900 dark:text-white tabular-nums">{fmtINR(value)}</span>
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2.5">
+        <Icon size={14} className="text-slate-400 dark:text-slate-500 shrink-0" />
+        <span className="text-xs font-bold text-slate-650 dark:text-slate-350 min-w-0">{label}</span>
+        <span className="ml-auto text-xs font-black text-slate-900 dark:text-white tabular-nums shrink-0">
+          {fmtINR(value)} <span className="text-[10px] text-slate-400 font-medium">({pct}%)</span>
+        </span>
+      </div>
+      <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+      </div>
+    </div>
+  );
+}
+
+// A clean dot + name + count list (no bars) — used only by Insurance
+// Pipeline's Policy Stages card. Distinct from the shared StageList (which
+// Servicing's four registers use) so this card's lighter look never affects
+// those. Only stages with a nonzero count are shown; counts always shown.
+function SimpleStageList({ map, order, emptyText }) {
+  const rows = order.filter(s => (map[s] || 0) > 0).map(s => ({ label: s, value: map[s] }));
+  if (rows.length === 0) return <p className="text-[10px] text-slate-400 dark:text-slate-500 italic font-bold py-2">{emptyText}</p>;
+  return (
+    <div className="space-y-3.5">
+      {rows.map(r => (
+        <div key={r.label} className="flex items-center gap-2.5 text-xs font-semibold">
+          <span className={`w-2 h-2 rounded-full shrink-0 ${STAGE_DOT[r.label] || 'bg-slate-400'}`} />
+          <span className="text-slate-600 dark:text-slate-350 min-w-0">{r.label}</span>
+          <span className="ml-auto text-slate-800 dark:text-white tabular-nums font-bold shrink-0">{r.value}</span>
+        </div>
+      ))}
     </div>
   );
 }
