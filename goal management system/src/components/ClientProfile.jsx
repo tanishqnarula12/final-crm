@@ -468,10 +468,19 @@ export default function ClientProfileView({
                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{client.name}</h2>
                 <StatusBadge status={details.status || 'Active'} />
               </div>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 font-medium flex items-center gap-2">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 font-medium flex flex-wrap items-center gap-2">
                 <span className="font-mono tracking-wider bg-blue-100/70 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 px-2.5 py-0.5 rounded-lg text-xs border border-blue-200/60 dark:border-blue-900/40">{client.pan}</span>
                 <span className="text-slate-300 dark:text-slate-700">•</span>
                 <span>{client.age || '—'} years old</span>
+                {client.createdAt && (
+                  <>
+                    <span className="text-slate-300 dark:text-slate-700">•</span>
+                    <span className="inline-flex items-center gap-1.5" title="Client created on">
+                      <CalendarDays size={13} className="text-slate-400 dark:text-slate-500 shrink-0" />
+                      Created {fmtDate(client.createdAt)}
+                    </span>
+                  </>
+                )}
               </p>
             </div>
           </div>

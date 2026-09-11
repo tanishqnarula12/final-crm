@@ -15,6 +15,7 @@ import { notifyFromEvents } from '../lib/notify.js';
 import { logActivity } from '../lib/activityLog.js';
 import { momCreateSchema } from '../lib/schemas.js';
 import { canCreate, canEdit } from '../lib/permissions.js';
+import { findPanConflict, panConflictMessage, normalizePan } from '../lib/panUniqueness.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -114,6 +115,34 @@ async function cascadeDeleteLeadChildren(leadIds, actorId) {
 
 router.put('/', asyncHandler(async (req, res) => {
   const { leads } = parseBody(bulkSchema, req.body);
+
+  // A PAN must be unique across the whole system (leads AND clients). This is a
+  // whole-array PUT, so only leads that are NEW or whose PAN actually CHANGED
+  // are validated — otherwise one pre-existing duplicate in the data would
+  // block every future save of every other lead.
+  const stored = await prisma.lead.findMany({
+    where: { id: { in: leads.map((l) => l.id) } },
+    select: { id: true, payload: true },
+  });
+  const storedPanById = new Map(stored.map((r) => [r.id, normalizePan(r.payload?.pan)]));
+  const seenInBatch = new Map(); // normalized PAN -> lead id, catches dupes within one payload
+
+  for (const lead of leads) {
+    const pan = normalizePan(lead.pan);
+    if (!pan) continue;
+    if (storedPanById.get(lead.id) === pan) continue; // unchanged — leave it alone
+
+    const clash = seenInBatch.get(pan);
+    if (clash && clash !== lead.id) {
+      return res.status(409).json({ error: `PAN ${pan} is used by two leads in this save. A PAN must be unique across the whole system.` });
+    }
+    seenInBatch.set(pan, lead.id);
+
+    const conflict = await findPanConflict(pan, { excludeLeadId: lead.id });
+    if (conflict) return res.status(409).json({ error: panConflictMessage(conflict, pan) });
+    lead.pan = pan;
+  }
+
   const { list, stats, events } = await syncBulk(prisma, {
     module: 'leads',
     modelKey: 'lead',

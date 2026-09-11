@@ -18,6 +18,7 @@ import { canDo, isAdmin } from '../utils/permissions';
 import { updateClient } from '../services/db';
 import { CountrySelect, StateSelect, CitySelect } from './LocationPicker';
 import { triggerInsuranceProspectDownload } from '../utils/prospectDownload';
+import { DOCUMENT_TYPES, documentTypeLabel } from '../utils/documentTypes';
 
 // KYC dropdown option sets
 const OCCUPATION_OPTIONS = ['Salaried', 'Self Employed', 'House Wife'];
@@ -96,52 +97,13 @@ const MOTOR_DOC_CATEGORIES = [
   { key: 'paymentProof', label: 'Payment Proof' },
 ];
 
-// Comprehensive document type list for the smart doc-upload picker.
-// key = storage key, label = display name, group = <optgroup> heading.
-const INSURANCE_DOC_TYPES = [
-  // Identity Proof
-  { key: 'aadharCard',      label: 'Aadhaar Card',              group: 'Identity Proof' },
-  { key: 'panCard',         label: 'PAN Card',                   group: 'Identity Proof' },
-  { key: 'passport',        label: 'Passport',                   group: 'Identity Proof' },
-  { key: 'voterId',         label: 'Voter ID',                   group: 'Identity Proof' },
-  { key: 'drivingLicense',  label: 'Driving License',            group: 'Identity Proof' },
-  { key: 'birthCertificate',label: 'Birth Certificate',          group: 'Identity Proof' },
-  // Address Proof
-  { key: 'utilityBill',     label: 'Utility Bill',               group: 'Address Proof' },
-  { key: 'rentAgreement',   label: 'Rent Agreement',             group: 'Address Proof' },
-  { key: 'rationCard',      label: 'Ration Card',                group: 'Address Proof' },
-  // Financial
-  { key: 'cancelledCheque', label: 'Cancelled Cheque',           group: 'Financial' },
-  { key: 'bankStatement3m', label: 'Bank Statement (3 Months)',  group: 'Financial' },
-  { key: 'bankStatement6m', label: 'Bank Statement (6 Months)',  group: 'Financial' },
-  { key: 'bankStatement12m',label: 'Bank Statement (12 Months)', group: 'Financial' },
-  { key: 'itr1yr',          label: 'ITR (1 Year)',               group: 'Financial' },
-  { key: 'itr3yr',          label: 'ITR (3 Years)',              group: 'Financial' },
-  { key: 'computation3yr',  label: 'Computation (3 Years)',      group: 'Financial' },
-  { key: 'form16',          label: 'Form 16',                    group: 'Financial' },
-  { key: 'caCertificate',   label: 'CA Certificate',             group: 'Financial' },
-  // Employment
-  { key: 'salarySlip',      label: 'Salary Slip (Last 3 Months)',group: 'Employment' },
-  { key: 'employmentLetter',label: 'Employment Letter',          group: 'Employment' },
-  { key: 'appointmentLetter',label: 'Appointment Letter',        group: 'Employment' },
-  // Medical
-  { key: 'medicalReport',   label: 'Medical Report',             group: 'Medical' },
-  { key: 'firstPrescription',label: 'First Prescription',        group: 'Medical' },
-  { key: 'ecg',             label: 'ECG Report',                 group: 'Medical' },
-  { key: 'bloodReport',     label: 'Blood Report',               group: 'Medical' },
-  { key: 'xray',            label: 'X-Ray Report',               group: 'Medical' },
-  // Insurance / Policy
-  { key: 'photo',           label: 'Passport Size Photo',        group: 'Insurance' },
-  { key: 'policyDocument',  label: 'Policy Document',            group: 'Insurance' },
-  { key: 'proposalForm',    label: 'Proposal Form',              group: 'Insurance' },
-  { key: 'previousPolicy',  label: 'Previous Policy',            group: 'Insurance' },
-  { key: 'surrenderLetter', label: 'Surrender Letter',           group: 'Insurance' },
-  // Other
-  { key: 'other',           label: 'Other',                      group: 'Other' },
-];
+// Document types for the smart doc-upload picker — shared with the Documents
+// module's upload dialog (utils/documentTypes.js) so both write the same
+// `category` label and the cross-linking between them keeps working.
+const INSURANCE_DOC_TYPES = DOCUMENT_TYPES;
 
 // Helper to look up a doc type label by key (handles legacy keys too)
-const docTypeLabel = (key) => INSURANCE_DOC_TYPES.find(d => d.key === key)?.label || key;
+const docTypeLabel = (key) => documentTypeLabel(key);
 
 // Composite key separator — must not appear in doc-type keys or applicant names
 const DOC_KEY_SEP = '|||';

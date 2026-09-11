@@ -417,6 +417,10 @@ export const FD_EXCEL_FIELDS = [
   { key: 'groupLeader', label: 'Client / Group Leader', type: 'text' },
   { key: 'applicant', label: 'Applicant', type: 'text' },
   { key: 'pan', label: 'Applicant PAN', type: 'text', required: true },
+  // An FD is often held jointly — the second holder is recorded here (both
+  // optional: plenty of FDs are single-holder).
+  { key: 'jointHolderName', label: 'Joint Holder Name', type: 'text' },
+  { key: 'jointHolderPan', label: 'Joint Holder PAN', type: 'text' },
   { key: 'bankName', label: 'Bank Name', type: 'text' },
   { key: 'startingDate', label: 'Starting Date', type: 'date' },
   { key: 'maturityDate', label: 'Maturity Date', type: 'date' },

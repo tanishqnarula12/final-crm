@@ -39,8 +39,12 @@ export const MODULES = [
   { key: 'mom', label: 'MOM', actions: ['create', 'view', 'edit'] },
   { key: 'portfolioReview', label: 'Portfolio Review', actions: ['create', 'view', 'edit'] },
   { key: 'policyReview', label: 'Policy Review', actions: ['view', 'edit'] },
-  { key: 'tasks', label: 'Tasks', actions: ['create', 'view', 'editDetails', 'changeStage', 'editLog', 'delete'] },
-  { key: 'cobr', label: 'Change of Broker (COBR)', actions: ['create', 'view', 'editDetails', 'changeStage', 'editLog', 'delete'] },
+  // `changeStage` is the FORWARD move; `changeStageBack` is the separate right
+  // to walk a record backward or reopen a terminal stage. Only the modules with
+  // a STAGE_ORDER in permissions.js carry the backward cell — the others never
+  // block a backward move, so a cell there would control nothing.
+  { key: 'tasks', label: 'Tasks', actions: ['create', 'view', 'editDetails', 'changeStage', 'changeStageBack', 'editLog', 'delete'] },
+  { key: 'cobr', label: 'Change of Broker (COBR)', actions: ['create', 'view', 'editDetails', 'changeStage', 'changeStageBack', 'editLog', 'delete'] },
   // The COBR workspace's other four registers each get their own matrix
   // column (unlike COBR itself, which stays a single shared column) — same
   // action set, same task-shaped assigner/assignee overlay.
@@ -48,11 +52,11 @@ export const MODULES = [
   { key: 'claims', label: 'Claims', actions: ['create', 'view', 'editDetails', 'changeStage', 'editLog', 'delete'] },
   { key: 'fixedDeposits', label: 'Fixed Deposits', actions: ['create', 'view', 'editDetails', 'changeStage', 'editLog', 'delete'] },
   { key: 'otherInsurancePolicies', label: 'Other Insurance Policies', actions: ['create', 'view', 'editDetails', 'changeStage', 'editLog', 'delete'] },
-  { key: 'investmentProspects', label: 'Investment Prospects', actions: ['create', 'view', 'editDetails', 'changeStage'] },
-  { key: 'insuranceProspects', label: 'Insurance Prospects', actions: ['create', 'view', 'editDetails', 'changeStage'] },
+  { key: 'investmentProspects', label: 'Investment Prospects', actions: ['create', 'view', 'editDetails', 'changeStage', 'changeStageBack'] },
+  { key: 'insuranceProspects', label: 'Insurance Prospects', actions: ['create', 'view', 'editDetails', 'changeStage', 'changeStageBack'] },
   { key: 'documents', label: 'Documents', actions: ['upload', 'view', 'delete'] },
   { key: 'meetings', label: 'Meetings', actions: ['create', 'view', 'edit', 'delete'] },
-  { key: 'queries', label: 'Queries', actions: ['create', 'view', 'editDetails', 'changeStage', 'editLog', 'delete'] },
+  { key: 'queries', label: 'Queries', actions: ['create', 'view', 'editDetails', 'changeStage', 'changeStageBack', 'editLog', 'delete'] },
   { key: 'leave', label: 'Leave', actions: ['create', 'view', 'editDetails', 'respond'] },
   // The Dashboard's Managed Portfolio KPI row — Total AUM Managed, Total SIP
   // Book and Managed Insurance are normally computed live, but each can be
@@ -65,7 +69,8 @@ export const MODULES = [
 
 export const ACTION_LABELS = {
   create: 'Create', view: 'View', edit: 'Edit', editPersonal: 'Edit Personal Details',
-  editDetails: 'Edit Details', changeStage: 'Change Stage', editLog: 'Edit / Add Log',
+  editDetails: 'Edit Details', changeStage: 'Change Stage (Forward)',
+  changeStageBack: 'Change Stage (Backward)', editLog: 'Edit / Add Log',
   assignRm: 'Assign RM', convert: 'Convert', delete: 'Delete', upload: 'Upload',
   respond: 'Approve / Reject',
   editAum: 'Edit Total AUM', editSip: 'Edit Total SIP Book', editInsurance: 'Edit Managed Insurance',
@@ -130,14 +135,14 @@ const DEF = {
   // option an admin has to remember to turn on. Internal Manager is the
   // deliberate exception (oversight, "close to Admin") — it can see/manage
   // every task, not just ones it's on.
-  tasks: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, changeStage: { _: S, INTERNAL_MANAGER: A }, editLog: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
+  tasks: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, changeStage: { _: S, INTERNAL_MANAGER: A }, changeStageBack: { _: N, INTERNAL_MANAGER: A }, editLog: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
   // COBR (Change of Broker) records ARE Task rows (relatedTo: 'COBR') — same
   // assigner/assignee overlay and stage rules as Tasks, just a separately
   // admin-configurable matrix column so who may create/edit a broker-change
   // request can be tuned independently of generic task rights. Defaults
   // mirror Tasks' own defaults exactly (no behavior change until an admin
   // customizes this row).
-  cobr: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, changeStage: { _: S, INTERNAL_MANAGER: A }, editLog: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
+  cobr: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, changeStage: { _: S, INTERNAL_MANAGER: A }, changeStageBack: { _: N, INTERNAL_MANAGER: A }, editLog: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
   // Renewals / Claims / Fixed Deposits / Other Insurance Policies — each its
   // own admin-configurable column, defaults mirroring COBR's exactly. The
   // assigner/assignee split itself (only the assigner edits details, only the
@@ -155,8 +160,8 @@ const DEF = {
   // (rather than silently inheriting the Proposal's create rule) so the
   // admin can see and tune it directly here — defaults mirror the matching
   // Proposal's create rule for a sane out-of-the-box behavior.
-  investmentProspects: { create: { _: N, PORTFOLIO_MANAGER: A, RM: S, INTERNAL_MANAGER: A }, view: { _: A }, editDetails: { _: N, PORTFOLIO_MANAGER: A, RM: S, INTERNAL_MANAGER: A }, changeStage: { _: N, SERVICE_MANAGER: A, INTERNAL_MANAGER: A, RM: S } },
-  insuranceProspects: { create: { _: N, INSURANCE_MANAGER: A, INTERNAL_MANAGER: A }, view: { _: A }, editDetails: { _: N, INSURANCE_MANAGER: A, INTERNAL_MANAGER: A }, changeStage: { _: N, INSURANCE_MANAGER: A, INTERNAL_MANAGER: A } },
+  investmentProspects: { create: { _: N, PORTFOLIO_MANAGER: A, RM: S, INTERNAL_MANAGER: A }, view: { _: A }, editDetails: { _: N, PORTFOLIO_MANAGER: A, RM: S, INTERNAL_MANAGER: A }, changeStage: { _: N, SERVICE_MANAGER: A, INTERNAL_MANAGER: A, RM: S }, changeStageBack: { _: N, PORTFOLIO_MANAGER: A, INTERNAL_MANAGER: A } },
+  insuranceProspects: { create: { _: N, INSURANCE_MANAGER: A, INTERNAL_MANAGER: A }, view: { _: A }, editDetails: { _: N, INSURANCE_MANAGER: A, INTERNAL_MANAGER: A }, changeStage: { _: N, INSURANCE_MANAGER: A, INTERNAL_MANAGER: A }, changeStageBack: { _: N, INSURANCE_MANAGER: A, INTERNAL_MANAGER: A } },
   documents: { upload: { _: A }, view: { _: A }, delete: { _: N } },
   meetings: { create: { _: A }, view: { _: A }, edit: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
   // Queries are private to the two people on them: whoever raised it

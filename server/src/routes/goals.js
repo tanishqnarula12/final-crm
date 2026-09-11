@@ -12,8 +12,13 @@ import { can } from '../lib/permissions.js';
 const router = Router();
 router.use(requireAuth);
 
+// Goals are a 'client'-kind module: "assigned" means the RM of the goal's
+// PARENT client, which the engine can only resolve if that client is attached
+// (record.client.assignedTo / .clientDetails.relationshipManager). Without the
+// include, a goal carries no RM of its own and every ASSIGNED-scoped role —
+// the assigned RM included — silently failed ownership and got a 403.
 router.patch('/:id', asyncHandler(async (req, res) => {
-  const existing = await prisma.goal.findUnique({ where: { id: req.params.id } });
+  const existing = await prisma.goal.findUnique({ where: { id: req.params.id }, include: { client: true } });
   if (!existing || existing.deletedAt) return res.status(404).json({ error: 'Goal not found' });
   if (!can(req.user, 'goals', 'edit', existing)) return res.status(403).json({ error: 'You cannot edit this goal.' });
   const data = parseBody(goalUpdateSchema, req.body);
@@ -28,7 +33,7 @@ router.patch('/:id', asyncHandler(async (req, res) => {
 // Soft-delete (global rule: no hard deletes). The row is hidden from reads via
 // the `deletedAt: null` filter on the clients include.
 router.delete('/:id', asyncHandler(async (req, res) => {
-  const existing = await prisma.goal.findUnique({ where: { id: req.params.id } });
+  const existing = await prisma.goal.findUnique({ where: { id: req.params.id }, include: { client: true } });
   if (!existing || existing.deletedAt) return res.status(404).json({ error: 'Goal not found' });
   if (!can(req.user, 'goals', 'delete', existing)) return res.status(403).json({ error: 'Records cannot be deleted.' });
   await prisma.goal.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });

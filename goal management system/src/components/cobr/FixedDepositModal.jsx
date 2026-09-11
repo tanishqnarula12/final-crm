@@ -33,6 +33,8 @@ import { teamName } from '../../services/team';
 const TONE_BTN = STAGE_BTN_TONE;
 
 const FIELD_DEFS = [
+  { key: 'jointHolderName', label: 'Joint Holder Name' },
+  { key: 'jointHolderPan', label: 'Joint Holder PAN' },
   { key: 'bankName', label: 'Bank Name' },
   { key: 'startingDate', label: 'Starting Date' },
   { key: 'maturityDate', label: 'Maturity Date' },
@@ -50,6 +52,8 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
     groupLeader: record?.groupLeader || '',
     applicant: record?.applicant || '',
     pan: record?.pan || '',
+    jointHolderName: record?.jointHolderName || '',
+    jointHolderPan: record?.jointHolderPan || '',
     bankName: record?.bankName || '',
     startingDate: record?.startingDate || '',
     maturityDate: record?.maturityDate || '',
@@ -199,6 +203,7 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
     if (!isEdit) { onClose(); return; }
     setF({
       groupLeaderId: record.groupLeaderId || '', groupLeader: record.groupLeader || '', applicant: record.applicant || '', pan: record.pan || '',
+      jointHolderName: record.jointHolderName || '', jointHolderPan: record.jointHolderPan || '',
       bankName: record.bankName || '', startingDate: record.startingDate || '', maturityDate: record.maturityDate || '', maturityAmount: record.maturityAmount || '',
       assignedTo: record.assignedTo || '', subPersons: record.subPersons || [], attachments: record.attachments || [],
     });
@@ -239,6 +244,24 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
           onChange={set}
           disabled={isEdit}
         />
+
+        <Field label="Joint Holder Name">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
+            <input value={f.jointHolderName} onChange={(e) => set({ jointHolderName: e.target.value })} placeholder="Second holder, if any" className={inputCls} />
+          </fieldset>
+        </Field>
+
+        <Field label="Joint Holder PAN">
+          <fieldset disabled={!fieldsUnlocked} className="contents">
+            <input
+              value={f.jointHolderPan}
+              onChange={(e) => set({ jointHolderPan: e.target.value.toUpperCase() })}
+              placeholder="ABCDE1234F"
+              maxLength={10}
+              className={inputCls + ' font-mono uppercase'}
+            />
+          </fieldset>
+        </Field>
 
         <Field label="Bank Name *">
           <fieldset disabled={!fieldsUnlocked} className="contents">

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  FolderOpen, FileText, Target, Shield, Search, X, Printer, Eye, CalendarDays, Wallet, FileBarChart, Upload, Paperclip, Trash2
+  FolderOpen, FileText, Target, Shield, Search, X, Printer, Eye, CalendarDays, Wallet, FileBarChart, Upload, Paperclip, Trash2, CheckCircle2
 } from 'lucide-react';
 import { Card, Avatar, btnPrimary, btnSecondary, btnGhost, inputCls, CoolSelect } from './UI';
 import { calcGoal, fmtINR, fmtFull, fmtSip, goalEmoji, monthLabel, fmtDate } from '../utils/calc';
@@ -11,6 +11,7 @@ import { getCurrentUser } from '../utils/auth';
 import { printHtmlDocument, printSafeDataUrl, wrapStandaloneHtml } from '../utils/documents';
 import { buildMomHtml } from '../utils/momHtml';
 import { cobrWorkspaceDocuments } from '../utils/cobrModules';
+import { DOCUMENT_TYPE_GROUPS } from '../utils/documentTypes';
 
 // ---------------------------------------------------------------------------
 // Build a unified, DB-driven list of generated documents from the clients data.
@@ -45,8 +46,16 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
   const [selectedGroupLeaderId, setSelectedGroupLeaderId] = useState('');
   const [selectedApplicant, setSelectedApplicant] = useState('');
   const [docTitle, setDocTitle] = useState('');
+  // "Other" lets the uploader name the document themselves — that typed name is
+  // what gets stored as the category, so it still links like any listed type.
+  const [customDocTitle, setCustomDocTitle] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedFileDataUrl, setSelectedFileDataUrl] = useState('');
+  const [uploadState, setUploadState] = useState('idle'); // 'idle' | 'uploading' | 'done'
+  const [uploadError, setUploadError] = useState('');
+
+  // What actually gets stored/linked as the document category.
+  const resolvedDocTitle = (docTitle === 'Other' ? customDocTitle : docTitle).trim();
 
   // Applicant options derived from the selected group leader's family
   const uploadApplicantOptions = useMemo(() => {
@@ -203,12 +212,17 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
 
   const handleUploadSubmit = async (e) => {
     e.preventDefault();
-    const finalDocTitle = docTitle.trim();
+    if (uploadState !== 'idle') return; // already in flight — ignore double submits
+    const finalDocTitle = resolvedDocTitle;
     if (!selectedGroupLeaderId || !selectedApplicant || !finalDocTitle || !selectedFileDataUrl) {
-      alert("Please fill all fields and select a file.");
+      setUploadError(docTitle === 'Other' && !customDocTitle.trim()
+        ? 'Please write the specific document name.'
+        : 'Please fill all fields and select a file.');
       return;
     }
 
+    setUploadError('');
+    setUploadState('uploading');
     try {
       const targetClient = clients.find(c => c.id === selectedGroupLeaderId);
       if (!targetClient) return;
@@ -250,15 +264,22 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
         await window.refreshAppData();
       }
 
-      setIsUploadModalOpen(false);
-      setSelectedGroupLeaderId('');
-      setSelectedApplicant('');
-      setDocTitle('');
-      setSelectedFile(null);
-      setSelectedFileDataUrl('');
-      alert("Document uploaded successfully!");
+      // Confirm in-place first, then close — so the upload visibly completes
+      // instead of the dialog just sitting there through the refresh.
+      setUploadState('done');
+      setTimeout(() => {
+        setIsUploadModalOpen(false);
+        setSelectedGroupLeaderId('');
+        setSelectedApplicant('');
+        setDocTitle('');
+        setCustomDocTitle('');
+        setSelectedFile(null);
+        setSelectedFileDataUrl('');
+        setUploadState('idle');
+      }, 900);
     } catch (err) {
-      alert("Error uploading document: " + err.message);
+      setUploadState('idle');
+      setUploadError(err.message || 'Could not upload this document.');
     }
   };
 
@@ -320,7 +341,7 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search client or document…" className={inputCls + ' pl-9 w-full md:w-64'} />
           </div>
           <button
-            onClick={() => setIsUploadModalOpen(true)}
+            onClick={() => { setUploadState('idle'); setUploadError(''); setIsUploadModalOpen(true); }}
             className={btnPrimary + ' py-2 px-3 text-xs shrink-0 flex items-center gap-1.5'}
           >
             <Upload size={14} /> Upload Doc
@@ -488,53 +509,21 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
                   disabled={!selectedApplicant}
                 >
                   <option value="">-- Select Document Type --</option>
-                  <optgroup label="Identity Proof">
-                    <option>Aadhaar Card</option>
-                    <option>PAN Card</option>
-                    <option>Passport</option>
-                    <option>Voter ID</option>
-                    <option>Driving License</option>
-                    <option>Birth Certificate</option>
-                  </optgroup>
-                  <optgroup label="Address Proof">
-                    <option>Utility Bill</option>
-                    <option>Rent Agreement</option>
-                    <option>Ration Card</option>
-                  </optgroup>
-                  <optgroup label="Financial">
-                    <option>Cancelled Cheque</option>
-                    <option>Bank Statement (3 Months)</option>
-                    <option>Bank Statement (6 Months)</option>
-                    <option>Bank Statement (12 Months)</option>
-                    <option>ITR (1 Year)</option>
-                    <option>ITR (3 Years)</option>
-                    <option>Computation (3 Years)</option>
-                    <option>Form 16</option>
-                    <option>CA Certificate</option>
-                  </optgroup>
-                  <optgroup label="Employment">
-                    <option>Salary Slip (Last 3 Months)</option>
-                    <option>Employment Letter</option>
-                    <option>Appointment Letter</option>
-                  </optgroup>
-                  <optgroup label="Medical">
-                    <option>Medical Report</option>
-                    <option>First Prescription</option>
-                    <option>ECG Report</option>
-                    <option>Blood Report</option>
-                    <option>X-Ray Report</option>
-                  </optgroup>
-                  <optgroup label="Insurance">
-                    <option>Passport Size Photo</option>
-                    <option>Policy Document</option>
-                    <option>Proposal Form</option>
-                    <option>Previous Policy</option>
-                    <option>Surrender Letter</option>
-                  </optgroup>
-                  <optgroup label="Other">
-                    <option>Other</option>
-                  </optgroup>
+                  {DOCUMENT_TYPE_GROUPS.map(({ group, types }) => (
+                    <optgroup key={group} label={group}>
+                      {types.map((t) => <option key={t.key}>{t.label}</option>)}
+                    </optgroup>
+                  ))}
                 </CoolSelect>
+                {docTitle === 'Other' && (
+                  <input
+                    value={customDocTitle}
+                    onChange={(e) => setCustomDocTitle(e.target.value)}
+                    placeholder="Please specify the document name…"
+                    className={inputCls + ' text-xs mt-2'}
+                    autoFocus
+                  />
+                )}
               </div>
 
               {/* Step 4 — File */}
@@ -561,23 +550,41 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
               </div>
 
               {/* Preview of final doc name */}
-              {selectedGroupLeaderId && selectedApplicant && docTitle && (
+              {selectedGroupLeaderId && selectedApplicant && resolvedDocTitle && (
                 <div className="rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-slate-800/60 px-4 py-3">
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Will be saved as</p>
                   <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    {docTitle || '…'}
+                    {resolvedDocTitle}
                     <span className="text-slate-400 mx-1">·</span>
                     <span className="text-blue-600 dark:text-blue-400">{selectedApplicant}</span>
                   </p>
                 </div>
               )}
 
+              {uploadError && (
+                <p className="text-xs font-bold text-rose-600 dark:text-rose-450">{uploadError}</p>
+              )}
+              {uploadState === 'done' && (
+                <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                  <CheckCircle2 size={14} className="shrink-0" /> Document uploaded successfully
+                </p>
+              )}
+
               <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 shrink-0">
-                <button type="button" onClick={() => setIsUploadModalOpen(false)} className={btnGhost + ' py-2 px-4'}>
+                <button
+                  type="button"
+                  onClick={() => setIsUploadModalOpen(false)}
+                  disabled={uploadState !== 'idle'}
+                  className={btnGhost + ' py-2 px-4' + (uploadState !== 'idle' ? ' opacity-50 cursor-not-allowed' : '')}
+                >
                   Cancel
                 </button>
-                <button type="submit" className={btnPrimary + ' py-2 px-5'}>
-                  Upload File
+                <button
+                  type="submit"
+                  disabled={uploadState !== 'idle'}
+                  className={btnPrimary + ' py-2 px-5' + (uploadState !== 'idle' ? ' opacity-70 cursor-not-allowed' : '')}
+                >
+                  {uploadState === 'uploading' ? 'Uploading…' : uploadState === 'done' ? 'Uploaded' : 'Upload File'}
                 </button>
               </div>
             </form>

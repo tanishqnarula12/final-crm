@@ -17,7 +17,7 @@
 //
 // All writes + logs happen in one interactive transaction.
 
-import { can, canCreate, canEdit, canDelete, canChangeStage, isAdmin, isBackwardStage } from './permissions.js';
+import { can, canCreate, canEdit, canDelete, canChangeStage, canChangeStageBack, isAdmin, isBackwardStage } from './permissions.js';
 import { logActivity, diffFields } from './activityLog.js';
 
 // Task change classification: a log/comment edit is NOT a details edit.
@@ -203,7 +203,7 @@ export async function syncBulk(prisma, spec) {
         // else, since isBackwardStage returns false for an unlisted module).
         const stageAllowed = !stageChanged || (
           canChangeStage(actor, mod, existing, from, to)
-          && (isAdmin(actor) || !isBackwardStage(mod, from, to))
+          && (!isBackwardStage(mod, from, to) || canChangeStageBack(actor, mod, existing))
         );
         allowed = detailAllowed || stageAllowed;
         if (!allowed && nextAssigned !== curAssigned) allowed = true;

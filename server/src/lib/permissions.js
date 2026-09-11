@@ -232,10 +232,14 @@ export function can(user, module, action, record = null, ctx = {}) {
     if (isAssigner) return true;
     // editLog (comment): the assignee AND any sub-person may add a log.
     if (action === 'editLog') return isAssignee || isSubPerson;
-    // changeStage: the assignee may move it forward (no reopen / backward);
-    // sub-people may NOT change the stage — comment only.
+    // changeStage: the assignee moves it forward; sub-people may NOT change the
+    // stage at all (comment only). Moving it BACKWARD is its own right, granted
+    // per-role through the matrix's `changeStageBack` cell — it used to be
+    // hardcoded to "Admin only", which meant a role explicitly given stage
+    // rights still couldn't reopen anything.
     if (!isAssignee) return false;
-    return !isBackwardStage(module, ctx.fromStage, ctx.toStage);
+    if (!isBackwardStage(module, ctx.fromStage, ctx.toStage)) return true;
+    return maxScope(roles, module, 'changeStageBack') !== 'NONE';
   }
 
   if (scope === 'ALL') return true;
@@ -295,3 +299,7 @@ export const canView = (user, module, record) => can(user, module, 'view', recor
 export const canAssign = (user, module) => can(user, module, 'assignRm', null);
 export const canChangeStage = (user, module, record, fromStage, toStage) =>
   can(user, module, stageActionFor(module), record, { fromStage, toStage });
+// Moving a record BACKWARD (or reopening a terminal stage) is a separate,
+// matrix-configurable right — see the `changeStageBack` action in
+// permissionCatalog.js. Admin still bypasses via can()'s isAdmin check.
+export const canChangeStageBack = (user, module, record) => can(user, module, 'changeStageBack', record);

@@ -12,6 +12,7 @@ import { asyncHandler } from '../middleware/error.js';
 import { parseBody } from '../lib/validate.js';
 import { goalCreateSchema, momCreateSchema } from '../lib/schemas.js';
 import { canCreate, canEdit, canDelete } from '../lib/permissions.js';
+import { findPanConflict, panConflictMessage, normalizePan } from '../lib/panUniqueness.js';
 import { logActivity, diffFields, listActivity } from '../lib/activityLog.js';
 
 const router = Router();
@@ -143,8 +144,9 @@ router.post('/', asyncHandler(async (req, res) => {
   }
   const data = parseBody(clientCreateSchema, req.body);
   if (data.pan) {
-    const dupe = await prisma.client.findFirst({ where: { pan: data.pan, deletedAt: null } });
-    if (dupe) return res.status(409).json({ error: 'A client with this PAN already exists — group leader PAN must be unique.' });
+    const conflict = await findPanConflict(data.pan);
+    if (conflict) return res.status(409).json({ error: panConflictMessage(conflict, data.pan) });
+    data.pan = normalizePan(data.pan);
   }
   // The real "Relationship Manager" picker (Client Profile / Internal Team
   // Assignments) writes clientDetails.relationshipManager, not the dedicated
@@ -170,9 +172,10 @@ router.patch('/:id', asyncHandler(async (req, res) => {
     return forbidden(res, 'Only the Operations Manager can edit client details.');
   }
   const data = parseBody(clientUpdateSchema, req.body);
-  if (data.pan && data.pan !== existing.pan) {
-    const dupe = await prisma.client.findFirst({ where: { pan: data.pan, deletedAt: null, NOT: { id: existing.id } } });
-    if (dupe) return res.status(409).json({ error: 'A client with this PAN already exists — group leader PAN must be unique.' });
+  if (data.pan && normalizePan(data.pan) !== normalizePan(existing.pan)) {
+    const conflict = await findPanConflict(data.pan, { excludeClientId: existing.id });
+    if (conflict) return res.status(409).json({ error: panConflictMessage(conflict, data.pan) });
+    data.pan = normalizePan(data.pan);
   }
   // Keep the RBAC `assignedTo` column in sync whenever the Relationship
   // Manager picker changes clientDetails.relationshipManager (see POST above).

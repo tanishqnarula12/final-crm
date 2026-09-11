@@ -273,12 +273,12 @@ export default function CobrView({
           type={REC.FD}
           rows={rowsFor[REC.FD]}
           stages={FD_STAGES}
-          searchFields={['applicant', 'groupLeader', 'pan', 'bankName']}
-          searchPlaceholder="Search applicant, PAN, bank…"
+          searchFields={['applicant', 'groupLeader', 'pan', 'bankName', 'jointHolderName', 'jointHolderPan']}
+          searchPlaceholder="Search applicant, PAN, bank, joint holder…"
           dateField={{ key: 'maturityDate', label: 'Maturity' }}
           onOpen={(r) => setEditor({ type: REC.FD, record: r })}
           emptyText="No fixed deposits tracked yet."
-          minWidth={1260}
+          minWidth={1500}
           excelSpec={COBR_EXCEL_SPEC[REC.FD]}
           clients={clients}
           onImportRecords={handleImportRecords}
@@ -288,6 +288,8 @@ export default function CobrView({
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
             { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
+            { key: 'jointHolderName', label: 'Joint Holder', render: (r) => r.jointHolderName || '—' },
+            { key: 'jointHolderPan', label: 'Joint Holder PAN', cls: 'font-mono text-slate-500 dark:text-slate-400', render: (r) => r.jointHolderPan || '—' },
             { key: 'bankName', label: 'Bank' },
             { key: 'startingDate', label: 'Starting Date', render: (r) => d(r.startingDate) },
             { key: 'maturityDate', label: 'Maturity Date', render: (r) => d(r.maturityDate) },

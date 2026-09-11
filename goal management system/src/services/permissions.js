@@ -181,7 +181,10 @@ export function can(module, action, record = null, ctx = {}) {
     // Comment: assignee + sub-person. Change stage: assignee only (not sub-person).
     if (action === 'editLog') return isAssignee || isSubPerson;
     if (!isAssignee) return false;
-    return !isBackwardStage(module, ctx.fromStage, ctx.toStage);
+    // Backward/reopen is its own matrix right (changeStageBack) — mirrors the
+    // server engine, which no longer hardcodes it to Admin only.
+    if (!isBackwardStage(module, ctx.fromStage, ctx.toStage)) return true;
+    return maxScope(roles, module, 'changeStageBack') !== 'NONE';
   }
 
   if (scope === 'ALL') return true;
