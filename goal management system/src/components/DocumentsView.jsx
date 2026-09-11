@@ -252,20 +252,15 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
       };
 
       const updated = [newAttachment, ...currentAttachments];
+      const nextDetails = { ...details, attachments: updated };
 
-      await updateClient(selectedGroupLeaderId, {
-        clientDetails: {
-          ...details,
-          attachments: updated
-        }
-      });
+      await updateClient(selectedGroupLeaderId, { clientDetails: nextDetails });
 
-      if (window.refreshAppData) {
-        await window.refreshAppData();
-      }
+      // The upload has landed — show it in the list straight away rather than
+      // waiting on a full app reload (which is what froze this dialog).
+      if (window.patchClientLocal) window.patchClientLocal(selectedGroupLeaderId, { clientDetails: nextDetails });
+      else if (window.refreshAppData) window.refreshAppData();
 
-      // Confirm in-place first, then close — so the upload visibly completes
-      // instead of the dialog just sitting there through the refresh.
       setUploadState('done');
       setTimeout(() => {
         setIsUploadModalOpen(false);

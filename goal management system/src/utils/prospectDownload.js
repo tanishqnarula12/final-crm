@@ -4,6 +4,7 @@
 
 import { LOGO_DATA_URI } from '../assets/logoBase64';
 import { teamName } from '../services/team';
+import { documentTypeLabel } from './documentTypes';
 
 const pad = n => String(n).padStart(2, '0');
 
@@ -53,10 +54,13 @@ const DOC_LABEL_MAP = {
 
 const DOC_KEY_SEP = '|||';
 
-// Resolves a doc-type key to human label (handles composite keys like "panCard|||Aarav Sharma")
+// Resolves a doc-type key to human label (handles composite keys like "panCard|||Aarav Sharma").
+// Any key not given a report-specific label above falls back to the shared
+// document-type list, so newer types (GST Certificate, HUF Deed, …) print their
+// real name instead of a raw storage key.
 const resolveDocLabel = (key) => {
   const dtKey = key.includes(DOC_KEY_SEP) ? key.split(DOC_KEY_SEP)[0] : key;
-  return DOC_LABEL_MAP[dtKey] || dtKey;
+  return DOC_LABEL_MAP[dtKey] || documentTypeLabel(dtKey);
 };
 
 const buildDocumentsSection = (documents) => {

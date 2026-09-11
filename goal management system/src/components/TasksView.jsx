@@ -945,6 +945,13 @@ export function TaskFormModal({ initial, clients, isViewer, onClose, onSave }) {
     || initial?.departmentOwner === meId
     || initial?.assignedTo === meId;
   const stageOk = !hasStageChanged || canChangeTaskStage(me, initial, initial?.stage || 'Open', stage);
+  // Only offer stages this account can actually move the task to (e.g. the
+  // assignee doesn't see earlier stages without the backward right) — legacy
+  // or brand-new tasks keep the full list, matching mayChangeStage above.
+  const initialTaskStage = initial?.stage || 'Open';
+  const pickableTaskStages = legacyOrNew
+    ? TASK_STAGES
+    : TASK_STAGES.filter((s) => s === initialTaskStage || canChangeTaskStage(me, initial, initialTaskStage, s));
 
   // Only truly "blocked" when a stage move they attempted isn't allowed (e.g.
   // the assignee trying to reopen). Editing details without rights can't happen
@@ -1622,19 +1629,22 @@ export function TaskFormModal({ initial, clients, isViewer, onClose, onSave }) {
 
             {isEdit && (
               <Field label="Stage">
-                <CoolSelect
-                  value={stage}
-                  disabled={!mayChangeStage}
-                  onChange={(e) => {
-                    setStage(e.target.value);
-                    if (e.target.value === (initial?.stage || 'Open')) {
-                      setStageRemark('');
-                    }
-                  }}
-                  className={selectCls + (!mayChangeStage ? ' opacity-60 cursor-not-allowed bg-slate-50 dark:bg-slate-950/20' : '')}
-                >
-                  {TASK_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
-                </CoolSelect>
+                {mayChangeStage && pickableTaskStages.length > 1 ? (
+                  <CoolSelect
+                    value={stage}
+                    onChange={(e) => {
+                      setStage(e.target.value);
+                      if (e.target.value === initialTaskStage) {
+                        setStageRemark('');
+                      }
+                    }}
+                    className={selectCls}
+                  >
+                    {pickableTaskStages.map(s => <option key={s} value={s}>{s}</option>)}
+                  </CoolSelect>
+                ) : (
+                  <input value={stage} readOnly className={inputCls + ' bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400'} />
+                )}
               </Field>
             )}
 

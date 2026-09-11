@@ -132,13 +132,19 @@ const STAGE_ORDER = {
   tasks: ['Open', 'Waiting For Client', 'In Process', 'Completed', 'Lost'],
   cobr: ['Open', 'Waiting For Client', 'In Process', 'Completed', 'Lost'],
   queries: ['Open', 'In Progress', 'Resolved', 'Closed'],
+  investmentProspects: ['Pre-Qualified', 'Qualified', 'Work Executed', 'Close Won', 'Close Lost'],
+  insuranceProspects: ['Qualified', 'Document Pending', 'Proposal Submitted', 'Payment Done', 'Waiting for Underwriter', 'Policy Issued', 'Policy Rejected'],
 };
 const TERMINAL_STAGES = {
   tasks: new Set(['Completed', 'Lost']),
   cobr: new Set(['Completed', 'Lost']),
   queries: new Set(['Resolved', 'Closed']),
+  investmentProspects: new Set(['Close Won', 'Close Lost']),
+  insuranceProspects: new Set(['Policy Issued', 'Policy Rejected']),
 };
-function isBackwardStage(module, from, to) {
+// Two-party modules — can()'s overlay settles stage direction for these.
+const TASK_SHAPED = ['tasks', 'cobr', 'queries', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies'];
+export function isBackwardStage(module, from, to) {
   if (!from || !to || from === to) return false;
   const stages = STAGE_ORDER[module] || [];
   const terminal = TERMINAL_STAGES[module] || new Set();
@@ -165,7 +171,6 @@ export function can(module, action, record = null, ctx = {}) {
   if (scope === 'NONE') return false;
 
   // Mirrors server/src/lib/permissions.js's TASK_SHAPED/STRICT_TWO_PARTY split.
-  const TASK_SHAPED = ['tasks', 'cobr', 'queries', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies'];
   const STRICT_TWO_PARTY = ['queries', 'renewals', 'claims', 'fixedDeposits'];
   if (TASK_SHAPED.includes(module) && ['editDetails', 'changeStage', 'editLog'].includes(action) && record) {
     // Queries + three other COBR-workspace registers: a hard requirement,
@@ -192,4 +197,26 @@ export function can(module, action, record = null, ctx = {}) {
   // mirrors the server engine (server/src/lib/permissions.js).
   if (!record) return false;
   return ownsRecord(module, record, user);
+}
+
+// Only an investment prospect's own RM or Portfolio Manager (or Admin) may put
+// it into "Pre-Qualified" — mirrors isPreQualifiedOwner in the server engine.
+export function isPreQualifiedOwner(record) {
+  const user = getCurrentUser();
+  if (!user || !record) return false;
+  if ((user.roles || []).includes('ADMIN')) return true;
+  return record.relationshipManager === user.id || record.portfolioManager === user.id;
+}
+
+// Can the current user move `record` from `from` to `to`? Mirrors the server's
+// sync check exactly, so a stage picker can show ONLY the stages that would
+// actually save — never a stage that looks selectable but gets reverted.
+export function canMoveToStage(module, record, from, to) {
+  if (!to || to === from) return true;
+  if (module === 'investmentProspects' && to === 'Pre-Qualified') return isPreQualifiedOwner(record);
+  const stageAction = module === 'leads' ? 'edit' : 'changeStage';
+  if (!can(module, stageAction, record, { fromStage: from, toStage: to })) return false;
+  // Two-party modules already resolved direction inside can()'s overlay.
+  if (TASK_SHAPED.includes(module) || !isBackwardStage(module, from, to)) return true;
+  return can(module, 'changeStageBack', record);
 }

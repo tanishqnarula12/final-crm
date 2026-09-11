@@ -3,9 +3,16 @@
 // existing component call-sites don't change; the `me` argument is ignored (the
 // engine reads the current user internally). The server remains the hard gate.
 
-import { can } from '../services/permissions';
+import { can, canMoveToStage } from '../services/permissions';
 
-export { can };
+export { can, canMoveToStage };
+
+// The stages a picker should offer: the current stage (so it still displays)
+// plus only the stages this user could actually save. Anything the permission
+// matrix wouldn't allow simply isn't shown, rather than being selectable and
+// then silently reverted or blocked on save.
+export const allowedStageOptions = (module, record, currentStage, stages) =>
+  stages.filter((s) => s === currentStage || canMoveToStage(module, record, currentStage, s));
 
 export const ROLE_LABELS = {
   ADMIN: 'Admin',

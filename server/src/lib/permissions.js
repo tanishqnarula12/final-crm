@@ -162,6 +162,24 @@ function maxScope(roles, module, action) {
   return best;
 }
 
+// Two-party modules (assigner + assignee). For these, can()'s overlay below
+// fully decides stage direction — the assigner may move either way, the
+// assignee forward only unless the matrix grants changeStageBack.
+const TASK_SHAPED = ['tasks', 'cobr', 'queries', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies'];
+
+// "Pre-Qualified" is the private entry stage of an investment prospect — only
+// that prospect's own RM or Portfolio Manager can see a record in it (see the
+// view rule in can()), so only they (or Admin) may put a prospect INTO it. A
+// Service Manager or anyone else can never move one back to Pre-Qualified,
+// whatever their matrix cells say.
+export const isPreQualifiedOwner = (user, record) => {
+  if (!user || !record) return false;
+  if (isAdmin(user)) return true;
+  const rmId = record.relationshipManager ?? record.payload?.relationshipManager;
+  const pmId = record.portfolioManager ?? record.payload?.portfolioManager;
+  return rmId === user.id || pmId === user.id;
+};
+
 // ---- core decision ---------------------------------------------------------
 // ctx may carry { fromStage, toStage } for task stage moves.
 export function can(user, module, action, record = null, ctx = {}) {
@@ -211,7 +229,6 @@ export function can(user, module, action, record = null, ctx = {}) {
   // COBR-workspace registers (Renewals/Claims/Fixed Deposits/Other Insurance
   // Policies) have the identical two-party shape, just their own stage
   // vocabularies (see STAGE_ORDER below, where applicable).
-  const TASK_SHAPED = ['tasks', 'cobr', 'queries', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies'];
   // Modules where the two-party rule is a HARD requirement — no ALL-bypass,
   // not even for an oversight role like Internal Manager: "only Assigned By
   // edits, only Assigned By/Assigned To change stage, no other user" was

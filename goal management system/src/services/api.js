@@ -40,12 +40,24 @@ async function request(method, path, body) {
     throw new ApiError('Cannot reach the server. Is the API running?', 0);
   }
 
-  // 204 No Content or empty body.
+  // 204 No Content or empty body. An error page from a proxy in front of the
+  // API (e.g. an HTML "413 Request Entity Too Large") isn't JSON — parsing it
+  // blindly surfaced a cryptic "Unexpected token '<'" instead of the real cause.
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      if (res.ok) throw new ApiError('Unexpected response from the server.', res.status);
+    }
+  }
 
   if (!res.ok) {
-    throw new ApiError(data?.error || `Request failed (${res.status})`, res.status, data?.details);
+    const message = res.status === 413
+      ? 'This upload is too large for the server to accept. Try a smaller file.'
+      : data?.error || `Request failed (${res.status})`;
+    throw new ApiError(message, res.status, data?.details);
   }
   return data;
 }

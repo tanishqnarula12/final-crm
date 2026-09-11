@@ -283,8 +283,16 @@ export default function App() {
 
   useEffect(() => {
     window.refreshAppData = loadData;
+    // Merge a just-saved change into ONE client in local state. A document
+    // upload used to wait on refreshAppData() — which re-downloads every
+    // client (with every document's file data) and eight other modules — so
+    // the dialog sat frozen for seconds after the upload had already landed.
+    window.patchClientLocal = (clientId, fields) => {
+      setClients((prev) => prev.map((c) => (c.id === clientId ? { ...c, ...fields } : c)));
+    };
     return () => {
       delete window.refreshAppData;
+      delete window.patchClientLocal;
     };
   }, []);
 

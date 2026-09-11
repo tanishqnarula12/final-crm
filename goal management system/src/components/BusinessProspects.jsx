@@ -14,7 +14,7 @@ import { uid } from '../utils/calc';
 import { RELATIONS } from '../utils/team';
 import { teamName, loadTeam } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
-import { canDo, isAdmin } from '../utils/permissions';
+import { canDo, isAdmin, allowedStageOptions } from '../utils/permissions';
 import { updateClient } from '../services/db';
 import { CountrySelect, StateSelect, CitySelect } from './LocationPicker';
 import { triggerInsuranceProspectDownload } from '../utils/prospectDownload';
@@ -506,7 +506,6 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
   // Insurance Manager alone edits/stages insurance prospects.
   const prospectModuleKey = initial?.proposalCategory === 'insurance' ? 'insuranceProspects' : 'investmentProspects';
   const canEditDetails = !isEdit || canDo(prospectModuleKey, 'editDetails', initial);
-  const canChangeStage = !isEdit || canDo(prospectModuleKey, 'changeStage', initial);
   const me = getCurrentUser();
   // An existing prospect always opens read-only, even for someone with edit
   // rights — they must explicitly click "Edit Details" to unlock it. A brand
@@ -720,6 +719,14 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
   // Insurance prospects move through an underwriting-shaped pipeline;
   // everything else keeps the generic investment pipeline.
   const stageOptions = hasInsuranceItem ? INSURANCE_PROSPECT_STAGES : PROSPECT_STAGES;
+
+  // Offer ONLY the stages this account could actually save — e.g. a Service
+  // Manager never sees "Pre-Qualified" (that's the prospect's RM/PM only), and
+  // nobody sees a backward stage without the matrix's backward right. If
+  // nothing but the current stage is left, there's no picker at all.
+  const currentStage = initial?.stage || 'Qualified';
+  const pickableStages = isEdit ? allowedStageOptions(prospectModuleKey, initial, currentStage, stageOptions) : stageOptions;
+  const canChangeStage = !isEdit || pickableStages.length > 1;
 
   const hasTravelItem = items.some(it => it.proposalType === 'Travel Insurance');
   const hasMarineItem = items.some(it => it.proposalType === 'Marine Insurance');
@@ -1017,14 +1024,16 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
           {isEdit && (
             <div className="max-w-xs">
               <Field label="Stage">
-                <CoolSelect
-                  value={stage} onChange={(e) => setStage(e.target.value)} disabled={!canChangeStage}
-                  className={selectCls + (!canChangeStage ? ' opacity-60 cursor-not-allowed' : '')}
-                >
-                  {stageOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                </CoolSelect>
+                {canChangeStage ? (
+                  <CoolSelect value={stage} onChange={(e) => setStage(e.target.value)} className={selectCls}>
+                    {pickableStages.map(s => <option key={s} value={s}>{s}</option>)}
+                  </CoolSelect>
+                ) : (
+                  <span className={`inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full ring-1 ${ALL_STAGE_THEME[currentStage] || ''}`}>
+                    {currentStage}
+                  </span>
+                )}
               </Field>
-              {!canChangeStage && <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">You don't have permission to change this prospect's stage.</p>}
             </div>
           )}
 
@@ -1366,9 +1375,13 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
           </div>
           <div className="flex gap-2">
             <button onClick={onClose} className={btnGhost}>Cancel</button>
-            <button onClick={handleConfirm} disabled={!canSave} className={btnPrimary}>
-              <CheckCircle2 size={14} /> {isEdit ? 'Save Changes' : `Confirm & Create${items.length > 1 ? ` ${items.length}` : ''}`}
-            </button>
+            {/* Someone who can neither edit this prospect nor move its stage has
+                nothing to save — don't show them a button that can never work. */}
+            {(!isEdit || canEditDetails || canChangeStage) && (
+              <button onClick={handleConfirm} disabled={!canSave} className={btnPrimary}>
+                <CheckCircle2 size={14} /> {isEdit ? 'Save Changes' : `Confirm & Create${items.length > 1 ? ` ${items.length}` : ''}`}
+              </button>
+            )}
           </div>
         </div>
       </div>

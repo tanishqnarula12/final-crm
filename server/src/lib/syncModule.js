@@ -17,7 +17,9 @@
 //
 // All writes + logs happen in one interactive transaction.
 
-import { can, canCreate, canEdit, canDelete, canChangeStage, canChangeStageBack, isAdmin, isBackwardStage } from './permissions.js';
+import {
+  can, canCreate, canEdit, canDelete, canChangeStage, canChangeStageBack, isAdmin, isBackwardStage, isPreQualifiedOwner,
+} from './permissions.js';
 import { logActivity, diffFields } from './activityLog.js';
 
 // Task change classification: a log/comment edit is NOT a details edit.
@@ -201,9 +203,15 @@ export async function syncBulk(prisma, spec) {
         // isBackwardStage, extended here to every module with a STAGE_ORDER
         // entry (currently the two Prospect modules; a no-op everywhere
         // else, since isBackwardStage returns false for an unlisted module).
+        // Moving an investment prospect INTO Pre-Qualified is its own hard
+        // rule: only that prospect's RM/PM (or Admin), whatever the matrix says.
+        // Any other backward move needs the matrix's changeStageBack right.
+        const intoPreQualified = mod === 'investmentProspects' && to === 'Pre-Qualified';
         const stageAllowed = !stageChanged || (
-          canChangeStage(actor, mod, existing, from, to)
-          && (!isBackwardStage(mod, from, to) || canChangeStageBack(actor, mod, existing))
+          intoPreQualified
+            ? isPreQualifiedOwner(actor, existing)
+            : canChangeStage(actor, mod, existing, from, to)
+              && (!isBackwardStage(mod, from, to) || canChangeStageBack(actor, mod, existing))
         );
         allowed = detailAllowed || stageAllowed;
         if (!allowed && nextAssigned !== curAssigned) allowed = true;

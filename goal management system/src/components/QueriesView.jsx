@@ -431,6 +431,13 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
   const mayParticipate = !isEdit || isAdmin(me) || !initial?.departmentOwner
     || initial.departmentOwner === me?.id || initial.assignedTo === me?.id;
   const stageOk = !hasStageChanged || canChangeQueryStage(me, initial, initial?.stage || 'Open', stage);
+  // Only offer stages this account can actually move the query to; a legacy
+  // query with no raiser recorded keeps the full list (mayParticipate above).
+  const initialQueryStage = initial?.stage || 'Open';
+  const legacyQuery = !isEdit || !initial?.departmentOwner;
+  const pickableQueryStages = legacyQuery
+    ? QUERY_STAGES
+    : QUERY_STAGES.filter((s) => s === initialQueryStage || canChangeQueryStage(me, initial, initialQueryStage, s));
 
   // Only treat this as a "details edit" (needing the raiser-only right) if
   // category/query/assignedTo actually changed — a plain stage move or
@@ -523,9 +530,13 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
 
           {isEdit && (
             <Field label="Stage *">
-              <CoolSelect value={stage} onChange={(e) => setStage(e.target.value)} className={selectCls + (!mayParticipate ? ' opacity-60 cursor-not-allowed' : '')} disabled={!mayParticipate}>
-                {QUERY_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
-              </CoolSelect>
+              {mayParticipate && pickableQueryStages.length > 1 ? (
+                <CoolSelect value={stage} onChange={(e) => setStage(e.target.value)} className={selectCls}>
+                  {pickableQueryStages.map(s => <option key={s} value={s}>{s}</option>)}
+                </CoolSelect>
+              ) : (
+                <input value={stage} readOnly className={inputCls + ' bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400'} />
+              )}
             </Field>
           )}
 
