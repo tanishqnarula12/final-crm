@@ -48,18 +48,70 @@ const createSchema = z.object({
   visibleForDays: z.number().int().positive().nullable().optional(),
 });
 
-export const serializeNotice = (n) => ({
-  id: n.id,
-  type: n.type,
-  title: n.title,
-  message: n.message,
-  createdBy: n.createdBy,
-  effectiveDate: n.effectiveDate,
-  effectiveTime: n.effectiveTime,
-  expiresAt: n.expiresAt,
-  createdAt: n.createdAt,
-  updatedAt: n.updatedAt,
-});
+// Renders a LEAVE notice's title/message FRESH, relative to `now` — never
+// frozen at the moment it was approved. The same stored record reads
+// "will be on leave" days ahead of the date, "is on leave today" once that
+// day genuinely arrives, and "was on leave" if it's ever read afterward
+// (rare in practice — endOfDayExpiry below already removes it from GET
+// /api/notices by then — but still correct if something reads it directly).
+export function renderLeaveNotice(data, now = new Date()) {
+  const { name, fromDate, toDate, leaveType, halfDaySlot, timeValue } = data;
+  const fmt = (d) => new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const todayKey = localDateKey(now);
+  const tense = fromDate === todayKey ? 'today' : fromDate > todayKey ? 'future' : 'past';
+  const isMultiDay = toDate !== fromDate;
+
+  if (leaveType === 'Half Day') {
+    const slot = halfDaySlot || 'Half Day';
+    const title = tense === 'today' ? `🌴 ${name} is on leave today (${slot})`
+      : tense === 'future' ? `🌴 ${name} will be on leave (${slot})`
+      : `🌴 ${name} was on leave (${slot})`;
+    return { title, message: `${name} will be away for the ${slot} on ${fmt(fromDate)}.` };
+  }
+  if (leaveType === 'Early Leave') {
+    const title = tense === 'today' ? `🌴 ${name} is leaving early today`
+      : tense === 'future' ? `🌴 ${name} will leave early`
+      : `🌴 ${name} left early`;
+    return { title, message: `${name} will leave early (around ${timeValue}) on ${fmt(fromDate)}.` };
+  }
+  if (leaveType === 'Late Entry') {
+    const title = tense === 'today' ? `🌴 ${name} will arrive late today`
+      : tense === 'future' ? `🌴 ${name} will arrive late`
+      : `🌴 ${name} arrived late`;
+    return { title, message: `${name} will arrive late (around ${timeValue}) on ${fmt(fromDate)}.` };
+  }
+  if (isMultiDay) {
+    // A range has no single "today" — it's future until it starts, ongoing
+    // through it, past once it ends. (endOfDayExpiry removes it from GET
+    // /api/notices right as it ends, so "past" is only ever seen elsewhere.)
+    const state = todayKey < fromDate ? 'future' : todayKey > toDate ? 'past' : 'ongoing';
+    const title = state === 'future' ? `🌴 ${name} will be on leave`
+      : state === 'past' ? `🌴 ${name} was on leave`
+      : `🌴 ${name} is on leave`;
+    const verb = state === 'future' ? 'will be' : state === 'past' ? 'was' : 'is';
+    return { title, message: `${name} ${verb} on leave from ${fmt(fromDate)} to ${fmt(toDate)}.` };
+  }
+  const title = tense === 'today' ? `🌴 ${name} is on leave today`
+    : tense === 'future' ? `🌴 ${name} will be on leave`
+    : `🌴 ${name} was on leave`;
+  return { title, message: `${name} is on leave on ${fmt(fromDate)}.` };
+}
+
+export const serializeNotice = (n) => {
+  const rendered = n.templateKind === 'LEAVE' && n.templateData ? renderLeaveNotice(n.templateData) : null;
+  return {
+    id: n.id,
+    type: n.type,
+    title: rendered?.title ?? n.title,
+    message: rendered?.message ?? n.message,
+    createdBy: n.createdBy,
+    effectiveDate: n.effectiveDate,
+    effectiveTime: n.effectiveTime,
+    expiresAt: n.expiresAt,
+    createdAt: n.createdAt,
+    updatedAt: n.updatedAt,
+  };
+};
 
 // "Visible for N days starting on effectiveDate" — N=1 means visible only
 // through the end of effectiveDate itself (day 1), not day 2, so the offset
@@ -92,10 +144,10 @@ export function isDue(row, now) {
 // today"). `dedupeKey` is only needed by callers that might otherwise fire
 // twice (the scheduler's recurring tick); a P2002 there is swallowed, not
 // thrown, so a duplicate attempt is just a no-op.
-export async function postSystemNotice(prisma, { type, title, message, dedupeKey = null, expiresAt = null }) {
+export async function postSystemNotice(prisma, { type, title, message, dedupeKey = null, expiresAt = null, templateKind = null, templateData = null }) {
   try {
     const row = await prisma.notice.create({
-      data: { type, title, message, createdBy: null, dedupeKey, effectiveDate: localDateKey(), triggered: true, expiresAt },
+      data: { type, title, message, createdBy: null, dedupeKey, effectiveDate: localDateKey(), triggered: true, expiresAt, templateKind, templateData },
     });
     emitToAll('notice:new', { notice: serializeNotice(row) });
     return row;

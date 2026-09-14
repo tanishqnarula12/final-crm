@@ -449,8 +449,18 @@ model Notification {
 model Notice {
   id            String    @id @default(cuid())
   type          String    @default("GENERAL") // GENERAL | ANNOUNCEMENT | HOLIDAY | BIRTHDAY | EVENT | LEAVE
+  // The stored, at-posting-time text. For a templated notice (templateKind
+  // set) this is only a fallback/initial value — the API re-renders title and
+  // message FRESH on every read from templateData (see renderLeaveNotice in
+  // routes/notices.js), so wording like "will be on leave" correctly becomes
+  // "is on leave today" as real time actually reaches that date, instead of
+  // staying frozen as whatever tense was true the moment it was approved.
   title         String
   message       String
+  // null = a plain notice (title/message above are authoritative, as before).
+  // 'LEAVE' = title/message are recomputed from templateData on every read.
+  templateKind  String?
+  templateData  Json?
   createdBy     String? // User.id, null = system-generated
   // YYYY-MM-DD (string, matching Leave.fromDate/toDate's convention) — the
   // notice is invisible to everyone, including the poster, until this date
