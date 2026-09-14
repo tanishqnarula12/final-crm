@@ -164,10 +164,14 @@ export default function PolicyReview({ client, onBack }) {
       id,
       policyName: '',
       policyNo: '',
-      // Defaults to the client's own name — most policies are self-held —
-      // but stays editable per policy since a household review can mix in
-      // a spouse's or child's policy under the same client.
-      policyHolderName: clientName || '',
+      // Left blank rather than pre-filled with the client's name: capturing
+      // clientName here at policy-creation time went stale (the very first
+      // policy block is created on mount, before the advisor has typed a
+      // client name at all) and never a policy already on screen. Every
+      // place this is displayed instead falls back to the client's name
+      // live, at render time, when this is left blank — see
+      // buildReportData/policyHolderName usages below.
+      policyHolderName: '',
       policyCategory: 'traditional',
       policySubtype: 'endowment',
       sumAssured: '',
@@ -999,12 +1003,12 @@ export default function PolicyReview({ client, onBack }) {
                           />
                         </div>
                         <div className="field">
-                          <label>Policy Holder Name <span className="tip" title="The person this specific policy belongs to — may differ from the client above">?</span></label>
+                          <label>Policy Holder Name <span className="tip" title="Leave blank if this policy belongs to the client above — fill in only when it's held by a spouse, child, etc.">?</span></label>
                           <input
                             type="text"
                             value={p.policyHolderName}
                             onChange={e => updatePolicyField(p.id, 'policyHolderName', e.target.value)}
-                            placeholder="e.g. Spouse / Child name"
+                            placeholder={`Defaults to ${clientName || 'client'} — e.g. Spouse / Child`}
                           />
                         </div>
                       </div>
@@ -1485,7 +1489,7 @@ export default function PolicyReview({ client, onBack }) {
                 <div className="cicon ci-blue" id={`r-policy-badge-${res.policyId}`}>{res.policyId}</div>
                 <div style={{ flex: 1 }}>
                   <div className="ctitle" id={`r-policy-name-${res.policyId}`}>{res.policyName || `Policy #${res.policyId}`} {res.policyNo ? `(${res.policyNo})` : ''}</div>
-                  <div className="csub" id={`r-policy-label-${res.policyId}`}>Policy #{res.policyId} — Individual Review{res.policyHolderName ? ` · Holder: ${res.policyHolderName}` : ''}</div>
+                  <div className="csub" id={`r-policy-label-${res.policyId}`}>Policy #{res.policyId} — Individual Review{(res.policyHolderName || clientName) ? ` · Holder: ${res.policyHolderName || clientName}` : ''}</div>
                 </div>
                 <div style={{ textAlign: 'right' }} className="no-print">
                   <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text3)' }} id={`r-client-name-${res.policyId}`}>{clientName}</div>
@@ -1749,7 +1753,6 @@ export default function PolicyReview({ client, onBack }) {
               <table>
                 <thead>
                   <tr>
-                    <th>Client Name</th>
                     <th>Policy Holder</th>
                     <th className="text-left">Policy Name & No.</th>
                     <th style={{ textAlign: 'right' }}>Continue Policy</th>
@@ -1766,8 +1769,7 @@ export default function PolicyReview({ client, onBack }) {
                       : { textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' });
                     return (
                       <tr key={row.policyId}>
-                        <td style={{ fontWeight: 600 }}>{clientName}</td>
-                        <td>{row.policyHolderName || '—'}</td>
+                        <td style={{ fontWeight: 600 }}>{row.policyHolderName || clientName || '—'}</td>
                         <td className="text-left">{row.policyName || `Policy #${row.policyId}`} {row.policyNo ? `(${row.policyNo})` : ''}</td>
                         <td style={winCellStyle('continue')}>{inr(row.continueVal)}</td>
                         <td style={winCellStyle('paidup')}>{inr(row.paidUpVal)}</td>

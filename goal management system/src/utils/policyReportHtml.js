@@ -140,10 +140,13 @@ function buildOverviewPage(data, results, dateStr, pageNum, totalPages) {
 
   const rows = results.map((r) => {
     const remarks = r.winner?.type === 'mf' ? 'Mutual is best' : (r.winner?.type === 'paidup' ? 'Go Paid-up' : 'Continue Policy');
+    // A policy left without its own holder belongs to the client themself —
+    // that's the common case (most policies are self-held), so this is a
+    // fallback, not a blank/"—" state.
+    const holder = r.policyHolderName || data.clientName || '—';
     return `
     <tr>
-      <td style="padding:7px 8px;border-bottom:1px solid #f1f5f9;font-weight:600;color:#0f172a;font-size:9px;">${escHtml(data.clientName) || 'Client'}</td>
-      <td style="padding:7px 8px;border-bottom:1px solid #f1f5f9;color:#475569;font-size:9px;">${escHtml(r.policyHolderName) || '—'}</td>
+      <td style="padding:7px 8px;border-bottom:1px solid #f1f5f9;font-weight:600;color:#0f172a;font-size:9px;">${escHtml(holder)}</td>
       <td style="padding:7px 8px;border-bottom:1px solid #f1f5f9;font-weight:700;color:#0f172a;font-size:9px;">${escHtml(r.policyName) || `Policy #${r.policyId}`}${r.policyNo ? ` <span style="font-weight:500;color:#64748b;font-size:8.5px;">(${escHtml(r.policyNo)})</span>` : ''}</td>
       ${summaryValueCell(r.continueVal, 'continue', r.winner?.type)}
       ${summaryValueCell(r.paidUpVal, 'paidup', r.winner?.type)}
@@ -171,14 +174,13 @@ function buildOverviewPage(data, results, dateStr, pageNum, totalPages) {
       <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
         <thead>
           <tr style="background:#0f1f3d;">
-            <th style="text-align:left;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:12%;">Client Name</th>
-            <th style="text-align:left;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:12%;">Policy Holder</th>
-            <th style="text-align:left;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:15%;">Policy Name &amp; No.</th>
+            <th style="text-align:left;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:15%;">Policy Holder</th>
+            <th style="text-align:left;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:20%;">Policy Name &amp; No.</th>
             <th style="text-align:right;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:12%;">Continue</th>
             <th style="text-align:right;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:12%;">Paid-up</th>
             <th style="text-align:right;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:12%;">Surrender</th>
             <th style="text-align:right;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:12%;">Mutual Fund</th>
-            <th style="text-align:left;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:13%;">Remarks</th>
+            <th style="text-align:left;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:17%;">Remarks</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -260,7 +262,7 @@ function buildPolicyDetailPage(res, index, total, data, dateStr, pageNum, totalP
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
       <div>
         <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:#0f172a;letter-spacing:-0.4px;">${escHtml(res.policyName) || `Policy #${res.policyId}`}${res.policyNo ? ` <span style="font-size:13px;font-weight:500;color:#64748b;">(${escHtml(res.policyNo)})</span>` : ''}</div>
-        <div style="font-size:11px;color:#1d4ed8;font-weight:700;margin-top:5px;">Policy Holder: ${escHtml(res.policyHolderName) || '—'}</div>
+        <div style="font-size:11px;color:#1d4ed8;font-weight:700;margin-top:5px;">Policy Holder: ${escHtml(res.policyHolderName || data.clientName) || '—'}</div>
         <div style="font-size:10.5px;color:#64748b;margin-top:3px;">${policyCategoryLabel(res)} &nbsp;·&nbsp; Policy ${index + 1} of ${total}</div>
       </div>
       <div style="text-align:right;flex-shrink:0;">

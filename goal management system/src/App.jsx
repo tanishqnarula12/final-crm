@@ -72,6 +72,7 @@ import {
 import NotificationPanel from './components/NotificationPanel';
 import NotificationToaster from './components/NotificationToaster';
 import InstallPrompt from './components/InstallPrompt';
+import UpdateBanner from './components/UpdateBanner';
 import { subscribeToPush, unsubscribeFromPush } from './services/push';
 
 export default function App() {
@@ -1359,6 +1360,7 @@ export default function App() {
         onBellShake={() => triggerAnim('bell')}
       />
       <InstallPrompt />
+      <UpdateBanner />
       {view !== 'chat' && (
         <Sidebar
           view={view}
