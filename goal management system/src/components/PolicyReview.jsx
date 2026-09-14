@@ -164,6 +164,10 @@ export default function PolicyReview({ client, onBack }) {
       id,
       policyName: '',
       policyNo: '',
+      // Defaults to the client's own name — most policies are self-held —
+      // but stays editable per policy since a household review can mix in
+      // a spouse's or child's policy under the same client.
+      policyHolderName: clientName || '',
       policyCategory: 'traditional',
       policySubtype: 'endowment',
       sumAssured: '',
@@ -573,6 +577,7 @@ export default function PolicyReview({ client, onBack }) {
         policyId: p.id,
         policyName: p.policyName,
         policyNo: p.policyNo,
+        policyHolderName: p.policyHolderName,
         policyCategory: p.policyCategory,
         policySubtype: p.policySubtype,
         sumAssured: sa,
@@ -974,23 +979,32 @@ export default function PolicyReview({ client, onBack }) {
                       </div>
                     </div>
                     <div className="card-body">
-                      <div className="fg fg-2" style={{ marginBottom: '14px' }}>
+                      <div className="fg fg-3" style={{ marginBottom: '14px' }}>
                         <div className="field">
                           <label>Policy Name</label>
-                          <input 
-                            type="text" 
-                            value={p.policyName} 
-                            onChange={e => updatePolicyField(p.id, 'policyName', e.target.value)} 
-                            placeholder="e.g. LIC Jeevan Anand" 
+                          <input
+                            type="text"
+                            value={p.policyName}
+                            onChange={e => updatePolicyField(p.id, 'policyName', e.target.value)}
+                            placeholder="e.g. LIC Jeevan Anand"
                           />
                         </div>
                         <div className="field">
                           <label>Policy No.</label>
-                          <input 
-                            type="text" 
-                            value={p.policyNo} 
-                            onChange={e => updatePolicyField(p.id, 'policyNo', e.target.value)} 
-                            placeholder="e.g. 123456789" 
+                          <input
+                            type="text"
+                            value={p.policyNo}
+                            onChange={e => updatePolicyField(p.id, 'policyNo', e.target.value)}
+                            placeholder="e.g. 123456789"
+                          />
+                        </div>
+                        <div className="field">
+                          <label>Policy Holder Name <span className="tip" title="The person this specific policy belongs to — may differ from the client above">?</span></label>
+                          <input
+                            type="text"
+                            value={p.policyHolderName}
+                            onChange={e => updatePolicyField(p.id, 'policyHolderName', e.target.value)}
+                            placeholder="e.g. Spouse / Child name"
                           />
                         </div>
                       </div>
@@ -1471,7 +1485,7 @@ export default function PolicyReview({ client, onBack }) {
                 <div className="cicon ci-blue" id={`r-policy-badge-${res.policyId}`}>{res.policyId}</div>
                 <div style={{ flex: 1 }}>
                   <div className="ctitle" id={`r-policy-name-${res.policyId}`}>{res.policyName || `Policy #${res.policyId}`} {res.policyNo ? `(${res.policyNo})` : ''}</div>
-                  <div className="csub" id={`r-policy-label-${res.policyId}`}>Policy #{res.policyId} — Individual Review</div>
+                  <div className="csub" id={`r-policy-label-${res.policyId}`}>Policy #{res.policyId} — Individual Review{res.policyHolderName ? ` · Holder: ${res.policyHolderName}` : ''}</div>
                 </div>
                 <div style={{ textAlign: 'right' }} className="no-print">
                   <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text3)' }} id={`r-client-name-${res.policyId}`}>{clientName}</div>
@@ -1736,6 +1750,7 @@ export default function PolicyReview({ client, onBack }) {
                 <thead>
                   <tr>
                     <th>Client Name</th>
+                    <th>Policy Holder</th>
                     <th className="text-left">Policy Name & No.</th>
                     <th style={{ textAlign: 'right' }}>Continue Policy</th>
                     <th style={{ textAlign: 'right' }}>Paid-up</th>
@@ -1745,19 +1760,25 @@ export default function PolicyReview({ client, onBack }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {results.map(row => (
-                    <tr key={row.policyId}>
-                      <td style={{ fontWeight: 600 }}>{clientName}</td>
-                      <td className="text-left">{row.policyName || `Policy #${row.policyId}`} {row.policyNo ? `(${row.policyNo})` : ''}</td>
-                      <td style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' }}>{inr(row.continueVal)}</td>
-                      <td style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' }}>{inr(row.paidUpVal)}</td>
-                      <td style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' }}>{inr(row.surrenderVal)}</td>
-                      <td style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' }}>{inr(row.mfFinalVal)}</td>
-                      <td className="text-left" style={{ fontWeight: 600, color: row.winner.type === 'mf' ? 'var(--green)' : row.winner.type === 'paidup' ? 'var(--amber)' : 'var(--blue)' }}>
-                        {row.winner.type === 'mf' ? 'Mutual is best' : (row.winner.type === 'paidup' ? 'Go Paid-up' : 'Continue Policy')}
-                      </td>
-                    </tr>
-                  ))}
+                  {results.map(row => {
+                    const winCellStyle = (type) => (row.winner.type === type
+                      ? { textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, color: 'var(--green)', background: 'rgba(74,222,128,0.12)', borderRadius: '6px' }
+                      : { textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' });
+                    return (
+                      <tr key={row.policyId}>
+                        <td style={{ fontWeight: 600 }}>{clientName}</td>
+                        <td>{row.policyHolderName || '—'}</td>
+                        <td className="text-left">{row.policyName || `Policy #${row.policyId}`} {row.policyNo ? `(${row.policyNo})` : ''}</td>
+                        <td style={winCellStyle('continue')}>{inr(row.continueVal)}</td>
+                        <td style={winCellStyle('paidup')}>{inr(row.paidUpVal)}</td>
+                        <td style={winCellStyle('surrender')}>{inr(row.surrenderVal)}</td>
+                        <td style={winCellStyle('mf')}>{inr(row.mfFinalVal)}</td>
+                        <td className="text-left" style={{ fontWeight: 600, color: row.winner.type === 'mf' ? 'var(--green)' : row.winner.type === 'paidup' ? 'var(--amber)' : 'var(--blue)' }}>
+                          {row.winner.type === 'mf' ? 'Mutual is best' : (row.winner.type === 'paidup' ? 'Go Paid-up' : 'Continue Policy')}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

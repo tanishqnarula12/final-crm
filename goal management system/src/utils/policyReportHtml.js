@@ -129,16 +129,27 @@ function buildOverviewPage(data, results, dateStr, pageNum, totalPages) {
     focusText = `Of the ${results.length} policies reviewed, ${parts.join(', ')}.`;
   }
 
+  // A summary cell for one scenario value — bold, filled light green and
+  // colored green when that scenario is the recommended (winning) path for
+  // this policy, plain otherwise, so the winning figure visibly pops out of
+  // the row instead of only the Remarks text being colored.
+  const summaryValueCell = (value, type, winnerType) => {
+    const isWinner = type === winnerType;
+    return `<td style="padding:7px 8px;border-bottom:1px solid #f1f5f9;text-align:right;font-size:9px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;${isWinner ? 'font-weight:800;color:#16a34a;background:#f0fdf4;' : 'font-weight:600;color:#334155;'}">${inr(value)}</td>`;
+  };
+
   const rows = results.map((r) => {
-    const wc = WINNER_COPY[r.winner?.type] || { label: r.winner?.name || '—', emoji: '💡' };
-    const upside = Math.max(0, (r.winner?.value || 0) - (r.continueVal || 0));
+    const remarks = r.winner?.type === 'mf' ? 'Mutual is best' : (r.winner?.type === 'paidup' ? 'Go Paid-up' : 'Continue Policy');
     return `
     <tr>
-      <td style="padding:11px 14px;border-bottom:1px solid #f1f5f9;font-weight:700;color:#0f172a;font-size:11px;">${escHtml(r.policyName) || `Policy #${r.policyId}`}${r.policyNo ? ` <span style="font-weight:500;color:#64748b;font-size:9.5px;">(${escHtml(r.policyNo)})</span>` : ''}</td>
-      <td style="padding:11px 14px;border-bottom:1px solid #f1f5f9;font-size:10.5px;color:#475569;">${policyCategoryLabel(r)}</td>
-      <td style="padding:11px 14px;border-bottom:1px solid #f1f5f9;font-size:10.5px;font-weight:700;color:${REC_COLOR[r.recType] || '#2563eb'};">${wc.emoji} ${wc.label}</td>
-      <td style="padding:11px 14px;border-bottom:1px solid #f1f5f9;text-align:right;font-size:10.5px;font-weight:700;color:#0f172a;">${inr(r.winner?.value)}</td>
-      <td style="padding:11px 14px;border-bottom:1px solid #f1f5f9;text-align:right;font-size:10.5px;font-weight:700;color:${upside > 0 ? '#16a34a' : '#94a3b8'};">${upside > 0 ? '+' + inr(upside) : '—'}</td>
+      <td style="padding:7px 8px;border-bottom:1px solid #f1f5f9;font-weight:600;color:#0f172a;font-size:9px;">${escHtml(data.clientName) || 'Client'}</td>
+      <td style="padding:7px 8px;border-bottom:1px solid #f1f5f9;color:#475569;font-size:9px;">${escHtml(r.policyHolderName) || '—'}</td>
+      <td style="padding:7px 8px;border-bottom:1px solid #f1f5f9;font-weight:700;color:#0f172a;font-size:9px;">${escHtml(r.policyName) || `Policy #${r.policyId}`}${r.policyNo ? ` <span style="font-weight:500;color:#64748b;font-size:8.5px;">(${escHtml(r.policyNo)})</span>` : ''}</td>
+      ${summaryValueCell(r.continueVal, 'continue', r.winner?.type)}
+      ${summaryValueCell(r.paidUpVal, 'paidup', r.winner?.type)}
+      ${summaryValueCell(r.surrenderVal, 'surrender', r.winner?.type)}
+      ${summaryValueCell(r.mfFinalVal, 'mf', r.winner?.type)}
+      <td style="padding:7px 8px;border-bottom:1px solid #f1f5f9;font-weight:700;font-size:9px;color:${REC_COLOR[r.recType] || '#2563eb'};white-space:nowrap;">${remarks}</td>
     </tr>`;
   }).join('');
 
@@ -157,14 +168,17 @@ function buildOverviewPage(data, results, dateStr, pageNum, totalPages) {
 
     <div style="font-size:14px;font-weight:700;color:#0f172a;margin-top:26px;margin-bottom:12px;">Executive summary</div>
     <div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
-      <table style="width:100%;border-collapse:collapse;">
+      <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
         <thead>
           <tr style="background:#0f1f3d;">
-            <th style="text-align:left;padding:10px 14px;font-size:9px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:white;">Policy</th>
-            <th style="text-align:left;padding:10px 14px;font-size:9px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:white;">Category</th>
-            <th style="text-align:left;padding:10px 14px;font-size:9px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:white;">Recommended Path</th>
-            <th style="text-align:right;padding:10px 14px;font-size:9px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:white;">Projected Value</th>
-            <th style="text-align:right;padding:10px 14px;font-size:9px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:white;">vs. Continuing</th>
+            <th style="text-align:left;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:12%;">Client Name</th>
+            <th style="text-align:left;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:12%;">Policy Holder</th>
+            <th style="text-align:left;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:15%;">Policy Name &amp; No.</th>
+            <th style="text-align:right;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:12%;">Continue</th>
+            <th style="text-align:right;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:12%;">Paid-up</th>
+            <th style="text-align:right;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:12%;">Surrender</th>
+            <th style="text-align:right;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:12%;">Mutual Fund</th>
+            <th style="text-align:left;padding:8px;font-size:7.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:white;width:13%;">Remarks</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -246,6 +260,7 @@ function buildPolicyDetailPage(res, index, total, data, dateStr, pageNum, totalP
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
       <div>
         <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:#0f172a;letter-spacing:-0.4px;">${escHtml(res.policyName) || `Policy #${res.policyId}`}${res.policyNo ? ` <span style="font-size:13px;font-weight:500;color:#64748b;">(${escHtml(res.policyNo)})</span>` : ''}</div>
+        <div style="font-size:11px;color:#1d4ed8;font-weight:700;margin-top:5px;">Policy Holder: ${escHtml(res.policyHolderName) || '—'}</div>
         <div style="font-size:10.5px;color:#64748b;margin-top:3px;">${policyCategoryLabel(res)} &nbsp;·&nbsp; Policy ${index + 1} of ${total}</div>
       </div>
       <div style="text-align:right;flex-shrink:0;">
