@@ -2,6 +2,7 @@ import { buildProjection } from './calc';
 import logoUrl from '../assets/logo.png';
 import { buildGoalReportHtml } from './goalReportHtml';
 import { buildAssetReportHtml } from './assetReportHtml';
+import { buildPolicyReportHtml } from './policyReportHtml';
 
 function escHtml(str) {
   return String(str)
@@ -620,6 +621,51 @@ export function exportGoalReportPdf(client) {
   <meta charset="UTF-8">
   <title>${escHtml(client.name)} – Goal Report</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #f1f5f9; }
+    @page { size: A4; margin: 14mm 16mm; }
+    @media print {
+      html, body { background: #ffffff; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    }
+  </style>
+</head>
+<body>${bodyHtml}</body>
+</html>`;
+
+  const win = window.open('', '_blank', 'width=820,height=1000');
+  if (!win) {
+    alert('Please allow pop-ups to export the report.');
+    return;
+  }
+  win.document.write(html);
+  win.document.close();
+
+  let printed = false;
+  const doPrint = () => {
+    if (printed) return;
+    printed = true;
+    win.focus();
+    win.print();
+  };
+  win.onload = doPrint;
+  setTimeout(doPrint, 1200);
+}
+
+// Dedicated Policy Review Report — same pattern as exportGoalReportPdf/
+// exportAssetReportPdf above (see policyReportHtml.js for the template
+// itself). Replaces the old window.print()-on-the-live-calculator approach,
+// which had no letterhead/branding and put its executive summary at the
+// very end of the printout instead of the front.
+export function exportPolicyReportPdf(data) {
+  const bodyHtml = buildPolicyReportHtml(data);
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${escHtml(data.clientName || 'Client')} – Policy Review Report</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: #f1f5f9; }

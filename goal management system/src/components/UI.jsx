@@ -111,6 +111,7 @@ export function CoolSelect({
   required = false,
   showValueOnSelect = false,
   freeInput = false,   // when true: typed text is accepted as value even if not in list
+  searchable = true,   // when false: plain-dropdown look — no search icon, no clear button
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -320,20 +321,26 @@ export function CoolSelect({
     inputClass += 'shadow-sm ';
   }
 
-  inputClass += isCompact ? 'py-1.5 pl-7 pr-7 text-xs ' : 'py-2.5 pl-8 pr-8 text-sm ';
+  inputClass += isCompact
+    ? `py-1.5 ${searchable ? 'pl-7' : 'pl-2.5'} pr-7 text-xs `
+    : `py-2.5 ${searchable ? 'pl-8' : 'pl-3.5'} pr-8 text-sm `;
   inputClass += cleanClassName;
 
   return (
     <div ref={wrapRef} className="relative w-full">
       <div className="relative">
-        <Search size={iconSize} className={`absolute ${leftIconPos} top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none`} />
+        {searchable && (
+          <Search size={iconSize} className={`absolute ${leftIconPos} top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none`} />
+        )}
         <input
           ref={inputRef}
           type="text"
           disabled={disabled}
           required={required}
+          readOnly={!searchable}
           value={open ? query : (selectedOpt ? (showValueOnSelect ? String(selectedOpt.value) : selectedOpt.label) : (freeInput ? (value || '') : ''))}
           onChange={(e) => {
+            if (!searchable) return;
             setQuery(e.target.value);
             if (!open) openMenu();
             else updateMenuRect();
@@ -345,7 +352,7 @@ export function CoolSelect({
           className={inputClass}
           autoComplete="off"
         />
-        {selectedOpt && selectedOpt.value !== '' && !disabled && (
+        {searchable && selectedOpt && selectedOpt.value !== '' && !disabled && (
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}

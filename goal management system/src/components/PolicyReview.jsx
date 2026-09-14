@@ -3,8 +3,10 @@ import {
   ArrowLeft, Printer, AlertCircle, CheckCircle2, Save
 } from 'lucide-react';
 import { CoolSelect } from './UI';
-import { saveGeneratedDocument, wrapStandaloneHtml, snapshotElementHtml } from '../utils/documents';
+import { saveGeneratedDocument, wrapStandaloneHtml } from '../utils/documents';
 import { teamName } from '../services/team';
+import { buildPolicyReportHtml } from '../utils/policyReportHtml';
+import { exportPolicyReportPdf } from '../utils/pdf';
 
 const CHART_JS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
 const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxR_YWt7vbldI57ZxqX3WrnvZrp0gTLWPa8Fqo-YmMjRvo760WT_gd62njXd3q9e7n0/exec';
@@ -730,23 +732,26 @@ export default function PolicyReview({ client, onBack }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Browser Print handler
+  // Builds the plain-data payload the dedicated report template renders from
+  // — kept separate from component state so the print export and the saved
+  // Document always render byte-for-byte the same report.
+  const buildReportData = () => ({
+    clientName, clientPan, groupLeader, mfReturn, ltcg, ltcgRate, results,
+  });
+
+  // Export / Print handler — opens the dedicated, hand-crafted Policy Review
+  // Report template (see policyReportHtml.js) in its own window instead of
+  // window.print()-ing the live on-screen calculator, which had no
+  // letterhead/branding and put its executive summary at the very end.
   const handlePrint = () => {
     if (!results || results.length === 0) {
       alert('Please analyze a policy first, then export.');
       return;
     }
-
-    const originalTitle = document.title;
-    document.title = `Policy Review_${clientName || 'Client'}`;
-    window.print();
-    setTimeout(() => {
-      document.title = originalTitle;
-    }, 500);
+    exportPolicyReportPdf(buildReportData());
   };
 
-  // Save the rendered Policy Review as a document in the client's Documents.
-  const resultsRef = useRef(null);
+  // Save the dedicated report template's HTML as a document in the client's Documents.
   const [savingDoc, setSavingDoc] = useState(false);
   const [docMsg, setDocMsg] = useState('');
   const handleSaveDocument = async () => {
@@ -759,14 +764,12 @@ export default function PolicyReview({ client, onBack }) {
       setTimeout(() => setDocMsg(''), 4000);
       return;
     }
-    if (!resultsRef.current) return;
     setSavingDoc(true);
     try {
-      const inner = snapshotElementHtml(resultsRef.current);
+      const inner = buildPolicyReportHtml(buildReportData());
       const html = wrapStandaloneHtml(
-        `<div class="policy-review-container">${inner}</div>`,
+        inner,
         `Policy Review — ${clientName || client.name}`,
-        POLICY_REVIEW_STYLES
       );
       const name = await saveGeneratedDocument(client, {
         kind: 'policy',
@@ -996,9 +999,10 @@ export default function PolicyReview({ client, onBack }) {
                       <div className="fg fg-2">
                         <div className="field">
                           <label>Policy Category</label>
-                          <CoolSelect 
-                            value={p.policyCategory} 
+                          <CoolSelect
+                            value={p.policyCategory}
                             onChange={e => updatePolicyField(p.id, 'policyCategory', e.target.value)}
+                            searchable={false}
                           >
                             <option value="traditional">Traditional</option>
                             <option value="ulip">ULIP</option>
@@ -1007,9 +1011,10 @@ export default function PolicyReview({ client, onBack }) {
                         {!isUlip && (
                           <div className="field" id={`subtype-wrap-${p.id}`}>
                             <label>Sub Type</label>
-                            <CoolSelect 
-                              value={p.policySubtype} 
+                            <CoolSelect
+                              value={p.policySubtype}
                               onChange={e => updatePolicyField(p.id, 'policySubtype', e.target.value)}
+                              searchable={false}
                             >
                               <option value="endowment">Endowment</option>
                               <option value="moneyback">Money Back</option>
@@ -1035,9 +1040,10 @@ export default function PolicyReview({ client, onBack }) {
                         </div>
                         <div className="field">
                           <label>Premium Frequency <span className="tip" title="How often the premium is paid">?</span></label>
-                          <CoolSelect 
-                            value={p.premiumFrequency} 
+                          <CoolSelect
+                            value={p.premiumFrequency}
                             onChange={e => updatePolicyField(p.id, 'premiumFrequency', e.target.value)}
+                            searchable={false}
                           >
                             <option value="12">Monthly</option>
                             <option value="4">Quarterly</option>
@@ -1454,9 +1460,11 @@ export default function PolicyReview({ client, onBack }) {
         </div>
       </div>
 
-      {/* Results Workspace (Visually active inside CRM, and prints A4 Landscape) */}
+      {/* Results Workspace — on-screen only; Export PDF / Print and Save
+          Document both render from the dedicated report template instead
+          (see buildReportData / policyReportHtml.js). */}
       {results && (
-        <div id="results-container" ref={resultsRef} className="results-wrapper">
+        <div id="results-container" className="results-wrapper">
           {results.map(res => (
             <div key={res.policyId} className="card result-card" style={{ marginBottom: '24px', breakInside: 'avoid' }}>
               <div className="card-head" style={{ borderBottom: '1px solid var(--border)', background: 'rgba(37,99,235,0.03)' }}>
@@ -2216,114 +2224,4 @@ const POLICY_REVIEW_STYLES = `
   }
 
   .policy-review-container .text-left { text-align: left !important; font-family: inherit !important; font-size: 13px !important; }
-
-  @media print {
-    @page {
-      size: A4 landscape;
-      margin: 10mm 10mm;
-    }
-    .policy-review-container {
-      background: #ffffff !important;
-      color: #1e293b !important;
-    }
-    .policy-review-container .no-print {
-      display: none !important;
-    }
-    
-    /* Hide top app structures for correct printer output flow */
-    header, nav, aside, footer, .no-print { display: none !important; }
-    
-    /* Reveal only the results section */
-    body * { visibility: hidden !important; }
-    .results-wrapper, .results-wrapper * { visibility: visible !important; }
-    .results-wrapper {
-      position: absolute !important;
-      left: 0 !important;
-      top: 0 !important;
-      width: 100% !important;
-      max-width: 100% !important;
-      background: #ffffff !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      visibility: visible !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-
-    .policy-review-container .card {
-      break-inside: avoid;
-      margin-bottom: 12px !important;
-      border: 1.5px solid #cbd5e1 !important;
-      background: #ffffff !important;
-      box-shadow: none !important;
-      overflow: visible !important;
-    }
-    .policy-review-container .card-body { padding: 12px !important; }
-    .policy-review-container .card-head {
-      padding: 8px 12px !important;
-      background: #f1f5f9 !important;
-      border-bottom: 1.5px solid #cbd5e1 !important;
-    }
-    .policy-review-container thead th {
-      background: #cbd5e1 !important;
-      color: #0f172a !important;
-      border-bottom: 1.5px solid #94a3b8 !important;
-    }
-    .policy-review-container tbody td {
-      border-bottom: 1px solid #cbd5e1 !important;
-      color: #334155;
-      padding: 8px 12px !important;
-    }
-    .policy-review-container tbody td:not(:first-child) { text-align: right !important; }
-    .policy-review-container .ctable-wrap { overflow: visible !important; }
-    .policy-review-container .metric-row {
-      grid-template-columns: repeat(4, 1fr) !important;
-      gap: 8px !important;
-      margin-bottom: 8px !important;
-    }
-    .policy-review-container .mcard {
-      padding: 6px 10px !important; 
-      border: 1.5px solid #cbd5e1 !important;
-      background: #ffffff !important;
-    }
-    .policy-review-container .mcard .mc-icon { font-size: 14px !important; margin-bottom: 2px !important; }
-    .policy-review-container .mcard .mc-lbl { font-size: 8px !important; }
-    .policy-review-container .mcard .mc-val { font-size: 18px !important; margin: 4px 0 2px !important; }
-    .policy-review-container .mcard .mc-sub { font-size: 8px !important; }
-    
-    .policy-review-container .grid-2 {
-      grid-template-columns: 1fr 1fr !important;
-      gap: 12px !important;
-    }
-    .policy-review-container .wg-bar {
-      border: 1px solid #cbd5e1 !important;
-      background: #f8fafc !important;
-    }
-    .policy-review-container .wg-bar.pos { background-color: rgba(74,222,128,0.08) !important; border-color: #22c55e !important; }
-    .policy-review-container .wg-bar.neg { background-color: rgba(248,113,113,0.08) !important; border-color: #ef4444 !important; }
-    .policy-review-container .wg-val.pos { color: #16a34a !important; }
-    .policy-review-container .wg-val.neg { color: #dc2626 !important; }
-    
-    .policy-review-container .score-section { padding: 8px !important; }
-    .policy-review-container .score-ring-wrap { width: 80px !important; height: 80px !important; }
-    .policy-review-container .rec-box {
-      padding: 10px !important;
-      border: 1.5px solid #cbd5e1 !important;
-      background: #f8fafc !important;
-    }
-    .policy-review-container .rec-box.mfbetter { background-color: rgba(74,222,128,0.08) !important; border-color: #16a34a !important; }
-    .policy-review-container .rec-box.paidup { background-color: rgba(251,191,36,0.05) !important; border-color: #d97706 !important; }
-    .policy-review-container .rec-box.continue { background-color: rgba(74,222,128,0.05) !important; border-color: #16a34a !important; }
-    
-    .policy-review-container .detail-grid {
-      grid-template-columns: repeat(3, 1fr) !important;
-      gap: 6px !important;
-    }
-    .policy-review-container .detail-item {
-      border: 1px solid #cbd5e1 !important;
-      background: #f8fafc !important;
-      padding: 6px 8px !important;
-    }
-    .policy-review-container .chart-wrap { height: 160px !important; }
-  }
 `;
