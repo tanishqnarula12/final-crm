@@ -68,6 +68,16 @@ export const fmtDate = (iso) => {
   return `${d.getDate()} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
 };
 
+// DD.MM.YYYY — for a generated report/proposal's print-time document.title,
+// which is what Chrome's "Save as PDF" suggests as the filename. Defaults to
+// today since these are always stamped with the moment of generation, not a
+// stored record date.
+export const fmtFileDate = (d = new Date()) => {
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  return `${day}.${month}.${d.getFullYear()}`;
+};
+
 // Date the goal was created — falls back to the planning anchor month/year for legacy goals
 export const goalCreatedLabel = (goal) =>
   fmtDate(goal.createdAt) || monthLabel(goal.createdMonth || CURRENT_MONTH, goal.createdYear || CURRENT_YEAR);

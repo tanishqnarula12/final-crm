@@ -3,7 +3,7 @@ import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, CoolSele
 import { Plus, Trash2, Shield, Heart, Briefcase, FileText, Printer, ArrowLeft, CheckCircle2, AlertCircle, Save, Plane, Ship, Car } from 'lucide-react';
 import { LOGO_DATA_URI } from '../assets/logoBase64';
 import { RELATIONS } from '../utils/team';
-import { uid, DOB_MIN, dobMax } from '../utils/calc';
+import { uid, DOB_MIN, dobMax, fmtFileDate } from '../utils/calc';
 import { addProspects } from '../utils/prospects';
 import { saveGeneratedDocument, wrapStandaloneHtml } from '../utils/documents';
 import { ProspectModal } from './BusinessProspects';
@@ -894,21 +894,13 @@ export default function InsuranceProposal({ client, isViewer }) {
   };
 
   // Browser "Print / Save PDF" defaults its filename to document.title — set
-  // it to "<Insurance Type(s)> Insurance Proposal of <Client>" right before
-  // printing (comma-joined when more than one type is filled in), then
-  // restore the app's normal title once the print dialog closes.
+  // it to "<Client> – Insurance Proposal <DD.MM.YYYY>" right before printing,
+  // matching the Goal/Asset Allocation report naming, then restore the app's
+  // normal title once the print dialog closes.
   const handlePrint = () => {
-    const typeLabels = [
-      types.medical && 'Medical',
-      types.term && 'Term',
-      types.accidental && 'Accidental',
-      types.travel && 'Travel',
-      types.marine && 'Marine',
-      types.motor && 'Motor',
-    ].filter(Boolean);
     const who = proposer || client?.name || 'Client';
     const prevTitle = document.title;
-    document.title = `${typeLabels.length ? typeLabels.join(', ') + ' ' : ''}Insurance Proposal of ${who}`;
+    document.title = `${who} – Insurance Proposal ${fmtFileDate()}`;
     window.print();
     document.title = prevTitle;
   };
@@ -2661,7 +2653,7 @@ export default function InsuranceProposal({ client, isViewer }) {
       )}
 
       {prospectToast && (
-        <div className="no-print fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-xl animate-fade-in">
+        <div className="no-print fixed top-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-xl animate-fade-in">
           {prospectToast}
         </div>
       )}

@@ -4,6 +4,7 @@ import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, CoolSelect, selectC
 import { Plus, Trash2, ArrowLeft, CheckCircle2, ChevronRight, Printer, Lightbulb, Briefcase, Save } from 'lucide-react';
 import { LOGO_DATA_URI } from '../assets/logoBase64';
 import { addProspects } from '../utils/prospects';
+import { fmtFileDate } from '../utils/calc';
 import { saveGeneratedDocument, wrapStandaloneHtml } from '../utils/documents';
 import { ProspectModal } from './BusinessProspects';
 
@@ -1231,15 +1232,14 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
   })();
 
   // Browser "Print / Save PDF" defaults its filename to document.title — set
-  // it to "<Proposal Type(s)> of <Client>" right before printing (comma-
-  // joined when multiple types are selected), then restore the app's normal
-  // title once the print dialog closes, so this never leaks into the tab
-  // title elsewhere in the app.
+  // it to "<Client> – Investment Proposal <DD.MM.YYYY>" right before
+  // printing, matching the Goal/Asset Allocation report naming, then restore
+  // the app's normal title once the print dialog closes, so this never leaks
+  // into the tab title elsewhere in the app.
   const handlePrint = () => {
-    const typeLabels = selTypes.map((tId) => TYPES.find((t) => t.id === tId)?.label).filter(Boolean);
     const who = clientName || client?.name || 'Client';
     const prevTitle = document.title;
-    document.title = `${typeLabels.join(', ') || 'Investment Proposal'} of ${who}`;
+    document.title = `${who} – Investment Proposal ${fmtFileDate()}`;
     window.print();
     document.title = prevTitle;
   };
@@ -1270,7 +1270,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
         <div className="inv-proposal-doc max-w-4xl mx-auto" dangerouslySetInnerHTML={{ __html: previewHtml }} />
 
         {prospectToast && (
-          <div className="no-print fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-xl animate-fade-in">
+          <div className="no-print fixed top-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-xl animate-fade-in">
             {prospectToast}
           </div>
         )}

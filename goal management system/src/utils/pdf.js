@@ -1,4 +1,4 @@
-import { buildProjection } from './calc';
+import { buildProjection, fmtFileDate } from './calc';
 import logoUrl from '../assets/logo.png';
 import { buildGoalReportHtml } from './goalReportHtml';
 import { buildAssetReportHtml } from './assetReportHtml';
@@ -619,7 +619,7 @@ export function exportGoalReportPdf(client) {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>${escHtml(client.name)} – Goal Report</title>
+  <title>${escHtml(client.name)} – Goal Report ${fmtFileDate()}</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; }
@@ -709,7 +709,7 @@ export function exportAssetReportPdf(client) {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>${escHtml(client.name)} – Asset Allocation Report</title>
+  <title>${escHtml(client.name)} – Asset Allocation Report ${fmtFileDate()}</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; }
