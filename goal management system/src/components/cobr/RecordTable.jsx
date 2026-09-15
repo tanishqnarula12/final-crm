@@ -10,6 +10,19 @@ import { Card, selectCls, inputCls, CoolSelect } from '../UI';
 import { stageBadgeCls } from '../../utils/cobrModules';
 import { ExcelToolbar } from './ExcelTools';
 
+// First/last day of the current calendar month as YYYY-MM-DD, in local
+// time — never toISOString() (UTC-based; near midnight IST it can land on
+// the wrong calendar day). Used to default the due-date filter to "this
+// month" instead of opening with every record ever in view.
+const pad2 = (n) => String(n).padStart(2, '0');
+const currentMonthRange = () => {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const lastDay = new Date(y, m + 1, 0).getDate();
+  return { first: `${y}-${pad2(m + 1)}-01`, last: `${y}-${pad2(m + 1)}-${pad2(lastDay)}` };
+};
+
 export default function RecordTable({
   type,
   rows = [],
@@ -35,10 +48,10 @@ export default function RecordTable({
   // Apply Filter is clicked. Two separate state pairs rather than one,
   // because picking a "from" date alone used to silently apply an
   // incomplete range mid-pick with no way to tell it had taken effect.
-  const [fromInput, setFromInput] = useState('');
-  const [toInput, setToInput] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [fromInput, setFromInput] = useState(() => (dateField ? currentMonthRange().first : ''));
+  const [toInput, setToInput] = useState(() => (dateField ? currentMonthRange().last : ''));
+  const [from, setFrom] = useState(() => (dateField ? currentMonthRange().first : ''));
+  const [to, setTo] = useState(() => (dateField ? currentMonthRange().last : ''));
   const [sort, setSort] = useState({ key: '__created', dir: 'desc' });
 
   const applyDateFilter = () => { setFrom(fromInput); setTo(toInput); };

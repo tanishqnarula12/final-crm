@@ -1,30 +1,68 @@
 // The service worker (sw.js) already calls skipWaiting()+clientsClaim() so a
-// freshly deployed version takes over in the background almost immediately —
-// but that alone never tells an already-open tab to reload. Its JS is
-// already loaded and running in memory; claiming future network requests
-// doesn't retroactively change code that's already executing. This listens
-// for that handoff (the `controllerchange` event) and lets the user choose
-// when to refresh, rather than silently reloading out from under someone
-// mid-form — several tools here (Policy Review, Goal calculator, etc.)
-// don't autosave, so a surprise reload would lose whatever they'd typed.
+// freshly deployed version takes over almost immediately once the browser
+// notices one exists — but the browser only ever checks for a new sw.js on
+// navigation (a fresh page load) or roughly once a day in the background.
+// A CRM tab that's just left open all day across a deploy gets neither: no
+// navigation ever happens in a SPA, and a day is far too slow to be useful
+// here. So this actively asks the browser to check — on mount, whenever the
+// tab regains focus, and on a short interval — instead of only listening
+// and hoping the browser gets around to it on its own. Once an update IS
+// found, that same skipWaiting+clientsClaim makes it take over within
+// moments, firing `controllerchange`, at which point this lets the user
+// choose when to refresh rather than silently reloading out from under
+// someone mid-form — several tools here (Policy Review, Goal calculator,
+// etc.) don't autosave, so a surprise reload would lose whatever they'd typed.
 import React, { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
+
+const CHECK_INTERVAL_MS = 60 * 1000;
+// A controllerchange in the first few seconds after load is virtually never
+// "a new version just shipped while you were using the app" — it's the SW
+// registration racing the page's own first paint (most likely right after a
+// manual refresh, which is exactly when the browser also re-checks the SW
+// and can find a build that finished landing moments earlier). Showing the
+// banner for that race is what made it pop up immediately after refreshing
+// to get the latest version — confusing since that tab already has it.
+const BOOT_GRACE_MS = 15 * 1000;
 
 export default function UpdateBanner() {
   const [updateReady, setUpdateReady] = useState(false);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
+    const bootAt = Date.now();
     // controllerchange also fires on the very first-ever activation (no
     // controller -> a controller) once the SW claims a page that loaded
     // before it existed. Only a change FROM an already-present controller
     // is an actual version switch while the app was in use.
     const hadControllerAtBoot = !!navigator.serviceWorker.controller;
     const onControllerChange = () => {
-      if (hadControllerAtBoot) setUpdateReady(true);
+      if (hadControllerAtBoot && Date.now() - bootAt > BOOT_GRACE_MS) setUpdateReady(true);
     };
     navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
-    return () => navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+
+    let cancelled = false;
+    let registration = null;
+    const checkForUpdate = () => { registration?.update().catch(() => {}); };
+
+    navigator.serviceWorker.getRegistration().then((reg) => {
+      if (cancelled || !reg) return;
+      registration = reg;
+      checkForUpdate();
+    });
+
+    const onVisibilityChange = () => { if (document.visibilityState === 'visible') checkForUpdate(); };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', checkForUpdate);
+    const intervalId = setInterval(checkForUpdate, CHECK_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', checkForUpdate);
+      clearInterval(intervalId);
+    };
   }, []);
 
   if (!updateReady) return null;
