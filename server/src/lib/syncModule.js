@@ -15,8 +15,23 @@
 //   • writes an ActivityLog row for every create/update/assign/stage/delete
 //   • returns the authoritative list so the client reconciles
 //
-// All writes + logs happen in one interactive transaction.
-
+// Each record's write + its own log entries commit in their OWN small
+// transaction — NOT one transaction wrapping the whole incoming array. That
+// used to be one `prisma.$transaction` around the entire loop, which for a
+// big batch (this engine backs Leads/Tasks/COBR/Renewals/Claims/FDs/
+// Policies/Queries — `tasks` alone can be hundreds of rows) meant dozens of
+// sequential DB round-trips (an update plus up to 3 activity-log inserts per
+// changed record) all held open under ONE transaction, locking every row it
+// touched until the entire loop finished. Under real concurrent usage that
+// serialized into minutes-long lock contention that cascaded into unrelated
+// reads timing out — even an unrelated `prisma migrate deploy` connection
+// got starved by it once. Per-record transactions mean each save's lock
+// footprint is milliseconds, not the whole batch's runtime. The tradeoff:
+// a failure partway through no longer rolls back the whole batch — records
+// already written before the failure stay written. A per-record try/catch
+// below turns a single record's DB error into `stats.failed` instead of
+// aborting the rest of the batch, so one bad row can't block everyone else's
+// change in the same save.
 import {
   can, canCreate, canEdit, canDelete, canChangeStage, canChangeStageBack, isAdmin, isBackwardStage, isPreQualifiedOwner,
 } from './permissions.js';
@@ -88,227 +103,254 @@ export async function syncBulk(prisma, spec) {
   const existingRows = await model.findMany();
   const byId = new Map(existingRows.map((r) => [r.id, r]));
   const incomingIds = new Set(incoming.map((r) => r.id));
-  const stats = { created: 0, updated: 0, rejected: 0, deleted: 0, kept: 0 };
-  // Domain events for the notification layer — populated inside the tx, acted
-  // on by the route AFTER commit + response (never emits sockets inside a tx).
+  const stats = { created: 0, updated: 0, rejected: 0, deleted: 0, kept: 0, failed: 0 };
+  // Domain events for the notification layer — populated only once the
+  // record's own transaction has actually committed, acted on by the route
+  // AFTER the response (never emits sockets inside a tx).
   const events = [];
 
-  await prisma.$transaction(async (tx) => {
-    const txModel = tx[modelKey];
+  for (const rec of incoming) {
+    const existing = byId.get(rec.id);
+    const now = new Date();
 
-    for (const rec of incoming) {
-      const existing = byId.get(rec.id);
-      const now = new Date();
-
-      // ---- CREATE ----------------------------------------------------------
-      if (!existing) {
-        const mod = moduleFor(rec);
-        // Pass the incoming payload itself so a 'client'-kind module can
-        // resolve contextual RM (e.g. a Prospect that already carries the
-        // copied `relationshipManager` field from the client it belongs to)
-        // before any DB row exists to check ownership against.
-        if (!canCreate(actor, mod, rec)) { stats.rejected++; continue; }
-        const owner = {
-          createdBy: actor.id,
-          departmentOwner: deptOwnerIsActor ? actor.id : (rec.departmentOwner ?? null),
-          assignedTo: mayAssign(assignOnCreate, actor, null) ? (rec.assignedTo ?? null) : null,
-        };
-        const payload = { ...rec, ...owner, createdAt: now.toISOString(), updatedAt: now.toISOString() };
-        await txModel.create({
-          data: { id: rec.id, ...promote(payload), ...owner, deletedAt: null, payload },
+    // ---- CREATE ------------------------------------------------------------
+    if (!existing) {
+      const mod = moduleFor(rec);
+      // Pass the incoming payload itself so a 'client'-kind module can
+      // resolve contextual RM (e.g. a Prospect that already carries the
+      // copied `relationshipManager` field from the client it belongs to)
+      // before any DB row exists to check ownership against.
+      if (!canCreate(actor, mod, rec)) { stats.rejected++; continue; }
+      const owner = {
+        createdBy: actor.id,
+        departmentOwner: deptOwnerIsActor ? actor.id : (rec.departmentOwner ?? null),
+        assignedTo: mayAssign(assignOnCreate, actor, null) ? (rec.assignedTo ?? null) : null,
+      };
+      const payload = { ...rec, ...owner, createdAt: now.toISOString(), updatedAt: now.toISOString() };
+      try {
+        await prisma.$transaction(async (tx) => {
+          await tx[modelKey].create({
+            data: { id: rec.id, ...promote(payload), ...owner, deletedAt: null, payload },
+          });
+          await logActivity(tx, {
+            module: mod, recordId: rec.id, action: 'CREATE',
+            newValue: summarize(payload), performedBy: actor.id,
+          });
         });
-        await logActivity(tx, {
-          module: mod, recordId: rec.id, action: 'CREATE',
-          newValue: summarize(payload), performedBy: actor.id,
-        });
-        events.push({ type: 'CREATE', module: mod, record: payload, actorId: actor.id });
-        stats.created++;
+      } catch (err) {
+        stats.failed++;
+        console.error(`[syncBulk] create failed for ${mod} ${rec.id}:`, err);
         continue;
       }
+      events.push({ type: 'CREATE', module: mod, record: payload, actorId: actor.id });
+      stats.created++;
+      continue;
+    }
 
-      // Skip untouched rows (cheap identity check on the stored payload).
+    // Skip untouched rows (cheap identity check on the stored payload).
+    if (JSON.stringify(existing.payload) === JSON.stringify(rec)) { stats.kept++; continue; }
+
+    // ---- UPDATE --------------------------------------------------------------
+    // Resolve the desired assignment (ignore a forbidden change).
+    const wantAssigned = rec.assignedTo ?? null;
+    const curAssigned = existing.assignedTo ?? null;
+    let nextAssigned = curAssigned;
+    const assignmentRequested = wantAssigned !== curAssigned;
+    if (assignmentRequested && mayAssign(assignOnEdit, actor, existing)) nextAssigned = wantAssigned;
+
+    const from = stageField ? (existing[stageField] ?? null) : null;
+    let to = stageField ? (rec[stageField] ?? null) : null;
+    let stageChanged = stageField && from !== to;
+
+    const mod = moduleFor(existing);
+    let allowed;
+    if (TASK_SHAPED_MODULES.has(mod)) {
+      // Split the change into details / stage / log and require the matching
+      // permission for each part (assigner edits details; assignee may change
+      // stage forward + add log). COBR rows are Tasks (relatedTo: 'COBR')
+      // under their own matrix column, and Queries share the identical
+      // two-party (raiser/recipient) shape — same split applies to both.
+      // Each aspect applies INDEPENDENTLY — a save that bundles a stage move
+      // with a detail edit must not be all-or-nothing. It used to be: one
+      // disallowed aspect rejected the WHOLE record, so someone allowed to
+      // move the stage but not edit details (the normal assignee case) saw
+      // their stage change silently vanish on the next reconciliation, since
+      // the modal always saves the full form. Now whichever aspect is
+      // disallowed is reverted to its stored value and the rest still lands
+      // — the same treatment the non-task-shaped branch below already got.
+      const changed = Object.keys(diffFields(existing.payload, rec));
+      const detailKeys = changed.filter((k) => !TASK_LOG_KEYS.has(k) && !TASK_STAGE_KEYS.has(k) && !NOISE_KEYS.has(k));
+      const logKeys = changed.filter((k) => TASK_LOG_KEYS.has(k));
+      const detailChanged = detailKeys.length > 0;
+      const logChanged = logKeys.length > 0;
+      const detailAllowed = !detailChanged || can(actor, mod, 'editDetails', existing);
+      const stageAllowed = !stageChanged || can(actor, mod, 'changeStage', existing, { fromStage: from, toStage: to });
+      // editLog is only required when the log is the ONLY thing that changed
+      // — alongside a detail/stage edit it rides on that aspect's own right.
+      const logAllowed = !logChanged || detailChanged || stageChanged || can(actor, mod, 'editLog', existing);
+      allowed = detailAllowed || stageAllowed || logAllowed;
+      if (!allowed && nextAssigned !== curAssigned) allowed = true;
+      if (!allowed) { stats.rejected++; continue; } // keep the stored version
+
+      if (!detailAllowed) detailKeys.forEach((k) => { rec[k] = existing.payload[k]; });
+      if (!logAllowed) logKeys.forEach((k) => { rec[k] = existing.payload[k]; });
+      if (!stageAllowed) rec[stageField] = existing[stageField];
+      // Re-derive after any partial revert — the STAGE_CHANGE log/event
+      // below must reflect what was actually applied, not what was asked for.
+      to = stageField ? (rec[stageField] ?? null) : null;
+      stageChanged = stageField && from !== to;
+      // Everything disallowed got reverted — nothing left to write.
       if (JSON.stringify(existing.payload) === JSON.stringify(rec)) { stats.kept++; continue; }
+    } else {
+      // Stage and non-stage changes need their OWN, independent permission
+      // check, and each must apply INDEPENDENTLY too — a save that bundles
+      // both (e.g. a Prospect's "Close Won" move saved together with an
+      // updated remark/amount) must not be all-or-nothing. The old
+      // either/or check rejected the WHOLE record whenever the actor
+      // lacked rights for EITHER aspect, discarding a stage move the actor
+      // WAS allowed to make just because it rode along with a detail edit
+      // they weren't (or vice versa) — which is exactly what made a
+      // "Close Won" move appear to revert on its own: the optimistic UI
+      // showed it, then the next reconciliation pulled back the server's
+      // real (unchanged) row. Now whichever aspect is disallowed is simply
+      // reverted to its stored value instead of voiding the whole update.
+      const changedKeys = Object.keys(diffFields(existing.payload, rec))
+        .filter((k) => k !== stageField && !NOISE_KEYS.has(k));
+      const detailAllowed = changedKeys.length === 0 || canEdit(actor, mod, existing);
+      // A stale browser tab re-sending an old `stage` value alongside an
+      // unrelated edit must not silently walk the record backward (e.g.
+      // out of a Prospect's Close Won) — same "no reopen without an
+      // explicit action" rule Tasks/COBR/Queries already enforce via
+      // isBackwardStage, extended here to every module with a STAGE_ORDER
+      // entry (currently the two Prospect modules; a no-op everywhere
+      // else, since isBackwardStage returns false for an unlisted module).
+      // Moving an investment prospect INTO Pre-Qualified is its own hard
+      // rule: only that prospect's RM/PM (or Admin), whatever the matrix says.
+      // Any other backward move needs the matrix's changeStageBack right.
+      const intoPreQualified = mod === 'investmentProspects' && to === 'Pre-Qualified';
+      const stageAllowed = !stageChanged || (
+        intoPreQualified
+          ? isPreQualifiedOwner(actor, existing)
+          : canChangeStage(actor, mod, existing, from, to)
+            && (!isBackwardStage(mod, from, to) || canChangeStageBack(actor, mod, existing))
+      );
+      allowed = detailAllowed || stageAllowed;
+      if (!allowed && nextAssigned !== curAssigned) allowed = true;
+      if (!allowed) { stats.rejected++; continue; } // keep the stored version
 
-      // ---- UPDATE ----------------------------------------------------------
-      // Resolve the desired assignment (ignore a forbidden change).
-      const wantAssigned = rec.assignedTo ?? null;
-      const curAssigned = existing.assignedTo ?? null;
-      let nextAssigned = curAssigned;
-      const assignmentRequested = wantAssigned !== curAssigned;
-      if (assignmentRequested && mayAssign(assignOnEdit, actor, existing)) nextAssigned = wantAssigned;
+      if (!detailAllowed) changedKeys.forEach((k) => { rec[k] = existing.payload[k]; });
+      if (!stageAllowed) rec[stageField] = existing[stageField];
+      // Re-derive after any partial revert above — the STAGE_CHANGE log/
+      // event further down must reflect what was actually applied, not
+      // what was originally requested.
+      to = stageField ? (rec[stageField] ?? null) : null;
+      stageChanged = stageField && from !== to;
+      // Everything disallowed got reverted back to the stored value —
+      // nothing left to actually write.
+      if (JSON.stringify(existing.payload) === JSON.stringify(rec)) { stats.kept++; continue; }
+    }
 
-      const from = stageField ? (existing[stageField] ?? null) : null;
-      let to = stageField ? (rec[stageField] ?? null) : null;
-      let stageChanged = stageField && from !== to;
+    const owner = {
+      createdBy: existing.createdBy,               // immutable
+      departmentOwner: existing.departmentOwner,   // immutable (assignedBy)
+      assignedTo: nextAssigned,
+    };
+    const payload = {
+      ...rec, ...owner,
+      createdAt: existing.createdAt?.toISOString?.() ?? existing.payload?.createdAt ?? undefined,
+      updatedAt: now.toISOString(),
+    };
+    // A new entry appended to the record's discussion thread (Queries'
+    // `remarks`, Tasks/COBR's `comments`) — surfaced as a domain event so the
+    // notification layer can tell the OTHER participant someone commented.
+    // Only GROWTH counts: editing or reordering an existing entry isn't a
+    // new comment and must not ping anyone.
+    const threadKey = mod === 'queries' ? 'remarks' : 'comments';
+    const threadBefore = Array.isArray(existing.payload?.[threadKey]) ? existing.payload[threadKey] : [];
+    const threadAfter = Array.isArray(payload?.[threadKey]) ? payload[threadKey] : [];
+    const fieldDiff = diffFields(existing.payload, payload,
+      Object.keys(payload).filter((k) => !NOISE_KEYS.has(k) && k !== stageField));
 
-      const mod = moduleFor(existing);
-      let allowed;
-      if (TASK_SHAPED_MODULES.has(mod)) {
-        // Split the change into details / stage / log and require the matching
-        // permission for each part (assigner edits details; assignee may change
-        // stage forward + add log). COBR rows are Tasks (relatedTo: 'COBR')
-        // under their own matrix column, and Queries share the identical
-        // two-party (raiser/recipient) shape — same split applies to both.
-        // Each aspect applies INDEPENDENTLY — a save that bundles a stage move
-        // with a detail edit must not be all-or-nothing. It used to be: one
-        // disallowed aspect rejected the WHOLE record, so someone allowed to
-        // move the stage but not edit details (the normal assignee case) saw
-        // their stage change silently vanish on the next reconciliation, since
-        // the modal always saves the full form. Now whichever aspect is
-        // disallowed is reverted to its stored value and the rest still lands
-        // — the same treatment the non-task-shaped branch below already got.
-        const changed = Object.keys(diffFields(existing.payload, rec));
-        const detailKeys = changed.filter((k) => !TASK_LOG_KEYS.has(k) && !TASK_STAGE_KEYS.has(k) && !NOISE_KEYS.has(k));
-        const logKeys = changed.filter((k) => TASK_LOG_KEYS.has(k));
-        const detailChanged = detailKeys.length > 0;
-        const logChanged = logKeys.length > 0;
-        const detailAllowed = !detailChanged || can(actor, mod, 'editDetails', existing);
-        const stageAllowed = !stageChanged || can(actor, mod, 'changeStage', existing, { fromStage: from, toStage: to });
-        // editLog is only required when the log is the ONLY thing that changed
-        // — alongside a detail/stage edit it rides on that aspect's own right.
-        const logAllowed = !logChanged || detailChanged || stageChanged || can(actor, mod, 'editLog', existing);
-        allowed = detailAllowed || stageAllowed || logAllowed;
-        if (!allowed && nextAssigned !== curAssigned) allowed = true;
-        if (!allowed) { stats.rejected++; continue; } // keep the stored version
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx[modelKey].update({
+          where: { id: rec.id },
+          data: { ...promote(payload), ...owner, payload },
+        });
 
-        if (!detailAllowed) detailKeys.forEach((k) => { rec[k] = existing.payload[k]; });
-        if (!logAllowed) logKeys.forEach((k) => { rec[k] = existing.payload[k]; });
-        if (!stageAllowed) rec[stageField] = existing[stageField];
-        // Re-derive after any partial revert — the STAGE_CHANGE log/event
-        // below must reflect what was actually applied, not what was asked for.
-        to = stageField ? (rec[stageField] ?? null) : null;
-        stageChanged = stageField && from !== to;
-        // Everything disallowed got reverted — nothing left to write.
-        if (JSON.stringify(existing.payload) === JSON.stringify(rec)) { stats.kept++; continue; }
-      } else {
-        // Stage and non-stage changes need their OWN, independent permission
-        // check, and each must apply INDEPENDENTLY too — a save that bundles
-        // both (e.g. a Prospect's "Close Won" move saved together with an
-        // updated remark/amount) must not be all-or-nothing. The old
-        // either/or check rejected the WHOLE record whenever the actor
-        // lacked rights for EITHER aspect, discarding a stage move the actor
-        // WAS allowed to make just because it rode along with a detail edit
-        // they weren't (or vice versa) — which is exactly what made a
-        // "Close Won" move appear to revert on its own: the optimistic UI
-        // showed it, then the next reconciliation pulled back the server's
-        // real (unchanged) row. Now whichever aspect is disallowed is simply
-        // reverted to its stored value instead of voiding the whole update.
-        const changedKeys = Object.keys(diffFields(existing.payload, rec))
-          .filter((k) => k !== stageField && !NOISE_KEYS.has(k));
-        const detailAllowed = changedKeys.length === 0 || canEdit(actor, mod, existing);
-        // A stale browser tab re-sending an old `stage` value alongside an
-        // unrelated edit must not silently walk the record backward (e.g.
-        // out of a Prospect's Close Won) — same "no reopen without an
-        // explicit action" rule Tasks/COBR/Queries already enforce via
-        // isBackwardStage, extended here to every module with a STAGE_ORDER
-        // entry (currently the two Prospect modules; a no-op everywhere
-        // else, since isBackwardStage returns false for an unlisted module).
-        // Moving an investment prospect INTO Pre-Qualified is its own hard
-        // rule: only that prospect's RM/PM (or Admin), whatever the matrix says.
-        // Any other backward move needs the matrix's changeStageBack right.
-        const intoPreQualified = mod === 'investmentProspects' && to === 'Pre-Qualified';
-        const stageAllowed = !stageChanged || (
-          intoPreQualified
-            ? isPreQualifiedOwner(actor, existing)
-            : canChangeStage(actor, mod, existing, from, to)
-              && (!isBackwardStage(mod, from, to) || canChangeStageBack(actor, mod, existing))
-        );
-        allowed = detailAllowed || stageAllowed;
-        if (!allowed && nextAssigned !== curAssigned) allowed = true;
-        if (!allowed) { stats.rejected++; continue; } // keep the stored version
-
-        if (!detailAllowed) changedKeys.forEach((k) => { rec[k] = existing.payload[k]; });
-        if (!stageAllowed) rec[stageField] = existing[stageField];
-        // Re-derive after any partial revert above — the STAGE_CHANGE log/
-        // event further down must reflect what was actually applied, not
-        // what was originally requested.
-        to = stageField ? (rec[stageField] ?? null) : null;
-        stageChanged = stageField && from !== to;
-        // Everything disallowed got reverted back to the stored value —
-        // nothing left to actually write.
-        if (JSON.stringify(existing.payload) === JSON.stringify(rec)) { stats.kept++; continue; }
-      }
-
-      const owner = {
-        createdBy: existing.createdBy,               // immutable
-        departmentOwner: existing.departmentOwner,   // immutable (assignedBy)
-        assignedTo: nextAssigned,
-      };
-      const payload = {
-        ...rec, ...owner,
-        createdAt: existing.createdAt?.toISOString?.() ?? existing.payload?.createdAt ?? undefined,
-        updatedAt: now.toISOString(),
-      };
-      await txModel.update({
-        where: { id: rec.id },
-        data: { ...promote(payload), ...owner, payload },
+        if (nextAssigned !== curAssigned) {
+          await logActivity(tx, {
+            module: mod, recordId: rec.id, action: 'ASSIGN',
+            oldValue: { assignedTo: curAssigned }, newValue: { assignedTo: nextAssigned },
+            performedBy: actor.id,
+          });
+        }
+        if (stageChanged) {
+          await logActivity(tx, {
+            module: mod, recordId: rec.id, action: 'STAGE_CHANGE',
+            oldValue: { stage: from }, newValue: { stage: to }, performedBy: actor.id,
+          });
+        }
+        if (Object.keys(fieldDiff).length) {
+          await logActivity(tx, {
+            module: mod, recordId: rec.id, action: 'UPDATE',
+            oldValue: pick(fieldDiff, 'from'), newValue: pick(fieldDiff, 'to'),
+            performedBy: actor.id,
+          });
+        }
       });
-
-      if (nextAssigned !== curAssigned) {
-        await logActivity(tx, {
-          module: mod, recordId: rec.id, action: 'ASSIGN',
-          oldValue: { assignedTo: curAssigned }, newValue: { assignedTo: nextAssigned },
-          performedBy: actor.id,
-        });
-        events.push({ type: 'ASSIGN', module: mod, record: payload, from: curAssigned, to: nextAssigned, actorId: actor.id });
-      }
-      if (stageChanged) {
-        await logActivity(tx, {
-          module: mod, recordId: rec.id, action: 'STAGE_CHANGE',
-          oldValue: { stage: from }, newValue: { stage: to }, performedBy: actor.id,
-        });
-        events.push({ type: 'STAGE_CHANGE', module: mod, record: payload, from, to, actorId: actor.id });
-      }
-      // A new entry appended to the record's discussion thread (Queries'
-      // `remarks`, Tasks/COBR's `comments`) — surfaced as a domain event so the
-      // notification layer can tell the OTHER participant someone commented.
-      // Only GROWTH counts: editing or reordering an existing entry isn't a
-      // new comment and must not ping anyone.
-      const threadKey = mod === 'queries' ? 'remarks' : 'comments';
-      const threadBefore = Array.isArray(existing.payload?.[threadKey]) ? existing.payload[threadKey] : [];
-      const threadAfter = Array.isArray(payload?.[threadKey]) ? payload[threadKey] : [];
-      if (threadAfter.length > threadBefore.length) {
-        events.push({
-          type: 'LOG_APPEND', module: mod, record: payload, actorId: actor.id,
-          entry: threadAfter[threadAfter.length - 1],
-        });
-      }
-      const fieldDiff = diffFields(existing.payload, payload,
-        Object.keys(payload).filter((k) => !NOISE_KEYS.has(k) && k !== stageField));
-      if (Object.keys(fieldDiff).length) {
-        await logActivity(tx, {
-          module: mod, recordId: rec.id, action: 'UPDATE',
-          oldValue: pick(fieldDiff, 'from'), newValue: pick(fieldDiff, 'to'),
-          performedBy: actor.id,
-        });
-      }
-      stats.updated++;
+    } catch (err) {
+      stats.failed++;
+      console.error(`[syncBulk] update failed for ${mod} ${rec.id}:`, err);
+      continue;
     }
 
-    // ---- DELETE (omitted rows) ---------------------------------------------
-    for (const row of existingRows) {
-      if (incomingIds.has(row.id) || row.deletedAt) continue;
-      const mod = moduleFor(row);
-      // A record the actor can't even VIEW is not "omitted" in any meaningful
-      // sense — their bulk save only ever contains what they can see, so a
-      // record outside that view is simply none of their business, not a
-      // delete request. (Without this guard, a scoped viewer — e.g. someone
-      // who only sees their own tasks — would look like they "deleted" every
-      // other task in existence the moment they saved anything.)
-      if (!can(actor, mod, 'view', row)) { stats.kept++; continue; }
-      if (canDelete(actor, mod, row)) {
-        await txModel.update({ where: { id: row.id }, data: { deletedAt: new Date() } });
-        await logActivity(tx, {
-          module: mod, recordId: row.id, action: 'DELETE',
-          oldValue: summarize(row.payload), performedBy: actor.id,
-        });
-        events.push({ type: 'DELETE', module: mod, record: row.payload, actorId: actor.id });
-        stats.deleted++;
-      } else {
-        stats.kept++; // omission is NOT a delete — the record survives
-      }
+    if (nextAssigned !== curAssigned) {
+      events.push({ type: 'ASSIGN', module: mod, record: payload, from: curAssigned, to: nextAssigned, actorId: actor.id });
     }
-  }, { timeout: 20000 });
+    if (stageChanged) {
+      events.push({ type: 'STAGE_CHANGE', module: mod, record: payload, from, to, actorId: actor.id });
+    }
+    if (threadAfter.length > threadBefore.length) {
+      events.push({
+        type: 'LOG_APPEND', module: mod, record: payload, actorId: actor.id,
+        entry: threadAfter[threadAfter.length - 1],
+      });
+    }
+    stats.updated++;
+  }
+
+  // ---- DELETE (omitted rows) -----------------------------------------------
+  for (const row of existingRows) {
+    if (incomingIds.has(row.id) || row.deletedAt) continue;
+    const mod = moduleFor(row);
+    // A record the actor can't even VIEW is not "omitted" in any meaningful
+    // sense — their bulk save only ever contains what they can see, so a
+    // record outside that view is simply none of their business, not a
+    // delete request. (Without this guard, a scoped viewer — e.g. someone
+    // who only sees their own tasks — would look like they "deleted" every
+    // other task in existence the moment they saved anything.)
+    if (!can(actor, mod, 'view', row)) { stats.kept++; continue; }
+    if (canDelete(actor, mod, row)) {
+      try {
+        await prisma.$transaction(async (tx) => {
+          await tx[modelKey].update({ where: { id: row.id }, data: { deletedAt: new Date() } });
+          await logActivity(tx, {
+            module: mod, recordId: row.id, action: 'DELETE',
+            oldValue: summarize(row.payload), performedBy: actor.id,
+          });
+        });
+      } catch (err) {
+        stats.failed++;
+        console.error(`[syncBulk] delete failed for ${mod} ${row.id}:`, err);
+        continue;
+      }
+      events.push({ type: 'DELETE', module: mod, record: row.payload, actorId: actor.id });
+      stats.deleted++;
+    } else {
+      stats.kept++; // omission is NOT a delete — the record survives
+    }
+  }
 
   // Scope the returned "authoritative list" to what the actor can actually
   // view — a PUT response should never hand a scoped viewer rows they
