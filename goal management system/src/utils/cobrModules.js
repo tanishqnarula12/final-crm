@@ -393,6 +393,7 @@ export const RENEWAL_EXCEL_FIELDS = [
   { key: 'crossSellCompany', label: 'Cross Sell Company', type: 'text' },
   { key: 'crossSellPolicy', label: 'Cross Sell Policy Name', type: 'text' },
   { key: 'crossSellAmount', label: 'Cross Sell Amount', type: 'number' },
+  { key: 'commissionReceived', label: 'Commission Received', type: 'select', options: ['Yes', 'No'] },
 ];
 export const renewalDedupeKey = (r) => (r.groupLeaderId && r.applicant ? `${r.groupLeaderId}|${r.applicant}|${(r.policyNumber || '').toLowerCase()}` : '');
 

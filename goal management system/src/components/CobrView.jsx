@@ -201,7 +201,7 @@ export default function CobrView({
           dateField={{ key: 'dueDate', label: 'Due date' }}
           onOpen={(r) => setEditor({ type: REC.RENEWAL, record: r })}
           emptyText="No renewals tracked yet."
-          minWidth={1260}
+          minWidth={1380}
           excelSpec={COBR_EXCEL_SPEC[REC.RENEWAL]}
           clients={clients}
           onImportRecords={handleImportRecords}
@@ -224,6 +224,16 @@ export default function CobrView({
                 return parts.length ? <div className="space-y-0.5">{parts}</div> : '—';
               },
               sortValue: (r) => (Number(r.upSellAmount) || 0) + (Number(r.crossSellAmount) || 0),
+            },
+            {
+              key: 'commissionReceived',
+              label: 'Commission',
+              render: (r) => r.commissionReceived === 'Yes'
+                ? <span className="text-emerald-600 dark:text-emerald-400 font-bold">Yes</span>
+                : r.commissionReceived === 'No'
+                  ? <span className="text-rose-600 dark:text-rose-400 font-bold">No</span>
+                  : '—',
+              sortValue: (r) => r.commissionReceived || '',
             },
           ]}
         />

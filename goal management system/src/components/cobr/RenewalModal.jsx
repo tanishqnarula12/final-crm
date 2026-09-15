@@ -14,7 +14,7 @@
 // change the Stage regardless (a separate right). Every edited field is
 // auto-logged into Comments & Logs as "Changed X: old -> new" on Save.
 import React, { useState, useMemo } from 'react';
-import { TrendingUp, Repeat, Check } from 'lucide-react';
+import { TrendingUp, Repeat, Check, X } from 'lucide-react';
 import { inputCls, selectCls, Field, CoolSelect, btnPrimary, btnGhost } from '../UI';
 import ClientApplicantFields from './ClientApplicantFields';
 import AttachmentField from './AttachmentField';
@@ -49,6 +49,7 @@ const FIELD_DEFS = [
   { key: 'crossSellCompany', label: 'Cross Sell Company' },
   { key: 'crossSellPolicy', label: 'Cross Sell Policy' },
   { key: 'crossSellAmount', label: 'Cross Sell Amount', format: (v) => (v ? fmtINR(Number(v) || 0) : '—') },
+  { key: 'commissionReceived', label: 'Commission Received', format: (v) => v || '—' },
 ];
 
 export default function RenewalModal({ record, clients = [], onClose, onSave }) {
@@ -82,6 +83,7 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
     crossSellCompany: record?.crossSellCompany || '',
     crossSellPolicy: record?.crossSellPolicy || '',
     crossSellAmount: record?.crossSellAmount || '',
+    commissionReceived: record?.commissionReceived || '',
   }));
 
   const [stage, setStage] = useState(record?.stage || RENEWAL_STAGES[0]);
@@ -107,10 +109,10 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
   const attachUnlocked = renewalAttachmentsUnlocked(stage);
   const requiresDocForPending = pendingStage === 'Policy Document Upload';
 
-  // Up Sell / Cross Sell ride alongside whoever can move the stage forward
-  // (not the assigner-only "Edit" gate) — the point is to capture an
-  // opportunity the moment it comes up mid-workflow, without a detour
-  // through general edit mode.
+  // Up Sell / Cross Sell / Commission Received ride alongside whoever can
+  // move the stage forward (not the assigner-only "Edit" gate) — the point
+  // is to capture an opportunity, or mark the commission in, the moment it
+  // comes up mid-workflow, without a detour through general edit mode.
   const oppChanged = isEdit && (
     !!f.upSell !== !!record.upSell
     || String(f.upSellAmount || '') !== String(record.upSellAmount || '')
@@ -118,6 +120,7 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
     || String(f.crossSellCompany || '') !== String(record.crossSellCompany || '')
     || String(f.crossSellPolicy || '') !== String(record.crossSellPolicy || '')
     || String(f.crossSellAmount || '') !== String(record.crossSellAmount || '')
+    || String(f.commissionReceived || '') !== String(record.commissionReceived || '')
   );
 
   const requestStageChange = (next) => {
@@ -208,6 +211,7 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
       dueDate: record.dueDate || '', assignedTo: record.assignedTo || '', subPersons: record.subPersons || [], attachments: record.attachments || [],
       upSell: record.upSell || false, upSellAmount: record.upSellAmount || '', crossSell: record.crossSell || false,
       crossSellCompany: record.crossSellCompany || '', crossSellPolicy: record.crossSellPolicy || '', crossSellAmount: record.crossSellAmount || '',
+      commissionReceived: record.commissionReceived || '',
     });
     setIsEditingMode(false);
   };
@@ -466,6 +470,42 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
             )}
           </div>
         )}
+      </div>
+
+      {/* Commission Received — same functionality as Opportunity above:
+          editable by whoever can move the stage forward, not gated behind
+          full Edit Mode, so it can be marked the moment it's actually known.
+          Tri-state (blank until someone marks it, not defaulted to No) since
+          "not yet known" is a real, distinct state from "confirmed not
+          received" — clicking the active option again clears back to blank. */}
+      <div className="rounded-2xl border border-emerald-200/60 dark:border-emerald-900/40 bg-emerald-50/30 dark:bg-emerald-950/10 p-4 space-y-3">
+        <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Commission Received</h4>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={!canChangeStageThis}
+            onClick={() => set({ commissionReceived: f.commissionReceived === 'Yes' ? '' : 'Yes' })}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+              f.commissionReceived === 'Yes'
+                ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-emerald-400'
+            }`}
+          >
+            <Check size={12} /> Yes
+          </button>
+          <button
+            type="button"
+            disabled={!canChangeStageThis}
+            onClick={() => set({ commissionReceived: f.commissionReceived === 'No' ? '' : 'No' })}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+              f.commissionReceived === 'No'
+                ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-rose-400'
+            }`}
+          >
+            <X size={12} /> No
+          </button>
+        </div>
       </div>
 
       {isEdit && <LogTimeline comments={comments} />}

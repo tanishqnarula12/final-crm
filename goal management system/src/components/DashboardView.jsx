@@ -25,6 +25,24 @@ import { getManagedPortfolio, setAumOverride, setSipOverride, setInsuranceOverri
 // Parse "₹ 50,000" / "50000" / numbers → number
 const num = (v) => Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
 
+// Outer percent+name label with a leader line, for the Types Booked donut —
+// Recharts' standard "renderCustomizedLabel" recipe: compute the label's
+// x/y from the slice's midpoint angle rather than an auto-placed default,
+// since the built-in label only supports a single dataKey's value, not a
+// "12% Motor"-style combined string.
+const PIE_LABEL_RADIAN = Math.PI / 180;
+const renderPieTypeLabel = ({ cx, cy, midAngle, outerRadius, percent, name }) => {
+  if (!percent) return null;
+  const radius = outerRadius + 18;
+  const x = cx + radius * Math.cos(-midAngle * PIE_LABEL_RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * PIE_LABEL_RADIAN);
+  return (
+    <text x={x} y={y} fill="#64748b" fontSize={10} fontWeight={700} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central">
+      {`${Math.round(percent * 100)}% ${name}`}
+    </text>
+  );
+};
+
 // Local YYYY-MM-DD — never toISOString() (UTC-based; near midnight IST it
 // can report the wrong calendar day). Mirrors NoticeBoard.jsx's localDateStr.
 const localDateStr = (d = new Date()) => {
@@ -948,23 +966,29 @@ export default function DashboardView({
                 </div>
               </Card>
 
-              {/* Policy Types Booked — donut leads (mirrors the Client Status
-                  Mix donut in Clients & Distribution), full legend of all 6
-                  types (incl. zero-count) follows so names always show. */}
-              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] flex flex-col items-center gap-5 bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
+              {/* Policy Types Booked — donut only: percent+name labels sit
+                  directly on the chart (via renderPieTypeLabel) instead of a
+                  separate legend list, so the breakdown is the chart. */}
+              <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] flex flex-col items-center bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
+                <div className="flex items-center gap-2.5 mb-2 w-full">
+                  <span className="w-7 h-7 rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0"><FileBadge size={14} /></span>
+                  <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Types Booked</h4>
+                </div>
                 {/* Donut always renders — a flat neutral ring at zero data,
                     same idea as Premium Booked's bars staying visible at 0%. */}
-                <div className="relative w-[120px] h-[120px] flex items-center justify-center shrink-0">
+                <div className="relative w-full h-[260px] flex items-center justify-center shrink-0">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
                         data={policyTypesData.length > 0 ? policyTypesData : [{ name: 'None', value: 1 }]}
                         cx="50%"
                         cy="50%"
-                        innerRadius={38}
-                        outerRadius={50}
+                        innerRadius={52}
+                        outerRadius={70}
                         paddingAngle={policyTypesData.length > 0 ? 3.5 : 0}
                         dataKey="value"
+                        label={policyTypesData.length > 0 ? renderPieTypeLabel : false}
+                        labelLine={policyTypesData.length > 0 ? { stroke: '#cbd5e1', strokeWidth: 1 } : false}
                       >
                         {(policyTypesData.length > 0 ? policyTypesData : [{ color: '#e2e8f0' }]).map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
@@ -973,29 +997,10 @@ export default function DashboardView({
                       {policyTypesData.length > 0 && <Tooltip content={<ChartTooltip />} />}
                     </PieChart>
                   </ResponsiveContainer>
-                  <div className="absolute flex flex-col items-center justify-center text-center">
-                    <span className="text-lg font-bold text-slate-800 dark:text-white tabular-nums leading-none">{ins.count}</span>
+                  <div className="absolute flex flex-col items-center justify-center text-center pointer-events-none">
+                    <span className="text-xl font-bold text-slate-800 dark:text-white tabular-nums leading-none">{ins.count}</span>
                     <span className="text-[8px] uppercase tracking-wide text-slate-400 font-semibold mt-1">Booked</span>
                   </div>
-                </div>
-                <div className="flex-1 w-full min-w-0">
-                  <div className="flex items-center gap-2.5 mb-4">
-                    <span className="w-7 h-7 rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0"><FileBadge size={14} /></span>
-                    <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Types Booked</h4>
-                  </div>
-                  <div className="space-y-2.5">
-                    {ins.types.map(t => (
-                      <div key={t.label} className="flex items-center gap-2.5 text-xs font-semibold">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
-                        <span className="text-slate-600 dark:text-slate-350 min-w-0">{t.label}</span>
-                        <span className="ml-auto text-slate-800 dark:text-white tabular-nums font-bold shrink-0">{t.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="w-full pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-500">Total Booked</span>
-                  <span className="text-xs font-bold text-slate-800 dark:text-white tabular-nums">{ins.count}</span>
                 </div>
               </Card>
 

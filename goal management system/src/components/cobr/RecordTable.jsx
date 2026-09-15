@@ -5,7 +5,7 @@
 // S. No. / status-badge behaviour is implemented once here so all five tabs
 // stay consistent.
 import React, { useMemo, useState } from 'react';
-import { Search, ArrowUp, ArrowDown, X, Trash2 } from 'lucide-react';
+import { Search, ArrowUp, ArrowDown, X, Trash2, Filter } from 'lucide-react';
 import { Card, selectCls, inputCls, CoolSelect } from '../UI';
 import { stageBadgeCls } from '../../utils/cobrModules';
 import { ExcelToolbar } from './ExcelTools';
@@ -30,9 +30,19 @@ export default function RecordTable({
 }) {
   const [query, setQuery] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
+  // The date pickers update fromInput/toInput live as the user picks a date;
+  // the actual filter (from/to, read by `filtered` below) only moves when
+  // Apply Filter is clicked. Two separate state pairs rather than one,
+  // because picking a "from" date alone used to silently apply an
+  // incomplete range mid-pick with no way to tell it had taken effect.
+  const [fromInput, setFromInput] = useState('');
+  const [toInput, setToInput] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [sort, setSort] = useState({ key: '__created', dir: 'desc' });
+
+  const applyDateFilter = () => { setFrom(fromInput); setTo(toInput); };
+  const dateFilterDirty = fromInput !== from || toInput !== to;
 
   const counts = useMemo(() => {
     const c = { all: rows.length };
@@ -84,7 +94,7 @@ export default function RecordTable({
       : <ArrowDown size={10} className="inline ml-1 -mt-0.5" />;
   };
 
-  const filtersActive = query || stageFilter !== 'all' || from || to;
+  const filtersActive = query || stageFilter !== 'all' || from || to || fromInput || toInput;
 
   return (
     <div className="space-y-4">
@@ -110,18 +120,30 @@ export default function RecordTable({
           <div className="flex items-end gap-2">
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{dateField.label} from</label>
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputCls + ' py-1.5 text-xs w-[150px]'} />
+              <input type="date" value={fromInput} onChange={(e) => setFromInput(e.target.value)} className={inputCls + ' py-1.5 text-xs w-[150px]'} />
             </div>
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">to</label>
-              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inputCls + ' py-1.5 text-xs w-[150px]'} />
+              <input type="date" value={toInput} onChange={(e) => setToInput(e.target.value)} className={inputCls + ' py-1.5 text-xs w-[150px]'} />
             </div>
+            <button
+              onClick={applyDateFilter}
+              disabled={!dateFilterDirty}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                dateFilterDirty
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-sm'
+                  : 'bg-white dark:bg-slate-900 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-800'
+              }`}
+              title="Apply the selected due-date range"
+            >
+              <Filter size={12} /> Apply Filter
+            </button>
           </div>
         )}
 
         {filtersActive && (
           <button
-            onClick={() => { setQuery(''); setStageFilter('all'); setFrom(''); setTo(''); }}
+            onClick={() => { setQuery(''); setStageFilter('all'); setFrom(''); setTo(''); setFromInput(''); setToInput(''); }}
             className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer pb-2"
           >
             <X size={12} /> Clear
