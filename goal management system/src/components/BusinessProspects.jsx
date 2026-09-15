@@ -96,6 +96,29 @@ const MOTOR_DOC_CATEGORIES = [
   { key: 'proposalForm', label: 'Proposal Form' },
   { key: 'paymentProof', label: 'Payment Proof' },
 ];
+// Indemnity (Professional Indemnity) Insurance's own document checklist —
+// same additive pattern as Travel/Marine/Motor above, shown whenever the
+// prospect includes an Indemnity Insurance proposal. Reuses 'proposalForm' /
+// 'gstCertificate' / 'previousPolicy' / 'claimHistoryDeclaration' /
+// 'paymentProof' where the concept overlaps. PAN and general individual KYC
+// are already always required via BASE_DOC_CATEGORIES, so only
+// 'kycDocuments' (broader business KYC beyond that) is added as its own item.
+const INDEMNITY_DOC_CATEGORIES = [
+  { key: 'proposalForm', label: 'Proposal Form' },
+  { key: 'kycDocuments', label: 'KYC Documents' },
+  { key: 'companyRegistrationCertificate', label: 'Company Registration / Incorporation Certificate' },
+  { key: 'gstCertificate', label: 'GST Certificate' },
+  { key: 'professionalBusinessLicence', label: 'Professional / Business Licence or Registration, if applicable' },
+  { key: 'companyProfile', label: 'Company Profile' },
+  { key: 'natureScopeDocument', label: 'Nature & Scope of Professional Services' },
+  { key: 'annualTurnoverDetails', label: 'Annual Turnover Details' },
+  { key: 'previousPolicy', label: 'Previous Policy Copy' },
+  { key: 'claimHistoryDeclaration', label: 'Claim History' },
+  { key: 'pendingClaimsDetails', label: 'Details of Pending Claims / Circumstances' },
+  { key: 'clientContractsAgreements', label: 'Client Contracts / Agreements, if required' },
+  { key: 'financialStatements', label: 'Financial Statements, if required' },
+  { key: 'paymentProof', label: 'Payment Proof' },
+];
 
 // Document types for the smart doc-upload picker — shared with the Documents
 // module's upload dialog (utils/documentTypes.js) so both write the same
@@ -731,6 +754,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
   const hasTravelItem = items.some(it => it.proposalType === 'Travel Insurance');
   const hasMarineItem = items.some(it => it.proposalType === 'Marine Insurance');
   const hasMotorItem = items.some(it => it.proposalType === 'Motor Insurance');
+  const hasIndemnityItem = items.some(it => it.proposalType === 'Indemnity Insurance');
 
   const requiredDocCategories = useMemo(() => {
     if (!hasInsuranceItem) return [];
@@ -740,16 +764,17 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
     const travel = hasTravelItem ? TRAVEL_DOC_CATEGORIES : [];
     const marine = hasMarineItem ? MARINE_DOC_CATEGORIES : [];
     const motor = hasMotorItem ? MOTOR_DOC_CATEGORIES : [];
-    // De-dupe by key — Travel/Marine/Motor reuse passport/proposalForm/
-    // previousPolicy/paymentProof, which could already be present via
-    // BASE/extra/each other.
+    const indemnity = hasIndemnityItem ? INDEMNITY_DOC_CATEGORIES : [];
+    // De-dupe by key — Travel/Marine/Motor/Indemnity reuse passport/
+    // proposalForm/previousPolicy/paymentProof/etc., which could already be
+    // present via BASE/extra/each other.
     const seen = new Set();
-    return [...BASE_DOC_CATEGORIES, ...extra, ...travel, ...marine, ...motor].filter(cat => {
+    return [...BASE_DOC_CATEGORIES, ...extra, ...travel, ...marine, ...motor, ...indemnity].filter(cat => {
       if (seen.has(cat.key)) return false;
       seen.add(cat.key);
       return true;
     });
-  }, [hasInsuranceItem, hasTravelItem, hasMarineItem, hasMotorItem, kyc.occupation]);
+  }, [hasInsuranceItem, hasTravelItem, hasMarineItem, hasMotorItem, hasIndemnityItem, kyc.occupation]);
 
 
 

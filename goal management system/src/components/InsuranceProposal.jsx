@@ -10,8 +10,8 @@ import { ProspectModal } from './BusinessProspects';
 
 // New insurance lines of business — shown as disabled "Coming Soon" pills
 // until their field sets are defined and each gets its own proposal section.
-// Travel, Marine and Motor graduated to real sections below.
-const COMING_SOON_TYPES = ['Home', 'Fire', 'Indemnity'];
+// Travel, Marine, Motor and Indemnity graduated to real sections below.
+const COMING_SOON_TYPES = ['Home', 'Fire'];
 
 // One empty Travel entry — Card layout mirrors the CRM Data Fields spec
 // (Traveller Name / DOB-Age / Passport / Nationality / Mobile / Email /
@@ -60,6 +60,24 @@ const EMPTY_MOTOR_POLICY = {
 };
 const MOTOR_POLICY_TYPES = ['Comprehensive', 'TP', 'OD'];
 
+// One empty Indemnity (Professional Indemnity) entry — field grouping
+// mirrors the CRM Data Fields spec's own two tables: a primary "Business &
+// Coverage Details" set (mostly Mandatory) and a secondary "Claims &
+// Contractual Details" set (renewal/if-applicable fields). `sum`/`premium`
+// are amount fields (see AMOUNT_KEYS below) — `sum` holds the Limit of
+// Indemnity, reusing the same key Marine/Travel use for their own mandatory
+// up-front coverage figure. Premium/Policy Number are explicitly "After
+// issuance" per the spec, same as Travel/Marine/Motor.
+const EMPTY_INDEMNITY_POLICY = {
+  insuredName: '', businessProfession: '', registeredAddress: '',
+  contactPerson: '', mobile: '', email: '',
+  natureScope: '', professionalCategory: '', annualTurnover: '', employeesCount: '',
+  coverageRequired: '', sum: '', deductible: '', geographicalTerritory: '', policyPeriod: '',
+  previousPolicyDetails: '', existingClaims: '', pendingClaims: '',
+  retroactiveDate: '', contractualRequirements: '',
+  premium: '', policyNumber: '',
+};
+
 export default function InsuranceProposal({ client, isViewer }) {
   const getSavedVal = (subKey, defaultVal) => {
     try {
@@ -85,6 +103,7 @@ export default function InsuranceProposal({ client, isViewer }) {
     travel: false,
     marine: false,
     motor: false,
+    indemnity: false,
   }));
 
   // Applicants List
@@ -177,6 +196,11 @@ export default function InsuranceProposal({ client, isViewer }) {
     { ...EMPTY_MOTOR_POLICY }
   ]));
 
+  // Indemnity State
+  const [indemnityPolicies, setIndemnityPolicies] = useState(() => getSavedVal('indemnityPolicies', [
+    { ...EMPTY_INDEMNITY_POLICY }
+  ]));
+
   // Preview Mode
   const [isPreview, setIsPreview] = useState(false);
   const [syncStatus, setSyncStatus] = useState(''); // '', 'syncing', 'done', 'error'
@@ -248,6 +272,7 @@ export default function InsuranceProposal({ client, isViewer }) {
         if (parsed.travelPolicies !== undefined) setTravelPolicies(parsed.travelPolicies);
         if (parsed.marinePolicies !== undefined) setMarinePolicies(parsed.marinePolicies);
         if (parsed.motorPolicies !== undefined) setMotorPolicies(parsed.motorPolicies);
+        if (parsed.indemnityPolicies !== undefined) setIndemnityPolicies(parsed.indemnityPolicies);
         return; // loaded draft successfully, skip defaults
       } catch (e) {
         console.error('Error loading insurance proposal draft:', e);
@@ -316,6 +341,7 @@ export default function InsuranceProposal({ client, isViewer }) {
       travel: false,
       marine: false,
       motor: false,
+      indemnity: false,
     });
     setIsPort(false);
     setPortDate('');
@@ -331,6 +357,7 @@ export default function InsuranceProposal({ client, isViewer }) {
     setTravelPolicies([{ ...EMPTY_TRAVEL_POLICY }]);
     setMarinePolicies([{ ...EMPTY_MARINE_POLICY }]);
     setMotorPolicies([{ ...EMPTY_MOTOR_POLICY }]);
+    setIndemnityPolicies([{ ...EMPTY_INDEMNITY_POLICY }]);
   }, [client]);
 
   // Save draft on updates
@@ -352,10 +379,11 @@ export default function InsuranceProposal({ client, isViewer }) {
       accidentalPolicies,
       travelPolicies,
       marinePolicies,
-      motorPolicies
+      motorPolicies,
+      indemnityPolicies
     };
     localStorage.setItem(key, JSON.stringify(draft));
-  }, [client, proposer, types, applicants, isPort, portDate, basePolicies, topupPolicies, termGroups, accidentalPolicies, travelPolicies, marinePolicies, motorPolicies]);
+  }, [client, proposer, types, applicants, isPort, portDate, basePolicies, topupPolicies, termGroups, accidentalPolicies, travelPolicies, marinePolicies, motorPolicies, indemnityPolicies]);
 
   // Checkbox Toggle Helpers
   const handleTypeChange = (key) => {
@@ -525,6 +553,20 @@ export default function InsuranceProposal({ client, isViewer }) {
     setMotorPolicies(prev => prev.map((p, i) => i === index ? { ...p, [key]: v } : p));
   };
 
+  // Add/Remove Indemnity Entries
+  const addIndemnityPolicy = () => {
+    setIndemnityPolicies(prev => [...prev, { ...EMPTY_INDEMNITY_POLICY }]);
+  };
+
+  const removeIndemnityPolicy = (index) => {
+    setIndemnityPolicies(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateIndemnityPolicy = (index, key, value) => {
+    const v = AMOUNT_KEYS.includes(key) ? fmtAmt(value) : value;
+    setIndemnityPolicies(prev => prev.map((p, i) => i === index ? { ...p, [key]: v } : p));
+  };
+
   // Format Helper
   const fmt = (v) => v || '—';
   
@@ -544,7 +586,7 @@ export default function InsuranceProposal({ client, isViewer }) {
     const digits = String(v == null ? '' : v).replace(/[^0-9]/g, '');
     return digits ? Number(digits).toLocaleString('en-IN') : '';
   };
-  const AMOUNT_KEYS = ['sum', 'premium', 'invoiceValue', 'idv'];
+  const AMOUNT_KEYS = ['sum', 'premium', 'invoiceValue', 'idv', 'annualTurnover'];
 
   // Google Sheets Sync
   const syncToGoogleSheets = async () => {
@@ -584,17 +626,23 @@ export default function InsuranceProposal({ client, isViewer }) {
       motorPolicies.forEach(p => totalMotor += parseNum(p.premium));
     }
 
+    let totalIndemnity = 0;
+    if (types.indemnity) {
+      indemnityPolicies.forEach(p => totalIndemnity += parseNum(p.premium));
+    }
+
     const payload = {
       proposerName: proposer,
       clientsCount: applicants.length,
-      types: [types.medical && 'Medical', types.term && 'Term', types.accidental && 'Accidental', types.travel && 'Travel', types.marine && 'Marine', types.motor && 'Motor'].filter(Boolean).join(' + '),
+      types: [types.medical && 'Medical', types.term && 'Term', types.accidental && 'Accidental', types.travel && 'Travel', types.marine && 'Marine', types.motor && 'Motor', types.indemnity && 'Indemnity'].filter(Boolean).join(' + '),
       totalMedical,
       totalTerm,
       totalAccidental,
       totalTravel,
       totalMarine,
       totalMotor,
-      totalPremium: totalMedical + totalTerm + totalAccidental + totalTravel + totalMarine + totalMotor,
+      totalIndemnity,
+      totalPremium: totalMedical + totalTerm + totalAccidental + totalTravel + totalMarine + totalMotor + totalIndemnity,
       date: new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' }),
       isPort: types.medical ? (isPort ? 'Yes' : 'No') : 'N/A',
       portDate: types.medical && isPort && portDate ? new Date(portDate).toLocaleDateString('en-IN') : ''
@@ -681,6 +729,7 @@ export default function InsuranceProposal({ client, isViewer }) {
       travel: false,
       marine: false,
       motor: false,
+      indemnity: false,
     });
     setIsPort(false);
     setPortDate('');
@@ -696,10 +745,11 @@ export default function InsuranceProposal({ client, isViewer }) {
     setTravelPolicies([{ ...EMPTY_TRAVEL_POLICY }]);
     setMarinePolicies([{ ...EMPTY_MARINE_POLICY }]);
     setMotorPolicies([{ ...EMPTY_MOTOR_POLICY }]);
+    setIndemnityPolicies([{ ...EMPTY_INDEMNITY_POLICY }]);
   };
 
   const handleGenerate = () => {
-    if (!types.medical && !types.term && !types.accidental && !types.travel && !types.marine && !types.motor) {
+    if (!types.medical && !types.term && !types.accidental && !types.travel && !types.marine && !types.motor && !types.indemnity) {
       alert('Please select at least one proposal type.');
       return;
     }
@@ -708,7 +758,7 @@ export default function InsuranceProposal({ client, isViewer }) {
   };
 
   const getProposalTypesLabel = () => {
-    return [types.medical && 'Medical', types.term && 'Term', types.accidental && 'Accidental', types.travel && 'Travel', types.marine && 'Marine', types.motor && 'Motor']
+    return [types.medical && 'Medical', types.term && 'Term', types.accidental && 'Accidental', types.travel && 'Travel', types.marine && 'Marine', types.motor && 'Motor', types.indemnity && 'Indemnity']
       .filter(Boolean)
       .join(' + ');
   };
@@ -818,6 +868,27 @@ export default function InsuranceProposal({ client, isViewer }) {
             p.vehicleRegistrationNumber || '—',
             p.makeModel || '—',
             p.idv ? '₹ ' + p.idv : '—',
+            p.premium ? '₹ ' + p.premium : '—',
+          ]),
+        },
+      });
+    }
+    if (types.indemnity) {
+      const entries = (indemnityPolicies || []).filter(p => p.insuredName || p.coverageRequired || p.sum || p.premium);
+      // Indemnity's Premium/Policy Number are explicitly "After issuance" —
+      // like Travel/Marine/Motor, Limit of Indemnity (sum) is the mandatory
+      // up-front figure the prospect's deal-size amount is based on.
+      drafts.push({
+        proposalType: 'Indemnity Insurance',
+        proposalCategory: 'insurance',
+        amount: (indemnityPolicies || []).reduce((s, p) => s + parseNum(p.sum), 0),
+        table: {
+          cols: ['Insured / Company', 'Business / Profession', 'Coverage Required', 'Limit of Indemnity', 'Premium'],
+          rows: entries.map(p => [
+            p.insuredName || '—',
+            p.businessProfession || '—',
+            p.coverageRequired || '—',
+            p.sum ? '₹ ' + p.sum : '—',
             p.premium ? '₹ ' + p.premium : '—',
           ]),
         },
@@ -1053,6 +1124,15 @@ export default function InsuranceProposal({ client, isViewer }) {
                       className="rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-750"
                     />
                     Motor
+                  </label>
+                  <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 text-xs font-semibold text-slate-700 dark:text-slate-350 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={types.indemnity}
+                      onChange={() => handleTypeChange('indemnity')}
+                      className="rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-750"
+                    />
+                    Indemnity
                   </label>
                   {COMING_SOON_TYPES.map(label => (
                     <label
@@ -2051,7 +2131,148 @@ export default function InsuranceProposal({ client, isViewer }) {
             </Card>
           )}
 
-          {/* Card 9: Actions */}
+          {/* Card 9: Indemnity Insurance Section */}
+          {types.indemnity && (
+            <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-md rounded-[20px] space-y-6">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/60">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-violet-50/50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 flex items-center justify-center border border-violet-100/40 dark:border-violet-900/30">
+                    <Briefcase size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">💼 Indemnity Insurance</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium font-sans">Professional / business indemnity cover, one entry per insured</p>
+                  </div>
+                </div>
+                <button onClick={addIndemnityPolicy} className={btnSecondary + ' py-1.5 px-3 text-xs'}>
+                  <Plus size={12} /> Add Entry
+                </button>
+              </div>
+
+              <div className="space-y-6 max-h-[600px] overflow-y-auto pr-1">
+                {indemnityPolicies.length === 0 ? (
+                  <div className="text-center py-6 text-sm text-slate-400 dark:text-slate-500 italic">No entries added. Click "Add Entry" to start.</div>
+                ) : (
+                  indemnityPolicies.map((p, i) => (
+                    <div key={i} className="p-5 rounded-2xl bg-violet-50/20 dark:bg-slate-950/20 border border-violet-100/50 dark:border-slate-805 space-y-5 relative">
+                      <button
+                        onClick={() => removeIndemnityPolicy(i)}
+                        disabled={indemnityPolicies.length === 1}
+                        className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 disabled:opacity-30 disabled:hover:text-slate-400 transition-colors"
+                        title="Remove Entry"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+
+                      {/* Business & Coverage Details */}
+                      <div className="space-y-3 pr-8">
+                        <span className="text-[10px] font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider pl-1.5 border-l-2 border-violet-500 leading-none">Business &amp; Coverage Details</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Insured / Company Name *</label>
+                            <input type="text" value={p.insuredName} onChange={(e) => updateIndemnityPolicy(i, 'insuredName', e.target.value)} placeholder="e.g. Fintness Consulting Pvt Ltd" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Business / Profession *</label>
+                            <input type="text" value={p.businessProfession} onChange={(e) => updateIndemnityPolicy(i, 'businessProfession', e.target.value)} placeholder="e.g. Chartered Accountant" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Registered Address *</label>
+                            <input type="text" value={p.registeredAddress} onChange={(e) => updateIndemnityPolicy(i, 'registeredAddress', e.target.value)} placeholder="e.g. registered office address" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Contact Person *</label>
+                            <input type="text" value={p.contactPerson} onChange={(e) => updateIndemnityPolicy(i, 'contactPerson', e.target.value)} placeholder="e.g. Rohan Mehta" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Mobile *</label>
+                            <input type="text" value={p.mobile} onChange={(e) => updateIndemnityPolicy(i, 'mobile', e.target.value)} placeholder="e.g. 98765 43210" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Email *</label>
+                            <input type="text" value={p.email} onChange={(e) => updateIndemnityPolicy(i, 'email', e.target.value)} placeholder="e.g. name@email.com" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Nature &amp; Scope of Professional Services *</label>
+                            <input type="text" value={p.natureScope} onChange={(e) => updateIndemnityPolicy(i, 'natureScope', e.target.value)} placeholder="e.g. Tax audit & advisory services" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Professional Category *</label>
+                            <input type="text" value={p.professionalCategory} onChange={(e) => updateIndemnityPolicy(i, 'professionalCategory', e.target.value)} placeholder="e.g. Accountants & Auditors" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Annual Turnover (Rs) *</label>
+                            <input type="text" value={p.annualTurnover} onChange={(e) => updateIndemnityPolicy(i, 'annualTurnover', e.target.value)} placeholder="e.g. 50,00,000" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950 text-right tabular-nums font-semibold'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Number of Employees / Professionals</label>
+                            <input type="text" value={p.employeesCount} onChange={(e) => updateIndemnityPolicy(i, 'employeesCount', e.target.value)} placeholder="As applicable" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Coverage Required *</label>
+                            <input type="text" value={p.coverageRequired} onChange={(e) => updateIndemnityPolicy(i, 'coverageRequired', e.target.value)} placeholder="e.g. Professional Indemnity" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Limit of Indemnity (Rs) *</label>
+                            <input type="text" value={p.sum} onChange={(e) => updateIndemnityPolicy(i, 'sum', e.target.value)} placeholder="e.g. 50,00,000" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950 text-right tabular-nums font-semibold'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Deductible / Excess</label>
+                            <input type="text" value={p.deductible} onChange={(e) => updateIndemnityPolicy(i, 'deductible', e.target.value)} placeholder="As applicable" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Geographical / Policy Territory</label>
+                            <input type="text" value={p.geographicalTerritory} onChange={(e) => updateIndemnityPolicy(i, 'geographicalTerritory', e.target.value)} placeholder="As applicable" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Policy Period *</label>
+                            <input type="text" value={p.policyPeriod} onChange={(e) => updateIndemnityPolicy(i, 'policyPeriod', e.target.value)} placeholder="e.g. 1 year" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Claims & Contractual Details */}
+                      <div className="space-y-3">
+                        <span className="text-[10px] font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider pl-1.5 border-l-2 border-violet-500 leading-none">Claims &amp; Contractual Details</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Previous Policy Details</label>
+                            <input type="text" value={p.previousPolicyDetails} onChange={(e) => updateIndemnityPolicy(i, 'previousPolicyDetails', e.target.value)} placeholder="For renewals" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Existing / Previous Claims</label>
+                            <input type="text" value={p.existingClaims} onChange={(e) => updateIndemnityPolicy(i, 'existingClaims', e.target.value)} placeholder="Where required" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Pending Claims / Circumstances</label>
+                            <input type="text" value={p.pendingClaims} onChange={(e) => updateIndemnityPolicy(i, 'pendingClaims', e.target.value)} placeholder="Where required" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Retroactive Date</label>
+                            <input type="date" value={p.retroactiveDate} onChange={(e) => updateIndemnityPolicy(i, 'retroactiveDate', e.target.value)} className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Contractual Requirements</label>
+                            <input type="text" value={p.contractualRequirements} onChange={(e) => updateIndemnityPolicy(i, 'contractualRequirements', e.target.value)} placeholder="If applicable" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Premium (Rs)</label>
+                            <input type="text" value={p.premium} onChange={(e) => updateIndemnityPolicy(i, 'premium', e.target.value)} placeholder="After issuance" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950 text-right tabular-nums font-semibold'} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Policy Number</label>
+                            <input type="text" value={p.policyNumber} onChange={(e) => updateIndemnityPolicy(i, 'policyNumber', e.target.value)} placeholder="After issuance" className={inputCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </Card>
+          )}
+
+          {/* Card 10: Actions */}
           <div className="flex items-center justify-end gap-3 pt-2">
             <button onClick={handleGenerate} className={btnPrimary}>
               <Plus size={14} /> Generate Proposal
@@ -2643,6 +2864,85 @@ export default function InsuranceProposal({ client, isViewer }) {
                 </div>
               )}
 
+              {types.indemnity && (
+                <div style={{ marginTop: '28px' }}>
+                  <div className="psec-title">💼 Indemnity Insurance</div>
+                  {indemnityPolicies.filter(p => p.insuredName || p.coverageRequired || p.sum || p.premium).length > 0 && (
+                    <>
+                      <div>
+                        <div className="psub-label psub-indemnity">Business &amp; Coverage Details</div>
+                        <div className="ptable-wrap">
+                          <table className="ptable">
+                            <thead>
+                              <tr>
+                                <th>#</th>
+                                <th>Insured / Company</th>
+                                <th>Business / Profession</th>
+                                <th>Coverage Required</th>
+                                <th>Annual Turnover</th>
+                                <th>Limit of Indemnity</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {indemnityPolicies.filter(p => p.insuredName || p.coverageRequired || p.sum || p.premium).map((p, i) => (
+                                <tr key={i}>
+                                  <td>{i + 1}</td>
+                                  <td style={{ fontWeight: 600, color: '#0d2a5e' }}>{fmt(p.insuredName)}</td>
+                                  <td style={{ fontSize: '12px' }}>{fmt(p.businessProfession)}</td>
+                                  <td style={{ fontSize: '12px' }}>{fmt(p.coverageRequired)}</td>
+                                  <td>{p.annualTurnover ? '₹ ' + fmtINR(p.annualTurnover) : '—'}</td>
+                                  <td>₹ {fmtINR(p.sum)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: '18px' }}>
+                        <div className="psub-label psub-indemnity">Claims &amp; Contractual Details</div>
+                        <div className="ptable-wrap">
+                          <table className="ptable">
+                            <thead>
+                              <tr>
+                                <th>#</th>
+                                <th>Policy Period</th>
+                                <th>Retroactive Date</th>
+                                <th>Premium</th>
+                                <th>Policy No.</th>
+                                {indemnityPolicies.some(p => p.previousPolicyDetails || p.existingClaims || p.pendingClaims || p.contractualRequirements) && <th>Notes</th>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {indemnityPolicies.filter(p => p.insuredName || p.coverageRequired || p.sum || p.premium).map((p, i) => {
+                                const notes = [
+                                  p.previousPolicyDetails && `Previous Policy: ${p.previousPolicyDetails}`,
+                                  p.existingClaims && `Existing Claims: ${p.existingClaims}`,
+                                  p.pendingClaims && `Pending Claims: ${p.pendingClaims}`,
+                                  p.contractualRequirements && `Contractual: ${p.contractualRequirements}`,
+                                ].filter(Boolean).join(' · ');
+                                return (
+                                  <tr key={i}>
+                                    <td>{i + 1}</td>
+                                    <td>{fmt(p.policyPeriod)}</td>
+                                    <td>{p.retroactiveDate ? new Date(p.retroactiveDate).toLocaleDateString('en-IN') : '—'}</td>
+                                    <td>{p.premium ? '₹ ' + fmtINR(p.premium) : 'Pending issuance'}</td>
+                                    <td>{p.policyNumber || 'Pending issuance'}</td>
+                                    {indemnityPolicies.some(x => x.previousPolicyDetails || x.existingClaims || x.pendingClaims || x.contractualRequirements) && (
+                                      <td style={{ fontSize: '12px', color: 'var(--slate)' }}>{notes || '—'}</td>
+                                    )}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               <div className="prop-footer">
                 <div className="prop-footer-note">This proposal is prepared for discussion purposes only. Final premiums are subject to underwriting and insurer approval. All amounts are in Indian Rupees (₹). Terms and conditions of respective insurers apply.</div>
                 <div className="prop-footer-brand">Team Fintness</div>
@@ -2700,6 +3000,8 @@ const INSURANCE_PRINT_STYLES = `
     --marine-light: #e0f2fe;
     --motor: #c2410c;
     --motor-light: #ffedd5;
+    --indemnity: #7c3aed;
+    --indemnity-light: #f3e8ff;
     --danger: #dc2626;
     --radius: 12px;
     --shadow: 0 4px 24px rgba(13,42,94,0.09);
@@ -2813,6 +3115,7 @@ const INSURANCE_PRINT_STYLES = `
   .psub-travel { background:var(--travel-light); color:var(--travel); }
   .psub-marine { background:var(--marine-light); color:var(--marine); }
   .psub-motor { background:var(--motor-light); color:var(--motor); }
+  .psub-indemnity { background:var(--indemnity-light); color:var(--indemnity); }
 
   .ptable {
     width:100%; border-collapse:collapse; margin-bottom:6px; font-size:13px;
