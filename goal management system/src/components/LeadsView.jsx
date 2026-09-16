@@ -226,6 +226,14 @@ export default function LeadsView({
           </button>
         ))}
         <span className="mx-1 w-px self-stretch bg-slate-200 dark:bg-slate-800" />
+        {/* Same state as the stage chips above — the two stay in step, this is
+            just the compact way to pick a stage alongside the other filters. */}
+        <div className="w-48">
+          <CoolSelect value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} className={selectCls + ' text-xs py-1.5'}>
+            <option value="all">All Stages</option>
+            {LEAD_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+          </CoolSelect>
+        </div>
         <div className="w-44">
           <CoolSelect value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className={selectCls + ' text-xs py-1.5'}>
             <option value="all">All Sources</option>
