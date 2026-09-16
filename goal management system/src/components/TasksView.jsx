@@ -395,18 +395,18 @@ function DocUploadGroup({ label, required, files, onAdd, onRemove, existingDocs 
                     ? 'bg-emerald-50 dark:bg-emerald-955/30 text-emerald-700 dark:text-emerald-400 ring-emerald-200/60 dark:ring-emerald-900/40'
                     : 'bg-blue-50 dark:bg-blue-955/30 text-blue-700 dark:text-blue-400 ring-blue-200/60 dark:ring-blue-900/40'
                 }`}
-                onMouseEnter={e => showTooltip(e, f.dataUrl, f.fileName || f.name)}
+                onMouseEnter={e => showTooltip(e, f.dataUrl, f.name || f.fileName)}
                 onMouseLeave={hideTooltip}
               >
                 <Paperclip size={10} />
                 <button
                   type="button"
-                  onClick={() => f.dataUrl && setPreviewFile({ dataUrl: f.dataUrl, name: f.fileName || f.name, uploadedBy: f.uploadedBy, date: f.date })}
+                  onClick={() => f.dataUrl && setPreviewFile({ dataUrl: f.dataUrl, name: f.name || f.fileName, uploadedBy: f.uploadedBy, date: f.date })}
                   className={`cursor-pointer flex items-center gap-0.5 ${
                     onFile ? 'hover:text-emerald-900 dark:hover:text-emerald-200' : 'hover:text-blue-900 dark:hover:text-blue-200'
                   }`}
                 >
-                  {f.fileName || f.name} <Eye size={10} className="inline-block" />
+                  {f.name || f.fileName} <Eye size={10} className="inline-block" />
                 </button>
                 {onFile && <span className="opacity-60 text-[9px] font-medium">(on file)</span>}
                 {!isViewer && (
@@ -697,9 +697,26 @@ export function TaskFormModal({ initial, clients, isViewer, onClose, onSave }) {
     setDocuments(prev => ({ ...prev, [category]: (prev[category] || []).filter(f => f.id !== fileId) }));
   };
 
+  // This runs on EVERY task save (handleSubmit calls it unconditionally for
+  // an NFT task — including a pure stage change or comment that never
+  // touched a document), so it must be idempotent: re-running it with the
+  // exact same linked files must produce the exact same client attachments,
+  // byte for byte. It used to re-derive every linked file's name from a
+  // "how many similar docs already exist" count on every single call — for
+  // a file that had already been synced once, that count included the file
+  // itself (the seed/baseline it excluded came from `initial.documents`, a
+  // snapshot frozen at modal-open time that never advanced as saves
+  // happened), so each subsequent save nudged the count up by one and
+  // renamed the SAME file to "... (2)", then "... (3)" on the save after
+  // that — while `applicantName` got silently re-derived too, so a file
+  // could drift onto a different applicant's name if its own wasn't set.
+  // The fix: a file whose id is already on the client's record is carried
+  // forward completely untouched (same name/category/applicant, no re-
+  // derivation at all); only a file that doesn't exist there yet gets a
+  // freshly computed name, checked against what's actually on the client
+  // right now rather than a stale snapshot.
   const syncDocumentsToClient = async (finalDocs) => {
     if (!selectedClient) return;
-    const newAttachments = [];
     const docLabels = {
       cancelledCheque: 'Cancelled Cheque',
       panCard: 'PAN Card',
@@ -707,24 +724,28 @@ export function TaskFormModal({ initial, clients, isViewer, onClose, onSave }) {
       bankProof: 'Bank Proof',
       nomineePanCard: 'Nominee PAN Card'
     };
+    const existingClientDocs = selectedClient.clientDetails?.attachments || [];
+    const existingById = new Map(existingClientDocs.map(a => [a.id, a]));
+
+    const linkedIds = new Set();
+    const newAttachments = [];
+    const pendingCounts = {};
     Object.entries(finalDocs).forEach(([catKey, files]) => {
       const label = docLabels[catKey] || catKey;
-      const fileApplicant = applicant.trim() || groupLeader.trim();
-      const existingClientDocs = selectedClient.clientDetails?.attachments || [];
-      const seedIds = new Set(
-        initial?.documents ? Object.values(initial.documents).flatMap(a => (a || []).map(f => f.id)) : []
-      );
-      const withinBatchCount = {};
       (files || []).forEach(f => {
-        const appName = f.applicantName || fileApplicant;
+        linkedIds.add(f.id);
+        const already = existingById.get(f.id);
+        if (already) {
+          newAttachments.push(already);
+          return;
+        }
+        const appName = f.applicantName || applicant.trim() || groupLeader.trim();
         const key = `${label}|||${appName}`;
         const priorCount = existingClientDocs.filter(a =>
-          a.category?.toLowerCase() === label.toLowerCase() &&
-          a.applicantName === appName &&
-          !seedIds.has(a.id)
+          a.category?.toLowerCase() === label.toLowerCase() && a.applicantName === appName
         ).length;
-        withinBatchCount[key] = (withinBatchCount[key] || 0) + 1;
-        const n = priorCount + withinBatchCount[key];
+        pendingCounts[key] = (pendingCounts[key] || 0) + 1;
+        const n = priorCount + pendingCounts[key];
         const docName = n > 1 ? `${label} (${n})_${appName}` : `${label}_${appName}`;
         newAttachments.push({
           id: f.id,
@@ -740,27 +761,33 @@ export function TaskFormModal({ initial, clients, isViewer, onClose, onSave }) {
         });
       });
     });
+
+    // A document this task originally uploaded fresh (not linked from the
+    // client's existing library) that's since been removed from the task is
+    // removed from the client too — it only ever existed because of this
+    // task. One that was LINKED from the client's existing documents
+    // (isExisting) is left alone even if unlinked here, since it belongs to
+    // the client independent of this task.
     const originalIds = new Set();
+    const originalIsExisting = new Set();
     if (initial && initial.documents) {
       Object.values(initial.documents).forEach(arr => {
         (arr || []).forEach(f => {
-          if (f.id) originalIds.add(f.id);
+          if (f.id) {
+            originalIds.add(f.id);
+            if (f.isExisting) originalIsExisting.add(f.id);
+          }
         });
       });
     }
-    const existing = (selectedClient.clientDetails?.attachments || []).filter(ex => {
-      if (newAttachments.some(n => n.id === ex.id)) return false;
-      if (originalIds.has(ex.id)) {
-        const originalFile = Object.values(initial.documents || {}).flatMap(a => a || []).find(f => f.id === ex.id);
-        if (originalFile && originalFile.isExisting) {
-          return true;
-        }
-        return false;
-      }
+    const rest = existingClientDocs.filter(ex => {
+      if (linkedIds.has(ex.id)) return false; // already represented in newAttachments
+      if (originalIds.has(ex.id) && !originalIsExisting.has(ex.id)) return false; // removed fresh upload -> delete
       return true;
     });
+
     await updateClient(selectedClient.id, {
-      clientDetails: { ...selectedClient.clientDetails, attachments: [...newAttachments, ...existing] }
+      clientDetails: { ...selectedClient.clientDetails, attachments: [...newAttachments, ...rest] }
     });
     if (window.refreshAppData) await window.refreshAppData();
   };
