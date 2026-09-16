@@ -17,6 +17,21 @@ import {
   STAGE_THEME, STATUS_THEME, SOURCE_THEME, scoreBand, computeScore, leadName, fmtStamp,
 } from '../services/leads';
 
+// Lead list filters persist per browser — someone who works a single RM's
+// pipeline shouldn't have to re-pick it on every visit. Only an explicit
+// "Clear" resets them; the search box is deliberately NOT persisted, since a
+// stale search term looks like an empty list rather than an active filter.
+const FILTERS_KEY = 'crm:lead-filters';
+const DEFAULT_FILTERS = { stage: 'all', status: 'Active', source: 'all', rm: 'all' };
+const loadSavedFilters = () => {
+  try {
+    const raw = localStorage.getItem(FILTERS_KEY);
+    return raw ? { ...DEFAULT_FILTERS, ...JSON.parse(raw) } : { ...DEFAULT_FILTERS };
+  } catch {
+    return { ...DEFAULT_FILTERS };
+  }
+};
+
 const scoreChip = (score) => {
   const band = scoreBand(score);
   const map = {
@@ -36,9 +51,11 @@ export default function LeadsView({
   const mayCreateLead = !isViewer && canCreateLead(me);
   const [leads, setLeads] = useState(() => loadLeads());
   const [query, setQuery] = useState('');
-  const [stageFilter, setStageFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('Active');
-  const [sourceFilter, setSourceFilter] = useState('all');
+  const savedFilters = useMemo(loadSavedFilters, []);
+  const [stageFilter, setStageFilter] = useState(savedFilters.stage);
+  const [statusFilter, setStatusFilter] = useState(savedFilters.status);
+  const [sourceFilter, setSourceFilter] = useState(savedFilters.source);
+  const [rmFilter, setRmFilter] = useState(savedFilters.rm);
   const [viewMode, setViewMode] = useState('table');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -71,6 +88,23 @@ export default function LeadsView({
     };
   }, []);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(FILTERS_KEY, JSON.stringify({
+        stage: stageFilter, status: statusFilter, source: sourceFilter, rm: rmFilter,
+      }));
+    } catch { /* private mode / quota — filters just won't persist */ }
+  }, [stageFilter, statusFilter, sourceFilter, rmFilter]);
+
+  const filtersActive = stageFilter !== DEFAULT_FILTERS.stage || statusFilter !== DEFAULT_FILTERS.status
+    || sourceFilter !== DEFAULT_FILTERS.source || rmFilter !== DEFAULT_FILTERS.rm;
+  const clearFilters = () => {
+    setStageFilter(DEFAULT_FILTERS.stage);
+    setStatusFilter(DEFAULT_FILTERS.status);
+    setSourceFilter(DEFAULT_FILTERS.source);
+    setRmFilter(DEFAULT_FILTERS.rm);
+  };
+
   const openLead = useMemo(() => leads.find(l => l.id === openLeadId) || null, [leads, openLeadId]);
 
   // Deep-link from a notification click — open the specific lead once its row
@@ -89,13 +123,14 @@ export default function LeadsView({
       .filter(l => statusFilter === 'all' || (l.status || 'Active') === statusFilter)
       .filter(l => stageFilter === 'all' || (l.stage || 'New') === stageFilter)
       .filter(l => sourceFilter === 'all' || l.leadSource === sourceFilter)
+      .filter(l => rmFilter === 'all' || (rmFilter === 'unassigned' ? !l.ownerId : l.ownerId === rmFilter))
       .filter(l => !q ||
         leadName(l).toLowerCase().includes(q) ||
         (l.mobile || '').toLowerCase().includes(q) ||
         (l.email || '').toLowerCase().includes(q) ||
         (l.pan || '').toLowerCase().includes(q))
       .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-  }, [leads, query, stageFilter, statusFilter, sourceFilter]);
+  }, [leads, query, stageFilter, statusFilter, sourceFilter, rmFilter]);
 
   const counts = useMemo(() => {
     const c = { all: leads.length };
@@ -197,6 +232,19 @@ export default function LeadsView({
             {LEAD_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
           </CoolSelect>
         </div>
+        <div className="w-52">
+          <CoolSelect value={rmFilter} onChange={(e) => setRmFilter(e.target.value)} className={selectCls + ' text-xs py-1.5'}>
+            <option value="all">All Relationship Managers</option>
+            <option value="unassigned">Unassigned</option>
+            {loadTeam().map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </CoolSelect>
+        </div>
+        {filtersActive && (
+          <button onClick={clearFilters} title="Reset every filter to its default"
+            className="px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer inline-flex items-center gap-1.5">
+            <X size={11} /> Clear Filters
+          </button>
+        )}
       </div>
 
       {/* List */}
@@ -550,6 +598,12 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
 
   const sc = scoreChip(lead.leadScore || 0);
   const stageIdx = LEAD_STAGES.indexOf(lead.stage);
+  // Leads converted before convertedAt was stamped still have the moment in
+  // their timeline — read it from there so existing converted leads show a
+  // real date rather than a dash.
+  const convertedAt = lead.convertedAt
+    || (lead.timeline || []).find(ev => ev.meta?.to === 'Converted')?.createdAt
+    || '';
 
   return createPortal(
     <div className="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-50 flex items-center justify-center p-0 md:p-6 overflow-hidden animate-fade-in" onClick={onClose}>
@@ -836,7 +890,13 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
               {lead.leadSource === 'Referred By Users' && <DetailRow label="Referred By (User)" value={lead.referredUser} />}
               <DetailRow label="Client Type" value={lead.clientType} />
               <DetailRow label="Assigned RM" value={lead.ownerId ? teamName(lead.ownerId) : 'Unassigned'} />
+              <DetailRow label="Others" value={(lead.contributors || []).map(teamName).filter(Boolean).join(', ')} />
+              <DetailRow label="Stage" value={lead.stage} />
+              <DetailRow label="Status" value={lead.status || 'Active'} />
+              {lead.status === 'Lost' && <DetailRow label="Lost Reason" value={lead.lostReason} />}
               <DetailRow label="Created" value={fmtStamp(lead.createdAt)} />
+              <DetailRow label="Created By" value={lead.createdBy} />
+              {lead.stage === 'Converted' && <DetailRow label="Conversion Date" value={fmtStamp(convertedAt)} />}
               <div className="sm:col-span-2"><DetailRow label="Lead Remarks" value={lead.remarks} /></div>
             </div>
           )}

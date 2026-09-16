@@ -17,7 +17,7 @@ import { loadProspects, ALL_STAGE_THEME } from '../utils/prospects';
 import { loadTasks, TASK_STAGES, STAGE_THEME } from '../utils/tasks';
 import { loadMeetings, MEETING_STATUSES } from '../utils/meetings';
 import { hasAllocation, allocationTotals } from '../utils/assets';
-import { isPolicy, isRenewal, isClaim, isFd, RENEWAL_STAGES, CLAIM_STAGES, FD_STAGES, POLICY_STAGES } from '../utils/cobrModules';
+import { isPolicy, isRenewal, isClaim, isFd, RENEWAL_STAGES, CLAIM_STAGES, FD_STAGES, POLICY_STAGES, stageReachedAt } from '../utils/cobrModules';
 import { isCobrTask, cobrTotals } from '../utils/cobr';
 import { can } from '../services/permissions';
 import { getManagedPortfolio, setAumOverride, setSipOverride, setInsuranceOverride } from '../services/managedPortfolio';
@@ -141,14 +141,48 @@ const rangeForFilter = (filter) => {
   }
   return { start: new Date(filter.year, filter.month, 1, 0, 0, 0, 0), end: new Date(filter.year, filter.month + 1, 0, 23, 59, 59, 999) };
 };
+// `dateField` is either a key or a resolver — a resolver lets one list be
+// dated per-record (investment prospects report on when they CLOSED, while
+// everything else still reports on when it was created).
 const filterByFilter = (list, filter, dateField = 'createdAt') => {
   const { start, end } = rangeForFilter(filter);
+  const dateOf = typeof dateField === 'function' ? dateField : (item) => item[dateField];
   return list.filter((item) => {
-    const iso = item[dateField];
+    const iso = dateOf(item);
     if (!iso) return false;
     const d = new Date(iso);
     return !Number.isNaN(d.getTime()) && d >= start && d <= end;
   });
+};
+
+// ---- What counts as BOOKED business ---------------------------------------
+// The dashboard reports COMPLETED business: a figure appears only once the
+// deal has actually closed, and it's dated by when it closed rather than when
+// its record happened to be created. Anything still in flight is pipeline,
+// not business done, and contributes nothing to these numbers.
+const isBookedInvestment = (p) => p.stage === 'Close Won';
+const investmentBookedDate = (p) => p.closedAt || p.closingDate || p.updatedAt || p.createdAt;
+// Insurance keeps reporting on creation date — only Investment was specified
+// to move onto a closing-date basis.
+const prospectReportDate = (p) => (p.proposalCategory === 'investment' ? investmentBookedDate(p) : p.createdAt);
+
+// A renewal counts once the premium is actually paid; Close Lost sits after
+// Payment Done in the stage list but is the opposite of booked, so it's
+// excluded explicitly rather than by position.
+const RENEWAL_PAID_FROM = RENEWAL_STAGES.indexOf('Payment Done');
+const isBookedRenewal = (r) => RENEWAL_STAGES.indexOf(r.stage) >= RENEWAL_PAID_FROM && r.stage !== 'Close Lost';
+const isBookedClaim = (r) => r.stage === 'Claim Settled';
+const claimBookedDate = (r) => r.settlementDate || stageReachedAt(r.stageHistory, 'Claim Settled') || r.dueDate;
+const isBookedFd = (r) => r.stage === 'Invested With Us';
+const fdBookedDate = (r) => r.investmentDate || stageReachedAt(r.stageHistory, 'Invested With Us') || r.maturityDate;
+
+// Servicing registers share one task list but each reports on its own date:
+// renewals on the renewal due date, claims on settlement, FDs on investment.
+const servicingReportDate = (t) => {
+  if (isRenewal(t)) return t.dueDate || t.createdAt;
+  if (isClaim(t)) return claimBookedDate(t) || t.createdAt;
+  if (isFd(t)) return fdBookedDate(t) || t.createdAt;
+  return t.createdAt;
 };
 
 // ---- Pure computations, parametrized by an already period-filtered list ---
@@ -156,7 +190,7 @@ const filterByFilter = (list, filter, dateField = 'createdAt') => {
 // state, or off a fixed FY window for Business Overview, without duplicating
 // the aggregation logic.)
 function computeInv(prospectsInPeriod) {
-  const items = prospectsInPeriod.filter(p => p.proposalCategory === 'investment');
+  const items = prospectsInPeriod.filter(p => p.proposalCategory === 'investment' && isBookedInvestment(p));
   const sumOf = (types) => items.filter(p => types.includes(p.proposalType)).reduce((s, p) => s + num(p.amount), 0);
   const sipIn = sumOf(SIP_IN_TYPES);
   const sipOut = sumOf(SIP_OUT_TYPES);
@@ -217,12 +251,18 @@ function computeServicing(tasksInPeriod) {
     list.forEach(t => { const s = t.stage || 'Qualified'; m[s] = (m[s] || 0) + 1; });
     return m;
   };
-  const build = (list, amountKey) => ({ count: list.length, amount: sumBy(list, amountKey), stages: stageMapOf(list) });
+  // The headline count/amount reports BOOKED business only, while the stage
+  // breakdown still covers every record in the period — otherwise the
+  // pipeline view would collapse to just the one stage that counts.
+  const build = (list, amountKey, isBooked) => {
+    const booked = list.filter(isBooked);
+    return { count: booked.length, amount: sumBy(booked, amountKey), stages: stageMapOf(list) };
+  };
   return {
-    renewal: build(tasksInPeriod.filter(isRenewal), 'premiumAmount'),
-    claim: build(tasksInPeriod.filter(isClaim), 'claimAmount'),
-    fd: build(tasksInPeriod.filter(isFd), 'maturityAmount'),
-    policy: build(tasksInPeriod.filter(isPolicy), 'premiumAmount'),
+    renewal: build(tasksInPeriod.filter(isRenewal), 'premiumAmount', isBookedRenewal),
+    claim: build(tasksInPeriod.filter(isClaim), 'claimAmount', isBookedClaim),
+    fd: build(tasksInPeriod.filter(isFd), 'maturityAmount', isBookedFd),
+    policy: build(tasksInPeriod.filter(isPolicy), 'premiumAmount', () => true),
   };
 }
 
@@ -284,14 +324,14 @@ export default function DashboardView({
 
   // Business Overview — defaults to the current financial year but can be
   // pointed at any past month/FY via its own picker.
-  const prospectsForBiz = useMemo(() => filterByFilter(prospects, bizFilter), [prospects, bizFilter]);
+  const prospectsForBiz = useMemo(() => filterByFilter(prospects, bizFilter, prospectReportDate), [prospects, bizFilter]);
   const tasksForBiz = useMemo(() => filterByFilter(tasks, bizFilter), [tasks, bizFilter]);
   const bizInv = useMemo(() => computeInv(prospectsForBiz), [prospectsForBiz]);
   const bizIns = useMemo(() => computeIns(prospectsForBiz), [prospectsForBiz]);
   const bizCobr = useMemo(() => computeCobr(tasksForBiz), [tasksForBiz]);
 
   // 1. Investment Operations — defaults to this month, own picker.
-  const prospectsForInv = useMemo(() => filterByFilter(prospects, invFilter), [prospects, invFilter]);
+  const prospectsForInv = useMemo(() => filterByFilter(prospects, invFilter, prospectReportDate), [prospects, invFilter]);
   const tasksForInv = useMemo(() => filterByFilter(tasks, invFilter), [tasks, invFilter]);
   const inv = useMemo(() => computeInv(prospectsForInv), [prospectsForInv]);
   const cobr = useMemo(() => computeCobr(tasksForInv), [tasksForInv]);
@@ -316,7 +356,7 @@ export default function DashboardView({
   // Fixed Deposits, Other Insurance Policies). Each is a Task row tagged by
   // `relatedTo`, with its own amount field and stage taxonomy (see
   // utils/cobrModules.js). Defaults to this month, own picker.
-  const tasksForServicing = useMemo(() => filterByFilter(tasks, servicingFilter), [tasks, servicingFilter]);
+  const tasksForServicing = useMemo(() => filterByFilter(tasks, servicingFilter, servicingReportDate), [tasks, servicingFilter]);
   const servicing = useMemo(() => computeServicing(tasksForServicing), [tasksForServicing]);
 
   // 3. Client metrics calculations
@@ -370,8 +410,8 @@ export default function DashboardView({
   // FY figures below are only a fallback for the moment before that lands (and
   // if the call fails), computed off the same math over this user's own data.
   const fixedFy = useMemo(() => defaultFilter('year'), []);
-  const localFyInv = useMemo(() => computeInv(filterByFilter(prospects, fixedFy)), [prospects, fixedFy]);
-  const localFyIns = useMemo(() => computeIns(filterByFilter(prospects, fixedFy)), [prospects, fixedFy]);
+  const localFyInv = useMemo(() => computeInv(filterByFilter(prospects, fixedFy, prospectReportDate)), [prospects, fixedFy]);
+  const localFyIns = useMemo(() => computeIns(filterByFilter(prospects, fixedFy, prospectReportDate)), [prospects, fixedFy]);
 
   const crmNetSip = mpComputed?.netSipFy ?? localFyInv.netSip;
   const crmNetInsurance = mpComputed?.netInsuranceFy ?? localFyIns.netFlow;
@@ -1026,9 +1066,9 @@ export default function DashboardView({
               <PeriodFilter filter={servicingFilter} onChange={setServicingFilter} defaultMode="month" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-              <HeroKpi icon={CalendarCheck} accent="blue" label="Renewal Premium" value={fmtINR(servicing.renewal.amount)} hint={`${servicing.renewal.count} active renewal${servicing.renewal.count === 1 ? '' : 's'}`} />
-              <HeroKpi icon={AlertCircle} accent="cyan" label="Claims Amount" value={fmtINR(servicing.claim.amount)} hint={`${servicing.claim.count} active claim${servicing.claim.count === 1 ? '' : 's'}`} />
-              <HeroKpi icon={Landmark} accent="violet" label="FD Maturity Value" value={fmtINR(servicing.fd.amount)} hint={`${servicing.fd.count} FD${servicing.fd.count === 1 ? '' : 's'} tracked`} />
+              <HeroKpi icon={CalendarCheck} accent="blue" label="Renewal Premium" value={fmtINR(servicing.renewal.amount)} hint={`${servicing.renewal.count} renewal${servicing.renewal.count === 1 ? '' : 's'} paid`} />
+              <HeroKpi icon={AlertCircle} accent="cyan" label="Claims Amount" value={fmtINR(servicing.claim.amount)} hint={`${servicing.claim.count} claim${servicing.claim.count === 1 ? '' : 's'} settled`} />
+              <HeroKpi icon={Landmark} accent="violet" label="FD Maturity Value" value={fmtINR(servicing.fd.amount)} hint={`${servicing.fd.count} FD${servicing.fd.count === 1 ? '' : 's'} invested with us`} />
               <HeroKpi icon={Shield} accent="emerald" label="Other Policies Premium" value={fmtINR(servicing.policy.amount)} hint={`${servicing.policy.count} polic${servicing.policy.count === 1 ? 'y' : 'ies'}`} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">

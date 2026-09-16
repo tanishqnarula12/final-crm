@@ -23,6 +23,12 @@ const currentMonthRange = () => {
   return { first: `${y}-${pad2(m + 1)}-01`, last: `${y}-${pad2(m + 1)}-${pad2(lastDay)}` };
 };
 
+const fmtStageDate = (v) => {
+  if (!v) return '';
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
 export default function RecordTable({
   type,
   rows = [],
@@ -40,6 +46,9 @@ export default function RecordTable({
   canImportExcel = false,
   onDelete = null, // (record) => void — omit to hide the delete column entirely
   canDelete = null, // (record) => boolean
+  // (record) => date string — a milestone date shown under the stage badge
+  // once the record reaches the stage that milestone belongs to.
+  stageDateFor = null,
 }) {
   const [query, setQuery] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
@@ -231,6 +240,11 @@ export default function RecordTable({
                       <span className={`inline-flex items-center leading-none px-2 py-1 text-[10px] font-bold uppercase tracking-wider ring-1 rounded-full ${stageBadgeCls(type, r.stage)}`}>
                         {r.stage || '—'}
                       </span>
+                      {stageDateFor?.(r) && (
+                        <div className="text-[9px] font-semibold text-slate-400 dark:text-slate-500 mt-1 tabular-nums">
+                          {fmtStageDate(stageDateFor(r))}
+                        </div>
+                      )}
                     </td>
                     {onDelete && (
                       <td className="px-4 py-3 whitespace-nowrap align-middle">

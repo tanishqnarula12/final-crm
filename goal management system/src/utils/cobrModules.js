@@ -533,6 +533,13 @@ export const isOpenStage = (type, stage) => !(STAGE_SETS[type]?.terminal?.has(st
 
 // One immutable history row. A claim never overwrites a stage — every
 // transition appends one of these, carrying whatever that transition captured.
+// When a record first reached a given stage, read back from its own immutable
+// stageHistory. Lets a milestone date (a claim's settlement, an FD's
+// investment) be recovered from records that predate the field being stored,
+// instead of only being right for ones saved after.
+export const stageReachedAt = (history = [], stage) =>
+  (history || []).find((h) => h.stage === stage)?.at || '';
+
 export const makeHistoryEntry = ({ stage, action, note, attachments, settlementAmount, by }) => ({
   id: uid(),
   at: new Date().toISOString(),
@@ -634,8 +641,8 @@ export function diffAttachmentLog(original = [], updated = []) {
   const before = new Map((original || []).map((a) => [a.id, a]));
   const after = new Map((updated || []).map((a) => [a.id, a]));
   const lines = [];
-  for (const [id, a] of after) if (!before.has(id)) lines.push(`Attachment added: ${a.fileName || a.name || 'file'}`);
-  for (const [id, a] of before) if (!after.has(id)) lines.push(`Attachment removed: ${a.fileName || a.name || 'file'}`);
+  for (const [id, a] of after) if (!before.has(id)) lines.push(`Attachment added: ${a.name || a.fileName || 'file'}`);
+  for (const [id, a] of before) if (!after.has(id)) lines.push(`Attachment removed: ${a.name || a.fileName || 'file'}`);
   return lines;
 }
 

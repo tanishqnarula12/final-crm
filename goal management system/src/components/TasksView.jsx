@@ -279,6 +279,11 @@ function DocUploadGroup({ label, required, files, onAdd, onRemove, existingDocs 
   const handleUseExisting = (doc) => {
     onAdd([{
       id: doc.id,
+      // Carry the client-profile name across, not just the raw upload
+      // filename — it's what the chip shows, and a linked document that
+      // arrived here without it read as "IMG_20240101.jpg" instead of
+      // "Aadhaar Card_Gaurav Bansal".
+      name: doc.name || doc.fileName,
       fileName: doc.fileName || doc.name,
       fileType: doc.fileType || 'application/octet-stream',
       dataUrl: doc.dataUrl || doc.data || '',

@@ -379,7 +379,10 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
                       {p.groupLeader && <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 flex items-center gap-1"><Crown size={10} className="text-amber-500" /> {p.groupLeader}</div>}
                     </td>
                     <td className="px-6 py-4 text-right tabular-nums font-bold text-slate-900 dark:text-white">{fmtAmountINR(p.amount)}</td>
-                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400 tabular-nums">{p.closingDate ? new Date(p.closingDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</td>
+                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400 tabular-nums">
+                      {(p.closedAt || p.closingDate) ? new Date(p.closedAt || p.closingDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                      {p.closedAt && <div className="text-[9px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mt-0.5">Closed</div>}
+                    </td>
                     <td className="px-6 py-4 text-center">
                       <span className={`inline-flex items-center px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full ring-1 ${ALL_STAGE_THEME[p.stage || 'Qualified']}`}>{p.stage || 'Qualified'}</span>
                     </td>
@@ -469,6 +472,11 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
           (i.e. no onOpenProspect was supplied by a parent like App.jsx) */}
       {!onOpenProspect && editing && (
         <ProspectModal
+          // Keyed on the prospect: without this, opening a different prospect
+          // while the modal is already up reuses the same component instance,
+          // so every field seeded with useState (closing date included) keeps
+          // the PREVIOUS prospect's value.
+          key={editing.id}
           mode="edit"
           initial={editing}
           clients={clients}
@@ -511,6 +519,19 @@ function FilterChip({ label, count, active, onClick }) {
     </button>
   );
 }
+
+// The stages that mean an investment prospect is finished, either way. Landing
+// on one stamps the actual closing date (`closedAt`), which is what the
+// dashboard reports on — distinct from `closingDate`, the EXPECTED close the
+// RM maintains while the deal is still in flight.
+const CLOSED_PROSPECT_STAGES = new Set(['Close Won', 'Close Lost']);
+
+// Local (not UTC) YYYY-MM-DD, matching what <input type="date"> stores —
+// toISOString() would shift the date backward for anyone west of UTC.
+const todayDateString = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 // ===========================================================================
 // PROSPECT MODAL — confirmation/edit form
@@ -782,9 +803,15 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
   // Policy-Issued date/document are all shown with "*" / "Required" guidance
   // for completeness, but are intentionally NOT enforced — a prospect can be
   // created or saved with a partial (or empty) KYC section.
+  // Moving an investment prospect out of Pre-Qualified is the point the RM /
+  // Portfolio Manager commits to a date the deal is expected to close on, so
+  // the expected Closing Date stops being optional right here.
+  const needsClosingDate = isEdit && initialStage === 'Pre-Qualified' && stage === 'Qualified';
+
   const canSave = (!isEdit || canEditDetails || canChangeStage) &&
     groupLeader.trim() && applicant.trim() && items.length > 0 &&
     (!stageChanged || stageRemark.trim()) &&
+    (!needsClosingDate || !!closingDate) &&
     items.every(it => String(it.amount || '').trim() !== '' && Number(it.amount) > 0);
 
   // Pushes newly uploaded KYC documents into the linked client's Documents/Attachments
@@ -914,6 +941,10 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
     const shared = {
       groupLeaderId: seed.groupLeaderId || initial?.groupLeaderId || '',
       groupLeader: groupLeader.trim(), applicant: applicant.trim(), pan, closingDate,
+      // Stamped the first time the prospect actually lands on a closing stage
+      // and never re-stamped afterwards, so a later edit (or a re-save at the
+      // same stage) can't drift the date the business actually closed on.
+      closedAt: CLOSED_PROSPECT_STAGES.has(stage) ? (initial?.closedAt || todayDateString()) : '',
       serviceManager, relationshipManager, owner, internalManager, insuranceManager, portfolioManager,
       kyc: hasInsuranceItem ? kyc : (seed.kyc || {}),
       documents: hasInsuranceItem ? safeDocuments : (seed.documents || {}),
@@ -1081,6 +1112,12 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
             </div>
           )}
 
+          {needsClosingDate && !closingDate && (
+            <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/60 dark:bg-amber-950/15 px-4 py-3 text-xs font-semibold text-amber-700 dark:text-amber-400">
+              Confirm the expected Closing Date below before moving this prospect to Qualified.
+            </div>
+          )}
+
           {/* Prospect details (closing date, team assignments) — locked
               read-only (via a native disabled <fieldset>, which cascades to
               every input/select inside) unless this account is Admin or holds
@@ -1168,12 +1205,14 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
                 <div className="flex items-center gap-3">
                   {showDateField && (
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Closing Date</span>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${needsClosingDate && !closingDate ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
+                        Closing Date{needsClosingDate ? ' *' : ''}
+                      </span>
                       <input
                         type="date"
                         value={closingDate}
                         onChange={(e) => setClosingDate(e.target.value)}
-                        className={inputCls + ' py-1.5 w-36'}
+                        className={inputCls + ` py-1.5 w-36${needsClosingDate && !closingDate ? ' !border-amber-400 dark:!border-amber-600' : ''}`}
                       />
                     </div>
                   )}
@@ -1706,6 +1745,11 @@ function DocUploadGroup({ label, required, files, onAdd, onRemove, existingDocs 
   const handleUseExisting = (doc) => {
     onAdd([{
       id: doc.id,
+      // Carry the client-profile name across, not just the raw upload
+      // filename — it's what the chip shows, and a linked document that
+      // arrived here without it read as "IMG_20240101.jpg" instead of
+      // "Aadhaar Card_Gaurav Bansal".
+      name: doc.name || doc.fileName,
       fileName: doc.fileName || doc.name,
       fileType: doc.fileType || 'application/octet-stream',
       dataUrl: doc.dataUrl || doc.data || '',

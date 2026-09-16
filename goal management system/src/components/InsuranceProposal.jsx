@@ -1004,6 +1004,9 @@ export default function InsuranceProposal({ client, isViewer }) {
         kind: 'insurance',
         label: 'Insurance Proposal',
         html,
+        // Named for what it actually is: the proposer it was drawn for, the
+        // insurance types it covers, and the day it was saved.
+        name: `${proposer || client.name} – ${getProposalTypesLabel()} Insurance Proposal ${fmtFileDate()}`,
       });
       setProspectToast(`✅ Saved to Documents as ${name}`);
     } catch (err) {

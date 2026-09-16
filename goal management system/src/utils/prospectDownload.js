@@ -74,7 +74,7 @@ const buildDocumentsSection = (documents) => {
     const appName = key.includes(DOC_KEY_SEP) ? key.split(DOC_KEY_SEP)[1] : (files[0]?.applicantName || 'General');
     const label   = resolveDocLabel(key);
     if (!byApplicant[appName]) byApplicant[appName] = [];
-    files.forEach(f => byApplicant[appName].push({ label, fileName: f.fileName || f.name || 'file' }));
+    files.forEach(f => byApplicant[appName].push({ label, fileName: f.name || f.fileName || 'file' }));
   });
 
   const applicantBlocks = Object.entries(byApplicant).map(([appName, items]) => {

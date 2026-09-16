@@ -21,7 +21,7 @@ import { RecordModal, AssignmentFields, LogTimeline, ViewEditFooter } from './Re
 import {
   REC, CLAIM_STAGES, CLAIM_TYPES, RENEWAL_CLAIM_INSURANCE_TYPES,
   MOTOR_VEHICLE_TYPES, MOTOR_COVERAGE_TYPES, claimActionsFor, claimIsClosed,
-  claimSettledTotal, makeHistoryEntry, recordTaskName, stageBadgeCls, STAGE_BTN_TONE,
+  claimSettledTotal, makeHistoryEntry, recordTaskName, stageBadgeCls, STAGE_BTN_TONE, stageReachedAt,
   useEditGate, buildFieldChangeLog, diffAttachmentLog, toLogComments,
 } from '../../utils/cobrModules';
 import { getCurrentUser } from '../../utils/auth';
@@ -165,6 +165,11 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
       ...f,
       stage,
       settlementAmount: claimSettledTotal(hist),
+      // Stamped once, when the claim actually reaches full settlement, and
+      // never re-stamped by a later save.
+      settlementDate: stage === 'Claim Settled'
+        ? (record?.settlementDate || stageReachedAt(hist, 'Claim Settled') || now)
+        : (record?.settlementDate || ''),
       stageHistory: hist,
       comments: cmts,
       subPerson: f.subPersons[0] || '',

@@ -165,11 +165,17 @@ export const snapshotElementHtml = (el) => {
 
 // Persist a generated HTML document onto the client's Documents/Attachments.
 // Returns the generated document name. Throws if there is no client.
-export const saveGeneratedDocument = async (client, { kind, label, html }) => {
+export const saveGeneratedDocument = async (client, { kind, label, html, name: explicitName }) => {
   if (!client?.id) throw new Error('This document is not linked to a saved client, so it cannot be saved.');
-  const name = buildDocName(kind, client.name);
+  // Callers that know what the document actually IS (a proposal knows the
+  // applicant it was drawn for and which proposal types it covers) pass their
+  // own name; buildDocName is the fallback for everything else.
+  const name = (explicitName || '').trim() || buildDocName(kind, client.name);
   const attachment = {
-    id: 'doc-' + Date.now(),
+    // Date.now() alone collides when two documents are saved in the same
+    // millisecond, and a duplicate id makes two distinct documents
+    // indistinguishable to every by-id lookup that touches attachments.
+    id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name,
     fileName: name + '.html',
     fileType: 'text/html',

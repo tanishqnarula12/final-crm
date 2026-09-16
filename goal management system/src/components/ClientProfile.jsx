@@ -1751,7 +1751,8 @@ function ProspectsBox({ prospects, onSelectProspect, emptyText }) {
                 {fmtAmountINR(p.amount)}
               </td>
               <td className="px-4 py-3 text-center text-slate-600 dark:text-slate-400 tabular-nums">
-                {p.closingDate ? new Date(p.closingDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                {(p.closedAt || p.closingDate) ? new Date(p.closedAt || p.closingDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                {p.closedAt && <div className="text-[9px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mt-0.5">Closed</div>}
               </td>
               <td className="px-4 py-3 text-center">
                 <span className={`inline-flex px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md ring-1 shrink-0 ${ALL_STAGE_THEME[p.stage || 'Qualified']}`}>

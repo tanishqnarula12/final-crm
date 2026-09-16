@@ -24,7 +24,7 @@ import AttachmentField from './AttachmentField';
 import { RecordModal, AssignmentFields, LogTimeline, ViewEditFooter } from './RecordShell';
 import {
   REC, fdActionsFor, fdIsClosed, makeHistoryEntry, recordTaskName,
-  stageBadgeCls, STAGE_BTN_TONE, useEditGate, buildFieldChangeLog, diffAttachmentLog, toLogComments,
+  stageBadgeCls, STAGE_BTN_TONE, useEditGate, buildFieldChangeLog, diffAttachmentLog, toLogComments, stageReachedAt,
 } from '../../utils/cobrModules';
 import { getCurrentUser } from '../../utils/auth';
 import { uid, fmtINR } from '../../utils/calc';
@@ -181,6 +181,11 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
       stage,
       // Only meaningful once that specific outcome actually happened.
       investmentAmount: stage === 'Invested With Us' ? investmentAmount : '',
+      // Stamped once, when the money actually came in, and never re-stamped
+      // by a later save.
+      investmentDate: stage === 'Invested With Us'
+        ? (record?.investmentDate || stageReachedAt(hist, 'Invested With Us') || now)
+        : (record?.investmentDate || ''),
       nextReminderDate: stage === 'FD Renewed' ? nextReminderDate : '',
       stageHistory: hist,
       comments: cmts,

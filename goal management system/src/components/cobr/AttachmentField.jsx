@@ -30,7 +30,7 @@ export function AttachmentChips({ files = [], onRemove, compact = false }) {
               onClick={() => f.dataUrl && setPreview(f)}
               className="truncate hover:underline cursor-pointer"
             >
-              {f.fileName || 'file'}
+              {f.name || f.fileName || 'file'}
             </button>
             {onRemove && (
               <button

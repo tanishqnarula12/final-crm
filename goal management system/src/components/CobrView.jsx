@@ -15,7 +15,7 @@ import { loadTasks, saveTasks } from '../utils/tasks';
 import { COBR_STAGES, cobrTotals, isCobrTask } from '../utils/cobr';
 import {
   REC, RENEWAL_STAGES, CLAIM_STAGES, FD_STAGES, POLICY_STAGES,
-  isRenewal, isClaim, isFd, isPolicy, isOpenStage, claimSettlementDisplay, COBR_EXCEL_SPEC,
+  isRenewal, isClaim, isFd, isPolicy, isOpenStage, claimSettlementDisplay, COBR_EXCEL_SPEC, stageReachedAt,
 } from '../utils/cobrModules';
 import { teamName } from '../services/team';
 import { fmtINR } from '../utils/calc';
@@ -256,6 +256,7 @@ export default function CobrView({
           canImportExcel={canImportFor(REC.CLAIM)}
           onDelete={(r) => handleDeleteRecord(REC.CLAIM, r)}
           canDelete={(r) => canDeleteFor(REC.CLAIM, r)}
+          stageDateFor={(r) => (r.stage === 'Claim Settled' ? (r.settlementDate || stageReachedAt(r.stageHistory, 'Claim Settled')) : '')}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
             { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
@@ -295,6 +296,7 @@ export default function CobrView({
           canImportExcel={canImportFor(REC.FD)}
           onDelete={(r) => handleDeleteRecord(REC.FD, r)}
           canDelete={(r) => canDeleteFor(REC.FD, r)}
+          stageDateFor={(r) => (r.stage === 'Invested With Us' ? (r.investmentDate || stageReachedAt(r.stageHistory, 'Invested With Us')) : '')}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
             { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },

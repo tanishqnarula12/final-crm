@@ -2140,7 +2140,7 @@ export default function App() {
               const newId = uid();
               try {
                 await addClient({ id: newId, name, pan, age: Number(age) || 0, clientDetails, createdAt: new Date().toISOString() });
-                updateLead(convertingLead.id, { stage: 'Converted', clientId: newId }, advisorProfile.name || getCurrentUser()?.name || 'System');
+                updateLead(convertingLead.id, { stage: 'Converted', clientId: newId, convertedAt: new Date().toISOString() }, advisorProfile.name || getCurrentUser()?.name || 'System');
                 // Carry the lead's MOM (if it drafted one) over to the new
                 // client so it shows up in Draft MOM there. AWAITED (not
                 // fire-and-forget) so the loadData() below reflects the
@@ -2260,6 +2260,11 @@ export default function App() {
 
       {showProspectForm && editingProspect && (
         <ProspectModal
+          // Keyed on the prospect: without this, opening a different prospect
+          // while the modal is already up reuses the same component instance,
+          // so every field seeded with useState (closing date included) keeps
+          // the PREVIOUS prospect's value.
+          key={editingProspect.id}
           mode="edit"
           initial={editingProspect}
           clients={clients}
