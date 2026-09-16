@@ -43,6 +43,12 @@ const TABS = [
 const d = (s) => (s ? new Date(s).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
 const money = (v) => (v === '' || v == null ? '—' : fmtINR(Number(v) || 0));
 
+// When the record actually closed. Records saved before these fields existed
+// still carry the moment in their own stage history, so read it back from
+// there rather than showing a dash for everything already settled/invested.
+const claimClosedOn = (r) => r.settlementDate || stageReachedAt(r.stageHistory, 'Claim Settled');
+const fdClosedOn = (r) => r.investmentDate || stageReachedAt(r.stageHistory, 'Invested With Us');
+
 export default function CobrView({
   isViewer,
   clients = [],
@@ -249,14 +255,13 @@ export default function CobrView({
           dateField={{ key: 'dueDate', label: 'Target date' }}
           onOpen={(r) => setEditor({ type: REC.CLAIM, record: r })}
           emptyText="No claims registered yet."
-          minWidth={1340}
+          minWidth={1480}
           excelSpec={COBR_EXCEL_SPEC[REC.CLAIM]}
           clients={clients}
           onImportRecords={handleImportRecords}
           canImportExcel={canImportFor(REC.CLAIM)}
           onDelete={(r) => handleDeleteRecord(REC.CLAIM, r)}
           canDelete={(r) => canDeleteFor(REC.CLAIM, r)}
-          stageDateFor={(r) => (r.stage === 'Claim Settled' ? (r.settlementDate || stageReachedAt(r.stageHistory, 'Claim Settled')) : '')}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
             { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
@@ -275,6 +280,12 @@ export default function CobrView({
               },
               sortValue: (r) => claimSettlementDisplay(r).amount,
             },
+            {
+              key: 'settlementDate',
+              label: 'Settlement Date',
+              render: (r) => (r.stage === 'Claim Settled' ? d(claimClosedOn(r)) : '—'),
+              sortValue: (r) => claimClosedOn(r) || '',
+            },
           ]}
         />
       )}
@@ -289,14 +300,13 @@ export default function CobrView({
           dateField={{ key: 'maturityDate', label: 'Maturity' }}
           onOpen={(r) => setEditor({ type: REC.FD, record: r })}
           emptyText="No fixed deposits tracked yet."
-          minWidth={1500}
+          minWidth={1640}
           excelSpec={COBR_EXCEL_SPEC[REC.FD]}
           clients={clients}
           onImportRecords={handleImportRecords}
           canImportExcel={canImportFor(REC.FD)}
           onDelete={(r) => handleDeleteRecord(REC.FD, r)}
           canDelete={(r) => canDeleteFor(REC.FD, r)}
-          stageDateFor={(r) => (r.stage === 'Invested With Us' ? (r.investmentDate || stageReachedAt(r.stageHistory, 'Invested With Us')) : '')}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
             { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
@@ -312,6 +322,12 @@ export default function CobrView({
               align: 'right',
               render: (r) => (r.stage === 'Invested With Us' ? <span className="font-bold text-violet-600 dark:text-violet-400">{money(r.investmentAmount)}</span> : '—'),
               sortValue: (r) => (r.stage === 'Invested With Us' ? Number(r.investmentAmount) || 0 : 0),
+            },
+            {
+              key: 'investmentDate',
+              label: 'Investment Date',
+              render: (r) => (r.stage === 'Invested With Us' ? d(fdClosedOn(r)) : '—'),
+              sortValue: (r) => fdClosedOn(r) || '',
             },
           ]}
         />
