@@ -26,13 +26,37 @@ export async function hydrateProspects() {
 }
 
 export const saveProspects = (prospects) => {
+  // Every caller (persist a single edit, addProspects a new create, a
+  // Client-Profile-driven update) builds its "next" array by copying the
+  // FULL previous list and changing only the record(s) it actually means to
+  // touch — so `before` (this tab's own cache, one line up) still lines up
+  // 1:1 with everything in `prospects` this tab did NOT just edit.
+  const before = cache;
   cache = prospects;
   window.dispatchEvent(new Event('crm:prospects-updated'));
-  // The server validates every change (RBAC — investment vs insurance rules
-  // differ per prospect) and returns the authoritative list; reconcile so a
-  // rejected create/edit/stage-change reverts in the UI instead of silently
-  // "sticking" locally while never actually persisting.
-  api.put('/prospects', { prospects })
+  const beforeById = new Map(before.map((p) => [p.id, p]));
+  // This tab's cache only refreshes on login, an explicit re-hydrate, or a
+  // PROSPECT_ASSIGNED notification — a stage move by someone else (no
+  // reassignment involved) never reaches an open tab. Blindly PUTting the
+  // full array would then resend THIS tab's stale copy of every prospect it
+  // never touched, and the server — seeing a real, authorized change —
+  // silently reverts whoever else's more recent edit, mis-attributed to
+  // whoever happened to save next (e.g. creating an unrelated prospect from
+  // a proposal). So: re-fetch live state first, and for every record this
+  // tab did NOT itself just change (identical to what `before` already had),
+  // ship the server's current value instead of this tab's possibly-stale one
+  // — only this tab's own real, intended edits ever get sent as-is.
+  api.get('/prospects')
+    .then(({ prospects: fresh } = {}) => {
+      const freshById = new Map((Array.isArray(fresh) ? fresh : []).map((p) => [p.id, p]));
+      const rebased = prospects.map((p) => {
+        const prior = beforeById.get(p.id);
+        const touchedByThisTab = !prior || JSON.stringify(prior) !== JSON.stringify(p);
+        if (touchedByThisTab) return p;
+        return freshById.get(p.id) || p;
+      });
+      return api.put('/prospects', { prospects: rebased });
+    })
     .then((res) => {
       if (Array.isArray(res?.prospects)) {
         cache = res.prospects;
