@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   UserPlus, Search, Plus, X, Phone, MessageCircle, Mail, CalendarPlus,
   Trash2, Pencil, Check, Clock, Crown, LayoutGrid, Table as TableIcon,
   Flame, Star, Snowflake, ArrowRight, CheckCircle2, Send, Zap, Activity,
-  Briefcase, RefreshCw, ChevronRight, User, FileText, Filter,
+  Briefcase, RefreshCw, ChevronRight, User, FileText,
   MapPin, Tag, UsersRound, CalendarDays, AlertCircle,
 } from 'lucide-react';
-import { Card, Avatar, Field, inputCls, selectCls, btnPrimary, btnSecondary, btnGhost, CoolSelect } from './UI';
+import { Card, Avatar, Field, inputCls, selectCls, btnPrimary, btnSecondary, btnGhost, CoolSelect, MultiSelect } from './UI';
 import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
 import { canAssignLead, canCreateLead, canDeleteLead, canEditLead, isAdmin } from '../utils/permissions';
@@ -40,108 +40,6 @@ const loadSavedFilters = () => {
     return { ...DEFAULT_FILTERS };
   }
 };
-
-// The checkbox list shared by both trigger styles below.
-function MultiSelectOptions({ label, options, selected, onChange }) {
-  const toggle = (value) => onChange(selected.includes(value) ? selected.filter(v => v !== value) : [...selected, value]);
-  return (
-    <>
-      <div className="max-h-64 overflow-y-auto space-y-0.5">
-        {options.map(opt => {
-          const checked = selected.includes(opt.value);
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => toggle(opt.value)}
-              className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-all cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60"
-            >
-              <span className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-all ${
-                checked ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-slate-700'
-              }`}>
-                {checked && <Check size={11} />}
-              </span>
-              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex-1 truncate">{opt.label}{opt.count != null ? ` (${opt.count})` : ''}</span>
-            </button>
-          );
-        })}
-      </div>
-      {selected.length > 0 && (
-        <button type="button" onClick={() => onChange([])} className="w-full mt-1 pt-1.5 border-t border-slate-100 dark:border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">
-          Clear {label}
-        </button>
-      )}
-    </>
-  );
-}
-
-// Small filter-icon trigger for a table column header — same interaction as
-// the Client Directory's "Manage columns" button (icon button -> portal
-// popover positioned off the trigger's own rect, since the table sits inside
-// an overflow-x-auto wrapper that would otherwise clip a plain dropdown).
-function HeaderFilterButton({ label, options, selected, onChange }) {
-  const [open, setOpen] = useState(false);
-  const [rect, setRect] = useState(null);
-  const triggerRef = useRef(null);
-
-  const updateRect = () => {
-    const r = triggerRef.current?.getBoundingClientRect();
-    if (!r) return;
-    const dropdownWidth = 220;
-    const margin = 12;
-    const clientWidth = document.documentElement.clientWidth;
-    let left = r.right - dropdownWidth;
-    const maxLeft = clientWidth - dropdownWidth - margin;
-    if (left > maxLeft) left = maxLeft;
-    if (left < margin) left = margin;
-    setRect({ top: r.bottom + 6, left });
-  };
-
-  const toggleOpen = () => { updateRect(); setOpen(o => !o); };
-
-  useEffect(() => {
-    if (!open) return;
-    window.addEventListener('scroll', updateRect, true);
-    window.addEventListener('resize', updateRect);
-    return () => {
-      window.removeEventListener('scroll', updateRect, true);
-      window.removeEventListener('resize', updateRect);
-    };
-  }, [open]);
-
-  const active = selected.length > 0;
-
-  return (
-    <>
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={toggleOpen}
-        title={`Filter by ${label}`}
-        className={`relative inline-flex items-center justify-center w-6 h-6 rounded-lg border transition-all cursor-pointer ${
-          open || active
-            ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900/60'
-            : 'bg-white dark:bg-slate-900 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-800 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-300 dark:hover:border-blue-800'
-        }`}
-      >
-        <Filter size={12} />
-        {active && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-blue-600 text-white text-[8px] font-bold flex items-center justify-center leading-none">{selected.length}</span>}
-      </button>
-      {open && rect && createPortal(
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div
-            style={{ position: 'fixed', top: `${rect.top}px`, left: `${rect.left}px` }}
-            className="w-[220px] rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/80 shadow-2xl z-50 p-2 animate-scale-up text-left normal-case tracking-normal"
-          >
-            <MultiSelectOptions label={label} options={options} selected={selected} onChange={onChange} />
-          </div>
-        </>,
-        document.body
-      )}
-    </>
-  );
-}
 
 const scoreChip = (score) => {
   const band = scoreBand(score);
@@ -319,7 +217,7 @@ export default function LeadsView({
       </div>
 
       {/* Status filter — Stage and RM moved into small filter-icon buttons in
-          the table header itself (see HeaderFilterButton below), matching
+          the table header itself (shared MultiSelect, icon variant), matching
           the Client Directory's column-picker rather than sitting up here. */}
       <div className="flex flex-wrap items-center gap-2">
         {['Active', 'Lost', 'Dormant', 'Junk', 'all'].map(s => (
@@ -368,7 +266,7 @@ export default function LeadsView({
                   <th className="text-center px-6 py-4 font-bold">
                     <span className="inline-flex items-center gap-1.5">
                       RM
-                      <HeaderFilterButton
+                      <MultiSelect variant="icon"
                         label="RM"
                         options={[{ value: 'unassigned', label: 'Unassigned' }, ...loadTeam().map(m => ({ value: m.id, label: m.name }))]}
                         selected={rmFilters} onChange={setRmFilters}
@@ -378,7 +276,7 @@ export default function LeadsView({
                   <th className="text-center px-6 py-4 font-bold">
                     <span className="inline-flex items-center gap-1.5">
                       Stage
-                      <HeaderFilterButton
+                      <MultiSelect variant="icon"
                         label="stage"
                         options={LEAD_STAGES.map(s => ({ value: s, label: s, count: counts[s] }))}
                         selected={stageFilters} onChange={setStageFilters}

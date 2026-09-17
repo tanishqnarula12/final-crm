@@ -6,7 +6,7 @@ import {
   LayoutGrid, Table as TableIcon, History, ArrowRight, Crown, Upload, Paperclip, ShieldCheck, Plus, Check, Download, Eye, Copy,
   SlidersHorizontal, FileSpreadsheet
 } from 'lucide-react';
-import { Card, Avatar, btnPrimary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
+import { Card, Avatar, btnPrimary, btnGhost, inputCls, selectCls, Field, CoolSelect, MultiSelect } from './UI';
 import {
   loadProspects, saveProspects, addProspects, CATEGORY_THEME, CATEGORY_LABEL, fmtProspectStamp, fmtAmountINR,
   PROSPECT_STAGES, INSURANCE_PROSPECT_STAGES, ALL_STAGE_THEME, ALL_PROSPECT_STAGES
@@ -154,12 +154,22 @@ const getSchemesForCategory = (cat) => {
 // List filters persist per browser, same as Leads and the Client Directory —
 // only an explicit Clear resets them. The search box is deliberately NOT
 // persisted: a stale search term reads as an empty list, not as a filter.
+// stage / cat / proposalType are multi-select — [] means "no restriction",
+// so an empty array reads as All, same convention the Leads filters use.
 const FILTERS_KEY = 'crm:prospect-filters';
-const DEFAULT_FILTERS = { stage: 'all', cat: 'all', proposalType: 'all', dateType: 'created', from: '', to: '' };
+const DEFAULT_FILTERS = { stages: [], cats: [], proposalTypes: [], dateType: 'created', from: '', to: '' };
+const asArray = (v, fallback) => (Array.isArray(v) ? v : fallback);
 const loadSavedFilters = () => {
   try {
     const raw = localStorage.getItem(FILTERS_KEY);
-    return raw ? { ...DEFAULT_FILTERS, ...JSON.parse(raw) } : { ...DEFAULT_FILTERS };
+    const parsed = raw ? JSON.parse(raw) : null;
+    return {
+      ...DEFAULT_FILTERS,
+      ...parsed,
+      stages: asArray(parsed?.stages, DEFAULT_FILTERS.stages),
+      cats: asArray(parsed?.cats, DEFAULT_FILTERS.cats),
+      proposalTypes: asArray(parsed?.proposalTypes, DEFAULT_FILTERS.proposalTypes),
+    };
   } catch {
     return { ...DEFAULT_FILTERS };
   }
@@ -172,9 +182,9 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
   const [prospects, setProspects] = useState(() => loadProspects());
   const [query, setQuery] = useState(initialQuery);
   const savedFilters = useMemo(loadSavedFilters, []);
-  const [stageFilter, setStageFilter] = useState(savedFilters.stage);
-  const [catFilter, setCatFilter] = useState(savedFilters.cat);
-  const [proposalTypeFilter, setProposalTypeFilter] = useState(savedFilters.proposalType);
+  const [stageFilters, setStageFilters] = useState(savedFilters.stages);
+  const [catFilters, setCatFilters] = useState(savedFilters.cats);
+  const [proposalTypeFilters, setProposalTypeFilters] = useState(savedFilters.proposalTypes);
   const [dateType, setDateType] = useState(savedFilters.dateType); // 'created' | 'closing'
   const [fromDate, setFromDate] = useState(savedFilters.from);
   const [toDate, setToDate] = useState(savedFilters.to);
@@ -231,11 +241,11 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
   useEffect(() => {
     try {
       localStorage.setItem(FILTERS_KEY, JSON.stringify({
-        stage: stageFilter, cat: catFilter, proposalType: proposalTypeFilter,
+        stages: stageFilters, cats: catFilters, proposalTypes: proposalTypeFilters,
         dateType, from: fromDate, to: toDate,
       }));
     } catch { /* private mode / quota — filters just won't persist */ }
-  }, [stageFilter, catFilter, proposalTypeFilter, dateType, fromDate, toDate]);
+  }, [stageFilters, catFilters, proposalTypeFilters, dateType, fromDate, toDate]);
 
   // Offered in the Proposal Type picker: whatever types actually exist in the
   // data, so the list can never offer a type that matches nothing (or miss a
@@ -246,15 +256,15 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
   );
 
   const activeFilterCount =
-    (stageFilter !== DEFAULT_FILTERS.stage ? 1 : 0) +
-    (catFilter !== DEFAULT_FILTERS.cat ? 1 : 0) +
-    (proposalTypeFilter !== DEFAULT_FILTERS.proposalType ? 1 : 0) +
+    (stageFilters.length > 0 ? 1 : 0) +
+    (catFilters.length > 0 ? 1 : 0) +
+    (proposalTypeFilters.length > 0 ? 1 : 0) +
     (fromDate || toDate ? 1 : 0);
 
   const clearFilters = () => {
-    setStageFilter(DEFAULT_FILTERS.stage);
-    setCatFilter(DEFAULT_FILTERS.cat);
-    setProposalTypeFilter(DEFAULT_FILTERS.proposalType);
+    setStageFilters([]);
+    setCatFilters([]);
+    setProposalTypeFilters([]);
     setDateType(DEFAULT_FILTERS.dateType);
     setFromDate(DEFAULT_FILTERS.from);
     setToDate(DEFAULT_FILTERS.to);
@@ -274,9 +284,9 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
       return true;
     };
     return prospects
-      .filter(p => stageFilter === 'all' || (p.stage || 'Qualified') === stageFilter)
-      .filter(p => catFilter === 'all' || p.proposalCategory === catFilter)
-      .filter(p => proposalTypeFilter === 'all' || p.proposalType === proposalTypeFilter)
+      .filter(p => stageFilters.length === 0 || stageFilters.includes(p.stage || 'Qualified'))
+      .filter(p => catFilters.length === 0 || catFilters.includes(p.proposalCategory))
+      .filter(p => proposalTypeFilters.length === 0 || proposalTypeFilters.includes(p.proposalType))
       .filter(inDateRange)
       .filter(p => !q ||
         (p.applicant || '').toLowerCase().includes(q) ||
@@ -284,7 +294,7 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
         (p.proposalType || '').toLowerCase().includes(q) ||
         (p.pan || '').toLowerCase().includes(q))
       .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-  }, [prospects, query, stageFilter, catFilter, proposalTypeFilter, dateType, fromDate, toDate]);
+  }, [prospects, query, stageFilters, catFilters, proposalTypeFilters, dateType, fromDate, toDate]);
 
   // Exports exactly what's on screen — same `filtered` rows the list renders.
   const handleExportExcel = () => {
@@ -412,25 +422,26 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
             <Field label="To Date">
               <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className={inputCls} />
             </Field>
-            <Field label="Business Type">
-              <CoolSelect value={catFilter} onChange={(e) => setCatFilter(e.target.value)} className={selectCls}>
-                <option value="all">All Business Types</option>
-                {['investment', 'insurance', 'othercode'].map(c => (
-                  <option key={c} value={c}>{CATEGORY_LABEL[c] || c}</option>
-                ))}
-              </CoolSelect>
+            <Field label="Business Type" hint="Pick any number — leave empty for all">
+              <MultiSelect
+                label="business types" allLabel="All Business Types"
+                options={['investment', 'insurance', 'othercode'].map(c => ({ value: c, label: CATEGORY_LABEL[c] || c }))}
+                selected={catFilters} onChange={setCatFilters}
+              />
             </Field>
-            <Field label="Proposal Type">
-              <CoolSelect value={proposalTypeFilter} onChange={(e) => setProposalTypeFilter(e.target.value)} className={selectCls}>
-                <option value="all">All Proposal Types</option>
-                {proposalTypeOptions.map(t => <option key={t} value={t}>{t}</option>)}
-              </CoolSelect>
+            <Field label="Proposal Type" hint="Pick any number — leave empty for all">
+              <MultiSelect
+                label="proposal types" allLabel="All Proposal Types"
+                options={proposalTypeOptions.map(t => ({ value: t, label: t }))}
+                selected={proposalTypeFilters} onChange={setProposalTypeFilters}
+              />
             </Field>
-            <Field label="Stage">
-              <CoolSelect value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} className={selectCls}>
-                <option value="all">All Stages</option>
-                {ALL_PROSPECT_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
-              </CoolSelect>
+            <Field label="Stage" hint="Pick any number — leave empty for all">
+              <MultiSelect
+                label="stages" allLabel="All Stages"
+                options={ALL_PROSPECT_STAGES.map(s => ({ value: s, label: s, count: stageCounts[s] }))}
+                selected={stageFilters} onChange={setStageFilters}
+              />
             </Field>
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4 pt-4 border-t border-slate-200/40 dark:border-slate-800/40">
@@ -447,26 +458,34 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
         </Card>
       )}
 
-      {/* Stage filter chips */}
+      {/* Stage / business-type chips — multi-select toggles over the same
+          state the filter panel's pickers use, so either affordance works and
+          the two always agree. "All" clears that axis back to no restriction. */}
       <div className="flex flex-wrap gap-2">
-        <FilterChip label="All" count={stageCounts.all} active={stageFilter === 'all'} onClick={() => setStageFilter('all')} />
-        {ALL_PROSPECT_STAGES.filter(s => stageCounts[s] > 0 || stageFilter === s).map(s => (
-          <FilterChip key={s} label={s} count={stageCounts[s]} active={stageFilter === s} onClick={() => setStageFilter(s)} />
+        <FilterChip label="All" count={stageCounts.all} active={stageFilters.length === 0} onClick={() => setStageFilters([])} />
+        {ALL_PROSPECT_STAGES.filter(s => stageCounts[s] > 0 || stageFilters.includes(s)).map(s => (
+          <FilterChip key={s} label={s} count={stageCounts[s]} active={stageFilters.includes(s)}
+            onClick={() => setStageFilters(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])} />
         ))}
         <span className="mx-1 w-px self-stretch bg-slate-200 dark:bg-slate-800" />
-        {['all', 'investment', 'insurance', 'othercode'].map(c => (
-          <button
-            key={c}
-            onClick={() => setCatFilter(c)}
-            className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${
-              catFilter === c
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
-            }`}
-          >
-            {c === 'all' ? 'All Types' : (CATEGORY_LABEL[c] || c)}
-          </button>
-        ))}
+        {['all', 'investment', 'insurance', 'othercode'].map(c => {
+          const active = c === 'all' ? catFilters.length === 0 : catFilters.includes(c);
+          return (
+            <button
+              key={c}
+              onClick={() => setCatFilters(prev => (
+                c === 'all' ? [] : prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]
+              ))}
+              className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${
+                active
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
+              }`}
+            >
+              {c === 'all' ? 'All Types' : (CATEGORY_LABEL[c] || c)}
+            </button>
+          );
+        })}
       </div>
 
       {/* List */}
