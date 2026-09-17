@@ -997,13 +997,6 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     const totalAmt = rows.reduce((s, r) => s + parseNum(r.amount), 0);
     const totalST = rows.reduce((s, r) => s + parseNum(r.shortTerm), 0);
     const totalLT = rows.reduce((s, r) => s + parseNum(r.longTerm), 0);
-    // Same blank-vs-zero distinction as the debt card below — a TOTAL of 0
-    // only means something when at least one row actually had a Long Term
-    // figure typed into it (a real net-zero result), not when every row
-    // simply left the field empty.
-    const hasAnyLT = rows.some(r => String(r.longTerm ?? '').trim() !== '');
-
-    const debtDisp = calc.hasDebtLT ? `₹ ${Math.round(calc.debtLTTax).toLocaleString('en-IN')}` : '—';
 
     const bankHTML = buildBankDetailsPrintHTML('redemption', thS, tdS);
     const rem = remarks.redemption;
@@ -1041,7 +1034,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
               <td colspan='3' style='background:#0047AB;color:#fff;padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;text-align:right;'>TOTAL</td>
               <td style='background:#0047AB;color:#fff;padding:10px 12px;font-size:13px;font-weight:700;text-align:right;white-space:nowrap;'>${fmtINRhtml(String(totalAmt))}</td>
               <td style='background:#0047AB;color:#fff;padding:10px 12px;font-size:13px;font-weight:700;text-align:right;white-space:nowrap;'>${fmtINRhtml(String(totalST))}</td>
-              <td style='background:#0047AB;color:#fff;padding:10px 12px;font-size:13px;font-weight:700;text-align:right;white-space:nowrap;'>${hasAnyLT ? fmtINRhtml(String(totalLT)) : '—'}</td>
+              <td style='background:#0047AB;color:#fff;padding:10px 12px;font-size:13px;font-weight:700;text-align:right;white-space:nowrap;'>${fmtINRhtml(String(totalLT))}</td>
               <td style='background:#0047AB;padding:10px 12px;'></td>
             </tr>
           </tbody>
@@ -1063,10 +1056,10 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
           <div style='flex:1;padding:14px 20px;background:#1a4a9c;border-radius:8px;color:#fff;'>
             <div style='font-size:10px;letter-spacing:1.5px;text-transform:uppercase;opacity:0.8;margin-bottom:8px;font-weight:700;'>Debt Tax Liability</div>
             ${calc.hasDebtST ? `<span style='display:inline-block;margin-bottom:8px;padding:3px 10px;background:rgba(255,255,255,0.92);color:#1a4a9c;font-size:10px;font-weight:700;border-radius:999px;letter-spacing:0.3px;'>As Per Tax Slab</span>` : ''}
-            <div style='font-size:20px;font-weight:800;margin-bottom:8px;'>${debtDisp}</div>
+            ${calc.hasDebtLT ? `<div style='font-size:20px;font-weight:800;margin-bottom:8px;'>₹ ${Math.round(calc.debtLTTax).toLocaleString('en-IN')}</div>` : ''}
             <div style='font-size:12px;opacity:0.9;line-height:1.6;'>
               Short Term: ${calc.hasDebtST ? 'As Per Tax Slab, will be added to your income' : '₹ 0'}<br>
-              Long Term: ${calc.hasDebtLT ? `₹ ${Math.round(calc.debtLTTax).toLocaleString('en-IN')}` : '—'}
+              Long Term: ₹ ${Math.round(calc.debtLTTax).toLocaleString('en-IN')}
             </div>
           </div>
         </div>
@@ -1717,17 +1710,19 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
                         <span>- Long Term (12.5%):</span>
                         <span>₹ {Math.round(taxes.equityLTTax).toLocaleString('en-IN')}</span>
                       </div>
-                      <div className="flex justify-between font-bold text-slate-900 dark:text-white pt-1 border-t border-slate-100 dark:border-slate-800">
-                        <span>Debt Tax Liability:</span>
-                        <span>{taxes.hasDebtLT ? `₹ ${Math.round(taxes.debtLTTax).toLocaleString('en-IN')}` : '—'}</span>
-                      </div>
+                      {taxes.hasDebtLT && (
+                        <div className="flex justify-between font-bold text-slate-900 dark:text-white pt-1 border-t border-slate-100 dark:border-slate-800">
+                          <span>Debt Tax Liability:</span>
+                          <span>₹ {Math.round(taxes.debtLTTax).toLocaleString('en-IN')}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between pl-3 text-[11px]">
                         <span>- Short Term:</span>
                         <span>{taxes.hasDebtST ? 'As Per Tax Slab' : '₹ 0'}</span>
                       </div>
                       <div className="flex justify-between pl-3 text-[11px]">
                         <span>- Long Term (12.5%):</span>
-                        <span>{taxes.hasDebtLT ? `₹ ${Math.round(taxes.debtLTTax).toLocaleString('en-IN')}` : '—'}</span>
+                        <span>₹ {Math.round(taxes.debtLTTax).toLocaleString('en-IN')}</span>
                       </div>
                     </div>
                   );
