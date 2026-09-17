@@ -3,14 +3,16 @@ import { createPortal } from 'react-dom';
 import SCHEMES from '../utils/schemes.json';
 import {
   UserCheck, Search, X, Trash2, Pencil, Briefcase, CalendarClock, IndianRupee, CheckCircle2,
-  LayoutGrid, Table as TableIcon, History, ArrowRight, Crown, Upload, Paperclip, ShieldCheck, Plus, Check, Download, Eye, Copy
+  LayoutGrid, Table as TableIcon, History, ArrowRight, Crown, Upload, Paperclip, ShieldCheck, Plus, Check, Download, Eye, Copy,
+  SlidersHorizontal, FileSpreadsheet
 } from 'lucide-react';
 import { Card, Avatar, btnPrimary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
 import {
   loadProspects, saveProspects, addProspects, CATEGORY_THEME, CATEGORY_LABEL, fmtProspectStamp, fmtAmountINR,
   PROSPECT_STAGES, INSURANCE_PROSPECT_STAGES, ALL_STAGE_THEME, ALL_PROSPECT_STAGES
 } from '../utils/prospects';
-import { uid } from '../utils/calc';
+import { uid, fmtFileDate } from '../utils/calc';
+import { exportProspectsToExcel, prospectClosingDate, toLocalDay } from '../utils/prospectExcel';
 import { RELATIONS } from '../utils/team';
 import { teamName, loadTeam } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
@@ -149,14 +151,34 @@ const getSchemesForCategory = (cat) => {
   return Object.keys(all).sort();
 };
 
+// List filters persist per browser, same as Leads and the Client Directory —
+// only an explicit Clear resets them. The search box is deliberately NOT
+// persisted: a stale search term reads as an empty list, not as a filter.
+const FILTERS_KEY = 'crm:prospect-filters';
+const DEFAULT_FILTERS = { stage: 'all', cat: 'all', proposalType: 'all', dateType: 'created', from: '', to: '' };
+const loadSavedFilters = () => {
+  try {
+    const raw = localStorage.getItem(FILTERS_KEY);
+    return raw ? { ...DEFAULT_FILTERS, ...JSON.parse(raw) } : { ...DEFAULT_FILTERS };
+  } catch {
+    return { ...DEFAULT_FILTERS };
+  }
+};
+
 // ===========================================================================
 // PROSPECTS MODULE — list of all generated business prospects
 // ===========================================================================
 export default function ProspectsView({ isViewer, onOpenProspect, prospectsChangeCounter, activeProspectId, setActiveProspectId, clients = [], initialQuery = '' }) {
   const [prospects, setProspects] = useState(() => loadProspects());
   const [query, setQuery] = useState(initialQuery);
-  const [stageFilter, setStageFilter] = useState('all');
-  const [catFilter, setCatFilter] = useState('all');
+  const savedFilters = useMemo(loadSavedFilters, []);
+  const [stageFilter, setStageFilter] = useState(savedFilters.stage);
+  const [catFilter, setCatFilter] = useState(savedFilters.cat);
+  const [proposalTypeFilter, setProposalTypeFilter] = useState(savedFilters.proposalType);
+  const [dateType, setDateType] = useState(savedFilters.dateType); // 'created' | 'closing'
+  const [fromDate, setFromDate] = useState(savedFilters.from);
+  const [toDate, setToDate] = useState(savedFilters.to);
+  const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'card'
   const [editing, setEditing] = useState(null); // local fallback modal when no onOpenProspect is supplied
 
@@ -206,18 +228,68 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
     else setEditing(p);
   };
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(FILTERS_KEY, JSON.stringify({
+        stage: stageFilter, cat: catFilter, proposalType: proposalTypeFilter,
+        dateType, from: fromDate, to: toDate,
+      }));
+    } catch { /* private mode / quota — filters just won't persist */ }
+  }, [stageFilter, catFilter, proposalTypeFilter, dateType, fromDate, toDate]);
+
+  // Offered in the Proposal Type picker: whatever types actually exist in the
+  // data, so the list can never offer a type that matches nothing (or miss a
+  // new one added to a proposal form later).
+  const proposalTypeOptions = useMemo(
+    () => Array.from(new Set(prospects.map(p => p.proposalType).filter(Boolean))).sort(),
+    [prospects]
+  );
+
+  const activeFilterCount =
+    (stageFilter !== DEFAULT_FILTERS.stage ? 1 : 0) +
+    (catFilter !== DEFAULT_FILTERS.cat ? 1 : 0) +
+    (proposalTypeFilter !== DEFAULT_FILTERS.proposalType ? 1 : 0) +
+    (fromDate || toDate ? 1 : 0);
+
+  const clearFilters = () => {
+    setStageFilter(DEFAULT_FILTERS.stage);
+    setCatFilter(DEFAULT_FILTERS.cat);
+    setProposalTypeFilter(DEFAULT_FILTERS.proposalType);
+    setDateType(DEFAULT_FILTERS.dateType);
+    setFromDate(DEFAULT_FILTERS.from);
+    setToDate(DEFAULT_FILTERS.to);
+  };
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    // Both ends inclusive, and compared as local YYYY-MM-DD strings (which
+    // sort lexicographically) so a createdAt timestamp and a plain closing
+    // date can be matched against the same picker values.
+    const inDateRange = (p) => {
+      if (!fromDate && !toDate) return true;
+      const day = toLocalDay(dateType === 'closing' ? prospectClosingDate(p) : p.createdAt);
+      if (!day) return false; // no date to place it in the window
+      if (fromDate && day < fromDate) return false;
+      if (toDate && day > toDate) return false;
+      return true;
+    };
     return prospects
       .filter(p => stageFilter === 'all' || (p.stage || 'Qualified') === stageFilter)
       .filter(p => catFilter === 'all' || p.proposalCategory === catFilter)
+      .filter(p => proposalTypeFilter === 'all' || p.proposalType === proposalTypeFilter)
+      .filter(inDateRange)
       .filter(p => !q ||
         (p.applicant || '').toLowerCase().includes(q) ||
         (p.groupLeader || '').toLowerCase().includes(q) ||
         (p.proposalType || '').toLowerCase().includes(q) ||
         (p.pan || '').toLowerCase().includes(q))
       .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-  }, [prospects, query, stageFilter, catFilter]);
+  }, [prospects, query, stageFilter, catFilter, proposalTypeFilter, dateType, fromDate, toDate]);
+
+  // Exports exactly what's on screen — same `filtered` rows the list renders.
+  const handleExportExcel = () => {
+    exportProspectsToExcel(filtered, `Business Prospects ${fmtFileDate()}.xlsx`);
+  };
 
   const stageCounts = useMemo(() => {
     const c = { all: prospects.length };
@@ -297,8 +369,83 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
             <button onClick={() => setViewMode('table')} title="Table view" className={`p-1.5 rounded-lg cursor-pointer transition-colors ${viewMode === 'table' ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><TableIcon size={15} /></button>
             <button onClick={() => setViewMode('card')} title="Card view" className={`p-1.5 rounded-lg cursor-pointer transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><LayoutGrid size={15} /></button>
           </div>
+          <button
+            onClick={() => setShowFilters(s => !s)}
+            className={`relative inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider border rounded-xl transition-all cursor-pointer shrink-0 ${
+              showFilters
+                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-900/60 shadow-sm'
+                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+            <SlidersHorizontal size={14} /> Filter
+            {activeFilterCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full bg-blue-600 dark:bg-blue-500 text-white">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={handleExportExcel}
+            title={`Export the ${filtered.length} prospect${filtered.length === 1 ? '' : 's'} currently listed`}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider border border-emerald-200 dark:border-emerald-900/50 bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all cursor-pointer shrink-0"
+          >
+            <FileSpreadsheet size={14} /> Export Excel
+          </button>
         </div>
       </div>
+
+      {/* Filter panel — same collapsible shape as the Client Directory's.
+          Business Type and Stage are also on the chip rows below; both drive
+          the same state, so the two stay in step whichever one is used. */}
+      {showFilters && (
+        <Card className="p-6 border border-blue-100 dark:border-blue-900/40 bg-blue-50/10 dark:bg-blue-950/5 shadow-md animate-scale-up">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <Field label="Date Type" hint="Which date the range below applies to">
+              <CoolSelect value={dateType} onChange={(e) => setDateType(e.target.value)} className={selectCls}>
+                <option value="created">Created Date</option>
+                <option value="closing">Closing Date</option>
+              </CoolSelect>
+            </Field>
+            <Field label="From Date">
+              <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className={inputCls} />
+            </Field>
+            <Field label="To Date">
+              <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className={inputCls} />
+            </Field>
+            <Field label="Business Type">
+              <CoolSelect value={catFilter} onChange={(e) => setCatFilter(e.target.value)} className={selectCls}>
+                <option value="all">All Business Types</option>
+                {['investment', 'insurance', 'othercode'].map(c => (
+                  <option key={c} value={c}>{CATEGORY_LABEL[c] || c}</option>
+                ))}
+              </CoolSelect>
+            </Field>
+            <Field label="Proposal Type">
+              <CoolSelect value={proposalTypeFilter} onChange={(e) => setProposalTypeFilter(e.target.value)} className={selectCls}>
+                <option value="all">All Proposal Types</option>
+                {proposalTypeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+              </CoolSelect>
+            </Field>
+            <Field label="Stage">
+              <CoolSelect value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} className={selectCls}>
+                <option value="all">All Stages</option>
+                {ALL_PROSPECT_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+              </CoolSelect>
+            </Field>
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4 pt-4 border-t border-slate-200/40 dark:border-slate-800/40">
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              Showing <strong className="text-slate-800 dark:text-slate-200">{filtered.length}</strong> of {prospects.length} prospect{prospects.length === 1 ? '' : 's'}
+              {(fromDate || toDate) && ` · ${dateType === 'closing' ? 'Closing' : 'Created'} ${fromDate || '…'} to ${toDate || '…'}`}
+            </p>
+            {activeFilterCount > 0 && (
+              <button onClick={clearFilters} className={btnGhost}>
+                <X size={14} /> Clear filters
+              </button>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Stage filter chips */}
       <div className="flex flex-wrap gap-2">
