@@ -576,7 +576,10 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
 
   const [applicant, setApplicant] = useState(seed.applicant || '');
   const [pan, setPan] = useState(seed.pan || '');
-  const [closingDate, setClosingDate] = useState(seed.closingDate || '');
+  // Closing Date lives PER ITEM (below, with amount/remarks/table), not here —
+  // confirming several prospects together from one proposal (one tab per
+  // proposal type) must let each keep its own date; a single shared field
+  // meant editing one tab's date silently rewrote every other tab's too.
   // Inherited from the client's Internal Team Assignments (ids used for RBAC).
   // Prefilled from the client profile but EDITABLE via a team-member dropdown
   // on create — one person can be the manager on many things, so the advisor
@@ -674,6 +677,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
         proposalType: initial.proposalType,
         proposalCategory: initial.proposalCategory,
         amount: initial.amount,
+        closingDate: initial.closingDate || '',
         table: initial.table || { cols: [], rows: [] },
         remarks: initial.remarks || '',
         remarksBy: initial.remarksBy || '',
@@ -684,7 +688,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
         otherCodeSource: initial.otherCodeSource || '',
         otherCodeAmount: initial.otherCodeAmount || ''
       }]
-    : drafts.map(d => ({ remarks: '', sipRejected: '', sipContinue: '', otherCodeEnabled: false, otherCodeSource: '', otherCodeAmount: '', ...d }));
+    : drafts.map(d => ({ closingDate: seed.closingDate || '', remarks: '', sipRejected: '', sipContinue: '', otherCodeEnabled: false, otherCodeSource: '', otherCodeAmount: '', ...d }));
   const [items, setItems] = useState(initialItems);
   const [activeIdx, setActiveIdx] = useState(0);
   const active = items[activeIdx] || items[0] || {};
@@ -811,7 +815,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
   const canSave = (!isEdit || canEditDetails || canChangeStage) &&
     groupLeader.trim() && applicant.trim() && items.length > 0 &&
     (!stageChanged || stageRemark.trim()) &&
-    (!needsClosingDate || !!closingDate) &&
+    (!needsClosingDate || !!active.closingDate) &&
     items.every(it => String(it.amount || '').trim() !== '' && Number(it.amount) > 0);
 
   // Pushes newly uploaded KYC documents into the linked client's Documents/Attachments
@@ -940,7 +944,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
 
     const shared = {
       groupLeaderId: seed.groupLeaderId || initial?.groupLeaderId || '',
-      groupLeader: groupLeader.trim(), applicant: applicant.trim(), pan, closingDate,
+      groupLeader: groupLeader.trim(), applicant: applicant.trim(), pan,
       // Stamped the first time the prospect actually lands on a closing stage
       // and never re-stamped afterwards, so a later edit (or a re-save at the
       // same stage) can't drift the date the business actually closed on.
@@ -959,7 +963,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
     // leave no trace at all in the one log this app already has for a
     // prospect.
     const DETAIL_FIELD_LABELS = {
-      closingDate: 'Closing Date', serviceManager: 'Service Manager', relationshipManager: 'Relationship Manager',
+      serviceManager: 'Service Manager', relationshipManager: 'Relationship Manager',
       owner: 'Owner', internalManager: 'Internal Manager', insuranceManager: 'Insurance Manager', portfolioManager: 'Portfolio Manager',
     };
     const editSummaryParts = [];
@@ -968,13 +972,15 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
         const before = initial?.[key] || '';
         const after = shared[key] || '';
         if (before !== after) {
-          const fmt = key === 'closingDate' ? (v => v || '—') : (v => (v ? (teamName(v) || v) : '—'));
-          editSummaryParts.push(`${label}: ${fmt(before)} → ${fmt(after)}`);
+          editSummaryParts.push(`${label}: ${before ? (teamName(before) || before) : '—'} → ${after ? (teamName(after) || after) : '—'}`);
         }
       });
       const it0 = items[0] || {};
       if (String(it0.amount ?? '') !== String(initial?.amount ?? '')) {
         editSummaryParts.push(`Amount: ${initial?.amount || '—'} → ${it0.amount || '—'}`);
+      }
+      if (String(it0.closingDate || '') !== String(initial?.closingDate || '')) {
+        editSummaryParts.push(`Closing Date: ${initial?.closingDate || '—'} → ${it0.closingDate || '—'}`);
       }
       const oldRows = initial?.table?.rows || [];
       const newRows = it0.table?.rows || [];
@@ -1045,6 +1051,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
       proposalType: it.proposalType,
       proposalCategory: it.proposalCategory,
       amount: it.amount,
+      closingDate: it.closingDate || '',
       table: it.table || { cols: [], rows: [] },
       remarks: it.remarks || '',
       // Remarks is a single free-text field, not a log — track who last
@@ -1112,7 +1119,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
             </div>
           )}
 
-          {needsClosingDate && !closingDate && (
+          {needsClosingDate && !active.closingDate && (
             <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/60 dark:bg-amber-950/15 px-4 py-3 text-xs font-semibold text-amber-700 dark:text-amber-400">
               Confirm the expected Closing Date below before moving this prospect to Qualified.
             </div>
@@ -1159,7 +1166,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
             </Field>
             {!allInvestment && (
               <Field label="Closing Date">
-                <input type="date" value={closingDate} onChange={(e) => setClosingDate(e.target.value)} className={inputCls} />
+                <input type="date" value={active.closingDate || ''} onChange={(e) => setActiveField('closingDate', e.target.value)} className={inputCls} />
               </Field>
             )}
             <Field label="Service Manager"><TeamSelect value={serviceManager} onChange={setServiceManager} /></Field>
@@ -1205,14 +1212,14 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
                 <div className="flex items-center gap-3">
                   {showDateField && (
                     <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-bold uppercase tracking-wider ${needsClosingDate && !closingDate ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${needsClosingDate && !active.closingDate ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
                         Closing Date{needsClosingDate ? ' *' : ''}
                       </span>
                       <input
                         type="date"
-                        value={closingDate}
-                        onChange={(e) => setClosingDate(e.target.value)}
-                        className={inputCls + ` py-1.5 w-36${needsClosingDate && !closingDate ? ' !border-amber-400 dark:!border-amber-600' : ''}`}
+                        value={active.closingDate || ''}
+                        onChange={(e) => setActiveField('closingDate', e.target.value)}
+                        className={inputCls + ` py-1.5 w-36${needsClosingDate && !active.closingDate ? ' !border-amber-400 dark:!border-amber-600' : ''}`}
                       />
                     </div>
                   )}
@@ -1446,7 +1453,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
                     if (valid.length) safeDocuments[key] = valid.map(({ dataUrl, data, ...meta }) => meta);
                   });
                   triggerInsuranceProspectDownload(
-                    { applicant, groupLeader, pan, closingDate, serviceManager, relationshipManager, portfolioManager, insuranceManager, owner, internalManager, stage: stage || 'Qualified', amount: items[0]?.amount, createdAt: new Date().toISOString(), kyc, documents: safeDocuments },
+                    { applicant, groupLeader, pan, closingDate: items[0]?.closingDate || '', serviceManager, relationshipManager, portfolioManager, insuranceManager, owner, internalManager, stage: stage || 'Qualified', amount: items[0]?.amount, createdAt: new Date().toISOString(), kyc, documents: safeDocuments },
                     items
                   );
                 }}
