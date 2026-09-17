@@ -5,6 +5,7 @@ import {
   Trash2, Pencil, Check, Clock, Crown, LayoutGrid, Table as TableIcon,
   Flame, Star, Snowflake, ArrowRight, CheckCircle2, Send, Zap, Activity,
   Briefcase, RefreshCw, ChevronRight, User, FileText, Filter,
+  MapPin, Tag, UsersRound, CalendarDays, AlertCircle,
 } from 'lucide-react';
 import { Card, Avatar, Field, inputCls, selectCls, btnPrimary, btnSecondary, btnGhost, CoolSelect } from './UI';
 import { loadTeam, teamName } from '../services/team';
@@ -984,29 +985,52 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
           )}
 
           {tab === 'details' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
-              <DetailRow label="Full Name" value={leadName(lead)} />
-              <DetailRow label="Mobile Number" value={lead.mobile} />
-              <DetailRow label="Email ID" value={lead.email} />
-              <DetailRow label="City / Location" value={lead.city} />
-              <DetailRow label="Related To" value={Array.isArray(lead.relatedTo) ? lead.relatedTo.join(', ') : lead.relatedTo} />
-              <DetailRow label="Lead Source" value={lead.leadSource} />
-              {lead.leadSource === 'Referred By Client' && <DetailRow label="Referred By (Client)" value={[lead.referredClientName, lead.referredClientPan].filter(Boolean).join(' · ')} />}
-              {lead.leadSource === 'Referred By Users' && <DetailRow label="Referred By (User)" value={lead.referredUser} />}
-              <DetailRow label="Client Type" value={lead.clientType} />
-              <DetailRow label="Assigned RM" value={lead.ownerId ? teamName(lead.ownerId) : 'Unassigned'} />
-              <DetailRow label="Others" value={(lead.contributors || []).map(teamName).filter(Boolean).join(', ')} />
-              <DetailRow label="Stage" value={lead.stage} />
-              <DetailRow label="Status" value={lead.status || 'Active'} />
-              {lead.status === 'Lost' && <DetailRow label="Lost Reason" value={lead.lostReason} />}
-              <DetailRow label="Created" value={fmtStamp(lead.createdAt)} />
-              {/* The server always stamps createdBy with the actor's raw user
-                  id (syncBulk's CREATE branch), not a name — teamName()
-                  resolves it, and safely passes through anything that isn't
-                  a team id (e.g. the simulated-lead source "Website"). */}
-              <DetailRow label="Created By" value={teamName(lead.createdBy) || lead.createdBy} />
-              {lead.stage === 'Converted' && <DetailRow label="Conversion Date" value={fmtStamp(convertedAt)} />}
-              <div className="sm:col-span-2"><DetailRow label="Lead Remarks" value={lead.remarks} /></div>
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <InfoSection accent="blue" icon={User} title="Contact & Personal">
+                  <InfoRow icon={User} accent="blue" label="Full Name" value={leadName(lead)} />
+                  <InfoRow icon={Phone} accent="blue" label="Mobile Number" value={lead.mobile} mono />
+                  <InfoRow icon={Mail} accent="sky" label="Email ID" value={lead.email} />
+                  <InfoRow icon={MapPin} accent="cyan" label="City / Location" value={lead.city} />
+                  <InfoRow icon={Briefcase} accent="blue" label="Client Type" value={lead.clientType} />
+                </InfoSection>
+
+                <InfoSection accent="cyan" icon={Zap} title="Lead Source & Referral">
+                  <InfoRow icon={Zap} accent="cyan" label="Lead Source" value={lead.leadSource} />
+                  <InfoRow icon={Tag} accent="cyan" label="Related To" value={Array.isArray(lead.relatedTo) ? lead.relatedTo.join(', ') : lead.relatedTo} />
+                  {lead.leadSource === 'Referred By Client' && (
+                    <InfoRow icon={Crown} accent="cyan" label="Referred By (Client)" value={[lead.referredClientName, lead.referredClientPan].filter(Boolean).join(' · ')} />
+                  )}
+                  {lead.leadSource === 'Referred By Users' && (
+                    <InfoRow icon={UsersRound} accent="cyan" label="Referred By (User)" value={lead.referredUser} />
+                  )}
+                </InfoSection>
+
+                <InfoSection accent="indigo" icon={UsersRound} title="Assignment & Pipeline">
+                  <InfoRow icon={User} accent="indigo" label="Assigned RM" value={lead.ownerId ? teamName(lead.ownerId) : ''} emptyText="Unassigned" />
+                  <InfoRow icon={UsersRound} accent="indigo" label="Others" value={(lead.contributors || []).map(teamName).filter(Boolean).join(', ')} emptyText="None" />
+                  <InfoRow icon={Activity} accent="indigo" label="Stage" value={lead.stage} />
+                  <InfoRow icon={CheckCircle2} accent="indigo" label="Status" value={lead.status || 'Active'} />
+                  {lead.status === 'Lost' && <InfoRow icon={AlertCircle} accent="rose" label="Lost Reason" value={lead.lostReason} />}
+                </InfoSection>
+
+                <InfoSection accent="purple" icon={Clock} title="Timeline">
+                  <InfoRow icon={CalendarDays} accent="purple" label="Created" value={fmtStamp(lead.createdAt)} />
+                  {/* The server always stamps createdBy with the actor's raw
+                      user id (syncBulk's CREATE branch), not a name —
+                      teamName() resolves it, and safely passes through
+                      anything that isn't a team id (e.g. the simulated-lead
+                      source "Website"). */}
+                  <InfoRow icon={User} accent="purple" label="Created By" value={teamName(lead.createdBy) || lead.createdBy} />
+                  {lead.stage === 'Converted' && <InfoRow icon={CheckCircle2} accent="emerald" label="Conversion Date" value={fmtStamp(convertedAt)} />}
+                </InfoSection>
+              </div>
+
+              <InfoSection accent="amber" icon={FileText} title="Lead Remarks">
+                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-line">
+                  {lead.remarks || <span className="text-slate-400 dark:text-slate-600 italic font-normal">No remarks added</span>}
+                </p>
+              </InfoSection>
             </div>
           )}
         </div>
@@ -1015,11 +1039,56 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
   );
 }
 
-function DetailRow({ label, value, mono }) {
+// Local mirror of ClientProfile's SectionBox/ContactRow — same visual
+// language (gradient card, colored icon chip per field) so a lead's Details
+// tab reads like the rest of the app instead of a bare label/value grid.
+// Self-contained here since those helpers aren't exported from that file.
+const INFO_SECTION_THEMES = {
+  blue: { box: 'from-blue-50/70 to-sky-50/40 dark:from-blue-950/15 dark:to-slate-950/20 border-blue-100/70 dark:border-blue-900/20', chip: 'bg-gradient-to-br from-blue-500 to-sky-500 text-white shadow-blue-500/25', title: 'text-blue-700 dark:text-blue-300' },
+  cyan: { box: 'from-cyan-50/70 to-blue-50/40 dark:from-cyan-950/15 dark:to-slate-950/20 border-cyan-100/70 dark:border-cyan-900/20', chip: 'bg-gradient-to-br from-cyan-500 to-blue-500 text-white shadow-cyan-500/25', title: 'text-cyan-700 dark:text-cyan-300' },
+  indigo: { box: 'from-indigo-50/70 to-violet-50/40 dark:from-indigo-950/15 dark:to-slate-950/20 border-indigo-100/70 dark:border-indigo-900/20', chip: 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-indigo-500/25', title: 'text-indigo-700 dark:text-indigo-300' },
+  purple: { box: 'from-purple-50/70 to-fuchsia-50/40 dark:from-purple-950/15 dark:to-slate-950/20 border-purple-100/70 dark:border-purple-900/20', chip: 'bg-gradient-to-br from-purple-500 to-fuchsia-500 text-white shadow-purple-500/25', title: 'text-purple-700 dark:text-purple-300' },
+  amber: { box: 'from-amber-50/70 to-orange-50/40 dark:from-amber-950/15 dark:to-slate-950/20 border-amber-100/70 dark:border-amber-900/20', chip: 'bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-amber-500/25', title: 'text-amber-700 dark:text-amber-300' },
+};
+
+const INFO_ROW_ACCENTS = {
+  blue: 'bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400',
+  sky: 'bg-sky-100 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400',
+  cyan: 'bg-cyan-100 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400',
+  indigo: 'bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400',
+  purple: 'bg-purple-100 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400',
+  emerald: 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400',
+  rose: 'bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400',
+  amber: 'bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400',
+};
+
+function InfoSection({ accent, icon: Icon, title, children }) {
+  const t = INFO_SECTION_THEMES[accent] || INFO_SECTION_THEMES.blue;
   return (
-    <div>
-      <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{label}</div>
-      <div className={`text-sm font-semibold text-slate-800 dark:text-slate-200 ${mono ? 'font-mono tracking-wider' : ''}`}>{value || <span className="text-slate-400 dark:text-slate-600 italic font-normal">—</span>}</div>
+    <div className={`p-5 rounded-2xl bg-gradient-to-br ${t.box} border space-y-3`}>
+      <h4 className="flex items-center gap-2.5">
+        <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 shadow-md ${t.chip}`}>
+          <Icon size={15} />
+        </span>
+        <span className={`text-xs font-black uppercase tracking-wider ${t.title}`}>{title}</span>
+      </h4>
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
+
+function InfoRow({ icon: Icon, accent, label, value, mono, emptyText = '—' }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${INFO_ROW_ACCENTS[accent] || INFO_ROW_ACCENTS.blue}`}>
+        <Icon size={14} />
+      </span>
+      <div className="min-w-0">
+        <span className="font-semibold block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">{label}</span>
+        <span className={`font-bold text-slate-800 dark:text-slate-200 text-xs break-words ${mono ? 'font-mono tracking-wider tabular-nums' : ''}`}>
+          {value || <span className="text-slate-400 dark:text-slate-600 italic font-normal">{emptyText}</span>}
+        </span>
+      </div>
     </div>
   );
 }
