@@ -18,6 +18,20 @@ const MAX_OPTIONAL_COLUMNS = 4;
 const DEFAULT_VISIBLE_COLUMNS = ['goalsDefined', 'goalStatus', 'assetAllocationStatus'];
 const COLUMNS_STORAGE_KEY = 'crm:clientListColumns';
 
+// The filter panel's own values (age/goals range, goal/allocation status) —
+// separate storage key from the columns picker above, same "sticky until an
+// explicit Clear" behaviour the Leads module's filters use.
+const FILTERS_STORAGE_KEY = 'crm:clientListFilters';
+const DEFAULT_FILTERS = { ageMin: '', ageMax: '', goalsMin: '', goalsMax: '', goalSet: 'all', allocSet: 'all' };
+const loadSavedFilters = () => {
+  try {
+    const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
+    return raw ? { ...DEFAULT_FILTERS, ...JSON.parse(raw) } : { ...DEFAULT_FILTERS };
+  } catch {
+    return { ...DEFAULT_FILTERS };
+  }
+};
+
 const OPTIONAL_COLUMNS = [
   {
     key: 'goalsDefined', label: 'Goals Defined', icon: Target,
@@ -75,12 +89,13 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
   const [query, setQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const searchBlurTimer = useRef(null);
-  const [ageMin, setAgeMin] = useState('');
-  const [ageMax, setAgeMax] = useState('');
-  const [goalsMin, setGoalsMin] = useState('');
-  const [goalsMax, setGoalsMax] = useState('');
-  const [goalSet, setGoalSet] = useState('all');
-  const [allocSet, setAllocSet] = useState('all');
+  const savedFilters = useMemo(loadSavedFilters, []);
+  const [ageMin, setAgeMin] = useState(savedFilters.ageMin);
+  const [ageMax, setAgeMax] = useState(savedFilters.ageMax);
+  const [goalsMin, setGoalsMin] = useState(savedFilters.goalsMin);
+  const [goalsMax, setGoalsMax] = useState(savedFilters.goalsMax);
+  const [goalSet, setGoalSet] = useState(savedFilters.goalSet);
+  const [allocSet, setAllocSet] = useState(savedFilters.allocSet);
   const [visibleColumns, setVisibleColumns] = useState(() => {
     try {
       const raw = localStorage.getItem(COLUMNS_STORAGE_KEY);
@@ -176,8 +191,16 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
     (goalSet !== 'all' ? 1 : 0) +
     (allocSet !== 'all' ? 1 : 0);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify({ ageMin, ageMax, goalsMin, goalsMax, goalSet, allocSet }));
+    } catch { /* private mode / quota — filters just won't persist */ }
+  }, [ageMin, ageMax, goalsMin, goalsMax, goalSet, allocSet]);
+
   const clearAll = () => {
-    setAgeMin(''); setAgeMax(''); setGoalsMin(''); setGoalsMax(''); setGoalSet('all'); setAllocSet('all');
+    setAgeMin(DEFAULT_FILTERS.ageMin); setAgeMax(DEFAULT_FILTERS.ageMax);
+    setGoalsMin(DEFAULT_FILTERS.goalsMin); setGoalsMax(DEFAULT_FILTERS.goalsMax);
+    setGoalSet(DEFAULT_FILTERS.goalSet); setAllocSet(DEFAULT_FILTERS.allocSet);
   };
 
   return (

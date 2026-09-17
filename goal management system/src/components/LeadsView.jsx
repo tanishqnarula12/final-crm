@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   UserPlus, Search, Plus, X, Phone, MessageCircle, Mail, CalendarPlus,
   Trash2, Pencil, Check, Clock, Crown, LayoutGrid, Table as TableIcon,
   Flame, Star, Snowflake, ArrowRight, CheckCircle2, Send, Zap, Activity,
-  Briefcase, RefreshCw, ChevronRight, User, FileText,
+  Briefcase, RefreshCw, ChevronRight, User, FileText, ChevronDown,
 } from 'lucide-react';
 import { Card, Avatar, Field, inputCls, selectCls, btnPrimary, btnSecondary, btnGhost, CoolSelect } from './UI';
 import { loadTeam, teamName } from '../services/team';
@@ -22,15 +22,86 @@ import {
 // "Clear" resets them; the search box is deliberately NOT persisted, since a
 // stale search term looks like an empty list rather than an active filter.
 const FILTERS_KEY = 'crm:lead-filters';
-const DEFAULT_FILTERS = { stage: 'all', status: 'Active', source: 'all', rm: 'all' };
+// stage/rm are multi-select — [] means "no restriction", same convention as
+// the 'all' sentinel the single-select fields (status/source) still use.
+const DEFAULT_FILTERS = { stages: [], status: 'Active', source: 'all', rms: [] };
 const loadSavedFilters = () => {
   try {
     const raw = localStorage.getItem(FILTERS_KEY);
-    return raw ? { ...DEFAULT_FILTERS, ...JSON.parse(raw) } : { ...DEFAULT_FILTERS };
+    const parsed = raw ? JSON.parse(raw) : null;
+    return {
+      ...DEFAULT_FILTERS,
+      ...parsed,
+      stages: Array.isArray(parsed?.stages) ? parsed.stages : DEFAULT_FILTERS.stages,
+      rms: Array.isArray(parsed?.rms) ? parsed.rms : DEFAULT_FILTERS.rms,
+    };
   } catch {
     return { ...DEFAULT_FILTERS };
   }
 };
+
+// Checkbox-popover multi-select — same pattern as the Client Directory's
+// "Manage columns" picker: a trigger button + a small dropdown of checkable
+// options, closes on outside click. Reused here for Stage and RM so picking
+// several at once doesn't need N separate single-select controls.
+function MultiSelectFilter({ label, allLabel, options, selected, onChange, width = 'w-48' }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  const toggle = (value) => onChange(selected.includes(value) ? selected.filter(v => v !== value) : [...selected, value]);
+  const summary = selected.length === 0 ? allLabel
+    : selected.length === 1 ? (options.find(o => o.value === selected[0])?.label || selected[0])
+    : `${selected.length} ${label} selected`;
+
+  return (
+    <div className={`relative ${width}`} ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={`${selectCls} text-xs py-1.5 flex items-center justify-between gap-1.5 cursor-pointer ${selected.length > 0 ? 'text-slate-900 dark:text-white font-semibold' : ''}`}
+      >
+        <span className="truncate">{summary}</span>
+        <ChevronDown size={13} className="shrink-0 text-slate-400" />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1.5 w-full min-w-[220px] rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/80 shadow-2xl z-50 p-2 animate-scale-up">
+          <div className="max-h-64 overflow-y-auto space-y-0.5">
+            {options.map(opt => {
+              const checked = selected.includes(opt.value);
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => toggle(opt.value)}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-all cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                >
+                  <span className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-all ${
+                    checked ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-slate-700'
+                  }`}>
+                    {checked && <Check size={11} />}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex-1 truncate">{opt.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          {selected.length > 0 && (
+            <button type="button" onClick={() => onChange([])} className="w-full mt-1 pt-1.5 border-t border-slate-100 dark:border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">
+              Clear {label}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const scoreChip = (score) => {
   const band = scoreBand(score);
@@ -52,10 +123,10 @@ export default function LeadsView({
   const [leads, setLeads] = useState(() => loadLeads());
   const [query, setQuery] = useState('');
   const savedFilters = useMemo(loadSavedFilters, []);
-  const [stageFilter, setStageFilter] = useState(savedFilters.stage);
+  const [stageFilters, setStageFilters] = useState(savedFilters.stages);
   const [statusFilter, setStatusFilter] = useState(savedFilters.status);
   const [sourceFilter, setSourceFilter] = useState(savedFilters.source);
-  const [rmFilter, setRmFilter] = useState(savedFilters.rm);
+  const [rmFilters, setRmFilters] = useState(savedFilters.rms);
   const [viewMode, setViewMode] = useState('table');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -91,18 +162,18 @@ export default function LeadsView({
   useEffect(() => {
     try {
       localStorage.setItem(FILTERS_KEY, JSON.stringify({
-        stage: stageFilter, status: statusFilter, source: sourceFilter, rm: rmFilter,
+        stages: stageFilters, status: statusFilter, source: sourceFilter, rms: rmFilters,
       }));
     } catch { /* private mode / quota — filters just won't persist */ }
-  }, [stageFilter, statusFilter, sourceFilter, rmFilter]);
+  }, [stageFilters, statusFilter, sourceFilter, rmFilters]);
 
-  const filtersActive = stageFilter !== DEFAULT_FILTERS.stage || statusFilter !== DEFAULT_FILTERS.status
-    || sourceFilter !== DEFAULT_FILTERS.source || rmFilter !== DEFAULT_FILTERS.rm;
+  const filtersActive = stageFilters.length > 0 || statusFilter !== DEFAULT_FILTERS.status
+    || sourceFilter !== DEFAULT_FILTERS.source || rmFilters.length > 0;
   const clearFilters = () => {
-    setStageFilter(DEFAULT_FILTERS.stage);
+    setStageFilters(DEFAULT_FILTERS.stages);
     setStatusFilter(DEFAULT_FILTERS.status);
     setSourceFilter(DEFAULT_FILTERS.source);
-    setRmFilter(DEFAULT_FILTERS.rm);
+    setRmFilters(DEFAULT_FILTERS.rms);
   };
 
   const openLead = useMemo(() => leads.find(l => l.id === openLeadId) || null, [leads, openLeadId]);
@@ -121,16 +192,16 @@ export default function LeadsView({
     const q = query.trim().toLowerCase();
     return leads
       .filter(l => statusFilter === 'all' || (l.status || 'Active') === statusFilter)
-      .filter(l => stageFilter === 'all' || (l.stage || 'New') === stageFilter)
+      .filter(l => stageFilters.length === 0 || stageFilters.includes(l.stage || 'New'))
       .filter(l => sourceFilter === 'all' || l.leadSource === sourceFilter)
-      .filter(l => rmFilter === 'all' || (rmFilter === 'unassigned' ? !l.ownerId : l.ownerId === rmFilter))
+      .filter(l => rmFilters.length === 0 || rmFilters.includes(l.ownerId ? l.ownerId : 'unassigned'))
       .filter(l => !q ||
         leadName(l).toLowerCase().includes(q) ||
         (l.mobile || '').toLowerCase().includes(q) ||
         (l.email || '').toLowerCase().includes(q) ||
         (l.pan || '').toLowerCase().includes(q))
       .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-  }, [leads, query, stageFilter, statusFilter, sourceFilter, rmFilter]);
+  }, [leads, query, stageFilters, statusFilter, sourceFilter, rmFilters]);
 
   const counts = useMemo(() => {
     const c = { all: leads.length };
@@ -207,11 +278,14 @@ export default function LeadsView({
         </div>
       </div>
 
-      {/* Stage funnel chips */}
+      {/* Stage funnel chips — multi-select: click toggles a stage in/out of
+          the filter, several can be active at once. "All" clears back to no
+          restriction, same state the Stage dropdown below reads from. */}
       <div className="flex flex-wrap gap-2">
-        <FilterChip label="All" count={counts.all} active={stageFilter === 'all'} onClick={() => setStageFilter('all')} />
+        <FilterChip label="All" count={counts.all} active={stageFilters.length === 0} onClick={() => setStageFilters([])} />
         {LEAD_STAGES.map(s => (
-          <FilterChip key={s} label={s} count={counts[s]} active={stageFilter === s} onClick={() => setStageFilter(s)} />
+          <FilterChip key={s} label={s} count={counts[s]} active={stageFilters.includes(s)}
+            onClick={() => setStageFilters(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])} />
         ))}
       </div>
 
@@ -227,26 +301,23 @@ export default function LeadsView({
         ))}
         <span className="mx-1 w-px self-stretch bg-slate-200 dark:bg-slate-800" />
         {/* Same state as the stage chips above — the two stay in step, this is
-            just the compact way to pick a stage alongside the other filters. */}
-        <div className="w-48">
-          <CoolSelect value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} className={selectCls + ' text-xs py-1.5'}>
-            <option value="all">All Stages</option>
-            {LEAD_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
-          </CoolSelect>
-        </div>
+            just the compact multi-select picker alongside the other filters. */}
+        <MultiSelectFilter
+          label="stages" allLabel="All Stages" width="w-48"
+          options={LEAD_STAGES.map(s => ({ value: s, label: s }))}
+          selected={stageFilters} onChange={setStageFilters}
+        />
         <div className="w-44">
           <CoolSelect value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className={selectCls + ' text-xs py-1.5'}>
             <option value="all">All Sources</option>
             {LEAD_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
           </CoolSelect>
         </div>
-        <div className="w-52">
-          <CoolSelect value={rmFilter} onChange={(e) => setRmFilter(e.target.value)} className={selectCls + ' text-xs py-1.5'}>
-            <option value="all">All Relationship Managers</option>
-            <option value="unassigned">Unassigned</option>
-            {loadTeam().map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-          </CoolSelect>
-        </div>
+        <MultiSelectFilter
+          label="RMs" allLabel="All Relationship Managers" width="w-56"
+          options={[{ value: 'unassigned', label: 'Unassigned' }, ...loadTeam().map(m => ({ value: m.id, label: m.name }))]}
+          selected={rmFilters} onChange={setRmFilters}
+        />
         {filtersActive && (
           <button onClick={clearFilters} title="Reset every filter to its default"
             className="px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer inline-flex items-center gap-1.5">
@@ -515,7 +586,9 @@ function LeadFormModal({ initial, clients = [], onClose, onSave }) {
 // LEAD DETAIL MODAL — stage stepper, quick actions, timeline, notes, follow-ups
 // ===========================================================================
 function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvertLead, onScheduleLeadMeeting, onLeadMeetingDone, onOpenLeadMeetingForm, onCreateLeadMom, onEditLeadMom, onToast }) {
-  const [tab, setTab] = useState('timeline');
+  // Opens straight to Details — everything entered at creation should be the
+  // first thing visible on clicking a lead, not hidden behind a tab click.
+  const [tab, setTab] = useState('details');
   const [noteText, setNoteText] = useState('');
   const [showLost, setShowLost] = useState(false);
   const [lostReason, setLostReason] = useState('Not Interested');
@@ -824,7 +897,7 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
 
         {/* Tabs */}
         <div className="px-5 pt-4 shrink-0 flex items-center gap-1.5">
-          {[['timeline', 'Timeline', Activity], ['followups', 'Follow-ups', Clock], ['details', 'Details', Briefcase]].map(([id, label, Icon]) => (
+          {[['details', 'Details', Briefcase], ['timeline', 'Timeline', Activity], ['followups', 'Follow-ups', Clock]].map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${tab === id ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
               <Icon size={13} /> {label}
             </button>

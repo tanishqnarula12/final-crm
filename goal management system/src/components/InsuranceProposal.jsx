@@ -971,7 +971,7 @@ export default function InsuranceProposal({ client, isViewer }) {
   const handlePrint = () => {
     const who = proposer || client?.name || 'Client';
     const prevTitle = document.title;
-    document.title = `${who} – Insurance Proposal ${fmtFileDate()}`;
+    document.title = `${who} – ${getProposalTypesLabel()} Insurance Proposal ${fmtFileDate()}`;
     window.print();
     document.title = prevTitle;
   };

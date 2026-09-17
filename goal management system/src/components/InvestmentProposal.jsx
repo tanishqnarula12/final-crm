@@ -1241,8 +1241,9 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
   // into the tab title elsewhere in the app.
   const handlePrint = () => {
     const who = clientName || client?.name || 'Client';
+    const typesLabel = selTypes.map((id) => TYPES.find((t) => t.id === id)?.label || id).join(', ');
     const prevTitle = document.title;
-    document.title = `${who} – Investment Proposal ${fmtFileDate()}`;
+    document.title = `${who} – ${typesLabel} ${fmtFileDate()}`;
     window.print();
     document.title = prevTitle;
   };
