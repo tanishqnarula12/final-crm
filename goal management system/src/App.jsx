@@ -90,6 +90,15 @@ export default function App() {
   const [activeDropdown, setActiveDropdown] = useState(null); // 'chat' | 'bell' | 'profile' | null
   const [activeAnim, setActiveAnim] = useState({ chat: false, bell: false, profile: false });
 
+  // Top-right dock: flush "notch" at rest, floating "island" once the page
+  // scrolls — see the dock's own comment below for the shape mechanics.
+  const [dockFloating, setDockFloating] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setDockFloating(window.scrollY > 20);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   const [advisorProfile, setAdvisorProfile] = useState(() => loadAdvisorProfile());
 
   useEffect(() => {
@@ -1373,14 +1382,19 @@ export default function App() {
       )}
 
       <div className={`flex-1 min-w-0 flex flex-col min-h-screen relative ${view === 'chat' ? 'pt-0' : 'pt-14'}`}>
-        {/* Top Right Floating Trapezoid Dock */}
+        {/* Top Right Floating Dock — flush "notch" at rest (sharp top
+            corners, rounded bottom), morphs into a fully-rounded floating
+            "island" once the page scrolls (iPhone Dynamic Island style), and
+            back on scrolling up. Uses `border-radius` for BOTH states, not
+            `clip-path` — a clip-path polygon can only draw straight facets
+            between its points, never an actual curve, so a "beveled octagon"
+            standing in for a rounded pill looks subtly angular up close.
+            border-radius corners are true circular arcs AND transition
+            smoothly on their own, so there's no shape-morph trick needed. */}
         {view !== 'chat' && (
-          <div className="no-print fixed top-0 right-12 z-30 flex flex-col items-end filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:drop-shadow-[0_4px_16px_rgba(0,0,0,0.25)]">
-            <div 
-              style={{
-                clipPath: 'polygon(0 0, 100% 0, 89% 82%, 87% 92%, 84% 100%, 16% 100%, 13% 92%, 11% 82%)'
-              }}
-              className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-x border-slate-200/20 dark:border-slate-800/40 pl-9 pr-9 py-2.5 flex items-center gap-5.5"
+          <div className={`no-print fixed right-12 z-30 flex flex-col items-end filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:drop-shadow-[0_4px_16px_rgba(0,0,0,0.25)] transition-[top] duration-500 ease-out ${dockFloating ? 'top-3' : 'top-0'}`}>
+            <div
+              className={`bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-slate-200/20 dark:border-slate-800/40 pl-9 pr-9 py-2.5 flex items-center gap-5.5 transition-all duration-500 ease-out ${dockFloating ? 'border rounded-full' : 'border-b border-x rounded-b-[28px]'}`}
             >
               {/* Module-refresh spinner — a small circle that spins briefly
                   while the module we just navigated into re-pulls its data.
