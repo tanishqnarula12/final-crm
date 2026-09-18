@@ -842,6 +842,13 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
   const [stage, setStage] = useState(initialStage);
   const [stageRemark, setStageRemark] = useState('');
   const stageChanged = isEdit && stage !== initialStage;
+  // Moving Pre-Qualified -> Qualified must be an active decision every time
+  // this modal is opened, not a silent pass because some earlier expected
+  // date happens to already be sitting in the field — starts unconfirmed on
+  // every fresh open (this state is never seeded from `initial`) and can
+  // only become true by the RM/PM explicitly acting: either editing the date
+  // (below) or ticking the "I've checked it" box.
+  const [closingDateConfirmed, setClosingDateConfirmed] = useState(false);
 
   // Policy Issued — additional mandatory fields once that stage is selected
   const [policyIssueDate, setPolicyIssueDate] = useState(initial?.policyIssueDate || '');
@@ -984,13 +991,18 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
   // created or saved with a partial (or empty) KYC section.
   // Moving an investment prospect out of Pre-Qualified is the point the RM /
   // Portfolio Manager commits to a date the deal is expected to close on, so
-  // the expected Closing Date stops being optional right here.
+  // the expected Closing Date stops being optional right here — AND it isn't
+  // enough for one to merely already be sitting in the field (a stale value
+  // from when the prospect was created), the RM/PM must actively review it:
+  // either change it to a new date, or explicitly confirm the existing one
+  // is still right via the checkbox next to it.
   const needsClosingDate = isEdit && initialStage === 'Pre-Qualified' && stage === 'Qualified';
+  const closingDateReady = !!active.closingDate && closingDateConfirmed;
 
   const canSave = (!isEdit || canEditDetails || canChangeStage) &&
     groupLeader.trim() && applicant.trim() && items.length > 0 &&
     (!stageChanged || stageRemark.trim()) &&
-    (!needsClosingDate || !!active.closingDate) &&
+    (!needsClosingDate || closingDateReady) &&
     items.every(it => String(it.amount || '').trim() !== '' && Number(it.amount) > 0);
 
   // Pushes newly uploaded KYC documents into the linked client's Documents/Attachments
@@ -1294,9 +1306,35 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
             </div>
           )}
 
-          {needsClosingDate && !active.closingDate && (
-            <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/60 dark:bg-amber-950/15 px-4 py-3 text-xs font-semibold text-amber-700 dark:text-amber-400">
-              Confirm the expected Closing Date below before moving this prospect to Qualified.
+          {needsClosingDate && !closingDateReady && (
+            <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/60 dark:bg-amber-950/15 px-4 py-3 space-y-2.5">
+              <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                Before moving this prospect to Qualified: update the Closing Date if it's changed, or confirm it's still correct.
+              </p>
+              {/* Deliberately its own input, NOT the locked proposal-details
+                  fieldset further down — changing the date must be available
+                  right here the moment the stage is switched, without first
+                  requiring a separate "Edit Details" unlock (which not every
+                  RM/PM path through this modal goes through). */}
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">Closing Date</span>
+                <input
+                  type="date"
+                  value={active.closingDate || ''}
+                  onChange={(e) => { setActiveField('closingDate', e.target.value); setClosingDateConfirmed(true); }}
+                  className={inputCls + ' py-1.5 w-40 !border-amber-400 dark:!border-amber-600'}
+                />
+              </div>
+              <label className={`flex items-center gap-2 text-xs font-bold select-none ${active.closingDate ? 'text-amber-800 dark:text-amber-300 cursor-pointer' : 'text-amber-400 dark:text-amber-700 cursor-not-allowed'}`}>
+                <input
+                  type="checkbox"
+                  checked={closingDateConfirmed}
+                  disabled={!active.closingDate}
+                  onChange={(e) => setClosingDateConfirmed(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded accent-amber-600 disabled:cursor-not-allowed"
+                />
+                I've checked the Closing Date above — it's correct
+              </label>
             </div>
           )}
 
@@ -1387,14 +1425,19 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
                 <div className="flex items-center gap-3">
                   {showDateField && (
                     <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-bold uppercase tracking-wider ${needsClosingDate && !active.closingDate ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${needsClosingDate && !closingDateReady ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
                         Closing Date{needsClosingDate ? ' *' : ''}
                       </span>
                       <input
                         type="date"
                         value={active.closingDate || ''}
-                        onChange={(e) => setActiveField('closingDate', e.target.value)}
-                        className={inputCls + ` py-1.5 w-36${needsClosingDate && !active.closingDate ? ' !border-amber-400 dark:!border-amber-600' : ''}`}
+                        onChange={(e) => {
+                          setActiveField('closingDate', e.target.value);
+                          // Actively picking a new date is itself the review —
+                          // no separate tick needed on top of an edit just made.
+                          if (needsClosingDate) setClosingDateConfirmed(true);
+                        }}
+                        className={inputCls + ` py-1.5 w-36${needsClosingDate && !closingDateReady ? ' !border-amber-400 dark:!border-amber-600' : ''}`}
                       />
                     </div>
                   )}
