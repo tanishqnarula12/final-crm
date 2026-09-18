@@ -293,7 +293,16 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
         (p.groupLeader || '').toLowerCase().includes(q) ||
         (p.proposalType || '').toLowerCase().includes(q) ||
         (p.pan || '').toLowerCase().includes(q))
-      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      // Newest Closing Date on top (the date the list's own "Closing" column
+      // shows) — Dec before Nov before Oct, and within the same month the
+      // higher day first (15th, then 8th, then 2nd). A prospect with no
+      // closing date yet (still Pre-Qualified) falls back to its creation
+      // date so it still lands in a sensible slot instead of the bottom.
+      .sort((a, b) => {
+        const da = toLocalDay(prospectClosingDate(a)) || toLocalDay(a.createdAt);
+        const db = toLocalDay(prospectClosingDate(b)) || toLocalDay(b.createdAt);
+        return db.localeCompare(da);
+      });
   }, [prospects, query, stageFilters, catFilters, proposalTypeFilters, dateType, fromDate, toDate]);
 
   // Exports exactly what's on screen — same `filtered` rows the list renders.

@@ -214,6 +214,10 @@ export function isPreQualifiedOwner(record) {
 export function canMoveToStage(module, record, from, to) {
   if (!to || to === from) return true;
   if (module === 'investmentProspects' && to === 'Pre-Qualified') return isPreQualifiedOwner(record);
+  // Confirming a prospect OUT of Pre-Qualified into Qualified is the same
+  // RM/PM-only ownership check, not the matrix's normal changeStage scope —
+  // mirrors server/src/lib/syncModule.js's outOfPreQualified rule exactly.
+  if (module === 'investmentProspects' && from === 'Pre-Qualified' && to === 'Qualified') return isPreQualifiedOwner(record);
   const stageAction = module === 'leads' ? 'edit' : 'changeStage';
   if (!can(module, stageAction, record, { fromStage: from, toStage: to })) return false;
   // Two-party modules already resolved direction inside can()'s overlay.

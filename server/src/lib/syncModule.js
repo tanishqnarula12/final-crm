@@ -227,9 +227,16 @@ export async function syncBulk(prisma, spec) {
       // Moving an investment prospect INTO Pre-Qualified is its own hard
       // rule: only that prospect's RM/PM (or Admin), whatever the matrix says.
       // Any other backward move needs the matrix's changeStageBack right.
+      // Confirming it OUT of Pre-Qualified into Qualified is the same
+      // ownership check, not just the matrix's normal changeStage scope —
+      // that's the point the RM/PM commits to a Closing Date (enforced
+      // client-side), so only they (or Admin) may make that specific move;
+      // a Service Manager or anyone else with generic changeStage rights
+      // still cannot.
       const intoPreQualified = mod === 'investmentProspects' && to === 'Pre-Qualified';
+      const outOfPreQualified = mod === 'investmentProspects' && from === 'Pre-Qualified' && to === 'Qualified';
       const stageAllowed = !stageChanged || (
-        intoPreQualified
+        intoPreQualified || outOfPreQualified
           ? isPreQualifiedOwner(actor, existing)
           : canChangeStage(actor, mod, existing, from, to)
             && (!isBackwardStage(mod, from, to) || canChangeStageBack(actor, mod, existing))
