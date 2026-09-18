@@ -43,7 +43,9 @@ const num = (v) => Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
 
 // Investment/insurance proposal buckets — must stay in step with
 // DashboardView.jsx's SIP_IN_TYPES / SIP_OUT_TYPES and computeIns().
-const SIP_IN_TYPES = ['SIP Registration'];
+// "Purchase with SIP" is itself a SIP registration, same as the
+// "SIP Registration" proposal type.
+const SIP_IN_TYPES = ['SIP Registration', 'Purchase with SIP'];
 const SIP_OUT_TYPES = ['SIP Cancellation'];
 const INSURANCE_PREMIUM_TYPES = [
   'Term Insurance', 'Medical Insurance', 'Accidental Insurance',

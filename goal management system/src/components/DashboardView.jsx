@@ -5,7 +5,7 @@ import {
   Shield, HeartPulse, Activity, FileBadge, Users, UserPlus, UserCheck, Skull, Clock,
   CalendarCheck, ListChecks, Briefcase, Landmark, Coins, Sparkles, PauseCircle,
   Calendar, CheckSquare, ExternalLink, AlertCircle, Video, Target, Plane, Ship, Car, ChevronDown,
-  Pencil, X
+  Pencil, X, Info
 } from 'lucide-react';
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip
@@ -74,13 +74,16 @@ const normalizeUrl = (url) => {
   return /^https?:\/\//i.test(u) ? u : `https://${u}`;
 };
 
-// Investment proposalType buckets — ONLY the exact 4 types that back the
-// Net SIP Book / Net Lumpsum Flow cards. Every other proposal type
-// ("Purchase with SIP", "Special SIP", "SIP Pause", "STP/SWP Proposal",
-// "STP/SWP Cancelation", etc.) must fall through to the dynamic "Other
-// Proposals" breakdown as its own line item — not get silently merged into
-// one of these 4 buckets.
-const SIP_IN_TYPES = ['SIP Registration'];
+// Investment proposalType buckets that back the Net SIP Book / Net Lumpsum
+// Flow cards. Every other proposal type ("Special SIP", "SIP Pause",
+// "STP/SWP Proposal", "STP/SWP Cancelation", etc.) must fall through to the
+// dynamic "Other Proposals" breakdown as its own line item — not get
+// silently merged into one of these buckets.
+// "Purchase with SIP" is itself a SIP registration (a fresh systematic
+// investment, same as the "SIP Registration" proposal type) — it counts
+// toward the SIP-in side, not Other Proposals. Must stay in step with
+// server/src/routes/managedPortfolio.js's own SIP_IN_TYPES.
+const SIP_IN_TYPES = ['SIP Registration', 'Purchase with SIP'];
 const SIP_OUT_TYPES = ['SIP Cancellation'];
 const LUMP_TYPES = ['Lumpsum Investment'];
 const REDEEM_TYPES = ['Redemption Proposal'];
@@ -193,6 +196,13 @@ function computeInv(prospectsInPeriod) {
   const items = prospectsInPeriod.filter(p => p.proposalCategory === 'investment' && isBookedInvestment(p));
   const sumOf = (types) => items.filter(p => types.includes(p.proposalType)).reduce((s, p) => s + num(p.amount), 0);
   const sipIn = sumOf(SIP_IN_TYPES);
+  // Per-type split of the SIP-in total, purely for the "i" breakdown next to
+  // the SIP Registration row — sipIn itself is still the single source of
+  // truth for the net figure, this is just how it's explained.
+  const sipInByType = SIP_IN_TYPES.reduce((acc, t) => {
+    acc[t] = sumOf([t]);
+    return acc;
+  }, {});
   const sipOut = sumOf(SIP_OUT_TYPES);
   const lump = sumOf(LUMP_TYPES);
   const redeem = sumOf(REDEEM_TYPES);
@@ -207,7 +217,7 @@ function computeInv(prospectsInPeriod) {
   const otherByType = Object.entries(otherByTypeMap)
     .map(([type, amount]) => ({ type, amount }))
     .sort((a, b) => b.amount - a.amount);
-  return { sipIn, sipOut, netSip: sipIn - sipOut, lump, redeem, netLump: lump - redeem, other, otherByType, otherCount: other.length, otherAmt, count: items.length };
+  return { sipIn, sipInByType, sipOut, netSip: sipIn - sipOut, lump, redeem, netLump: lump - redeem, other, otherByType, otherCount: other.length, otherAmt, count: items.length };
 }
 
 function computeIns(prospectsInPeriod) {
@@ -691,7 +701,10 @@ export default function DashboardView({
               <FlowCard
                 title="Net SIP Book" net={inv.netSip} icon={TrendingUp} accent="blue"
                 rows={[
-                  { icon: ArrowUpRight, label: 'SIP Registration', value: inv.sipIn, tone: 'in' },
+                  {
+                    icon: ArrowUpRight, label: 'SIP Registration', value: inv.sipIn, tone: 'in',
+                    info: SIP_IN_TYPES.map(t => `${t}: ${fmtINR(inv.sipInByType[t] || 0)}`).join('  •  '),
+                  },
                   { icon: ArrowDownLeft, label: 'SIP Cancellation', value: inv.sipOut, tone: 'out' },
                 ]}
               />
@@ -1644,6 +1657,29 @@ const FLOW_ROW_TONE = {
 // rows as a 2x2 tile grid (Net COBR Flow's 4 metrics) instead of a stacked
 // label/value list (the 2-item cards) — keeps every card in the row the
 // same visual weight instead of one growing cramped or lopsided.
+// Small "i" affordance next to a FlowCard row — hovering it reveals what the
+// row's total is actually made up of, without cluttering the row itself. A
+// plain absolutely-positioned tooltip (not a portal) is safe here: FlowCard
+// sits in the normal document flow with no overflow-clipping ancestor.
+// Hover-only (no separate click-to-toggle): combining both meant a click
+// while already hovering closed it right back — the native `title` below
+// already covers a keyboard/touch fallback.
+function InfoTip({ text }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-flex shrink-0" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <button type="button" className="text-slate-350 hover:text-blue-600 dark:text-slate-600 dark:hover:text-blue-400 transition-colors cursor-pointer" title={text}>
+        <Info size={11} />
+      </button>
+      {open && (
+        <div className="absolute z-50 left-1/2 -translate-x-1/2 bottom-full mb-1.5 w-max max-w-[240px] px-2.5 py-1.5 rounded-lg bg-slate-900 dark:bg-slate-700 text-white text-[10px] font-semibold shadow-lg leading-relaxed">
+          {text}
+        </div>
+      )}
+    </span>
+  );
+}
+
 function FlowCard({ title, net, icon: TitleIcon, accent = 'blue', rows, grid, wide }) {
   const badge = FLOW_ACCENT[accent] || FLOW_ACCENT.blue;
   const negative = net < 0;
@@ -1690,6 +1726,7 @@ function FlowCard({ title, net, icon: TitleIcon, accent = 'blue', rows, grid, wi
                   <div className="flex items-center gap-2 min-w-0">
                     <r.icon size={13} className={`shrink-0 ${tone.icon}`} />
                     <span className="text-[12.5px] font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">{r.label}</span>
+                    {r.info && <InfoTip text={r.info} />}
                   </div>
                   <span className={`text-[12.5px] font-bold tabular-nums shrink-0 ${tone.text}`}>{fmtINR(r.value)}</span>
                 </div>
