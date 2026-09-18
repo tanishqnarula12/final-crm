@@ -2,14 +2,16 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Users, Plus, X, SlidersHorizontal, Search, CheckCircle2, AlertCircle, FileSpreadsheet, PieChart, Wallet,
-  Columns3, Check, Lock, Target, TrendingUp, ShieldCheck, HeartPulse, Activity, Trash2
+  Columns3, Check, Lock, Target, TrendingUp, ShieldCheck, HeartPulse, Activity, Trash2,
+  MapPin, Map, Tag, Briefcase, UserCheck, BadgeCheck, Clock, Skull
 } from 'lucide-react';
 import {
-  Avatar, Card, Field, inputCls, selectCls, btnPrimary, btnGhost, CoolSelect
+  Avatar, Card, Field, inputCls, selectCls, btnPrimary, btnGhost, CoolSelect, MultiSelect
 } from './UI';
 import { getCurrentUser } from '../utils/auth';
 import { canCreateClient, canDeleteClient } from '../utils/permissions';
 import { hasAllocation } from '../utils/assets';
+import { teamName, loadTeam } from '../services/team';
 import ClientSearchDropdown from './ClientSearchDropdown';
 
 // Manage Columns — the optional columns an advisor can pin onto the Client
@@ -22,15 +24,49 @@ const COLUMNS_STORAGE_KEY = 'crm:clientListColumns';
 // separate storage key from the columns picker above, same "sticky until an
 // explicit Clear" behaviour the Leads module's filters use.
 const FILTERS_STORAGE_KEY = 'crm:clientListFilters';
-const DEFAULT_FILTERS = { ageMin: '', ageMax: '', goalsMin: '', goalsMax: '', goalSet: 'all', allocSet: 'all' };
+// City/State/Client Type/Client Status/Occupation/RM are multi-select — []
+// means "no restriction", same convention Leads/Prospects filters use.
+const DEFAULT_FILTERS = {
+  ageMin: '', ageMax: '', goalsMin: '', goalsMax: '', goalSet: 'all', allocSet: 'all',
+  cities: [], states: [], clientTypes: [], statuses: [], occupations: [], rms: [],
+};
+const asArray = (v, fallback) => (Array.isArray(v) ? v : fallback);
 const loadSavedFilters = () => {
   try {
     const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
-    return raw ? { ...DEFAULT_FILTERS, ...JSON.parse(raw) } : { ...DEFAULT_FILTERS };
+    const parsed = raw ? JSON.parse(raw) : null;
+    return {
+      ...DEFAULT_FILTERS,
+      ...parsed,
+      cities: asArray(parsed?.cities, DEFAULT_FILTERS.cities),
+      states: asArray(parsed?.states, DEFAULT_FILTERS.states),
+      clientTypes: asArray(parsed?.clientTypes, DEFAULT_FILTERS.clientTypes),
+      statuses: asArray(parsed?.statuses, DEFAULT_FILTERS.statuses),
+      occupations: asArray(parsed?.occupations, DEFAULT_FILTERS.occupations),
+      rms: asArray(parsed?.rms, DEFAULT_FILTERS.rms),
+    };
   } catch {
     return { ...DEFAULT_FILTERS };
   }
 };
+
+// Shared field accessors — the SAME fallback logic backs the filter
+// predicate, the derived option lists and the table cell, so a client can
+// never be excluded by one and shown as a different value by another.
+const clientCity = (c) => c.clientDetails?.city || '';
+const clientState = (c) => c.clientDetails?.state || '';
+const clientTypeOf = (c) => c.clientDetails?.clientType || '';
+const clientStatusOf = (c) => c.clientDetails?.status || 'Active';
+// "Occupation" as advisors mean it is the fixed Profession field, not the
+// free-text clientDetails.occupation — that one lives under the form's
+// optional "Additional Details" section and the bulk-Excel-import flow never
+// writes it at all, so it's blank for most of a real directory. Profession is
+// required on every creation path (manual + import), and the import flow's
+// own column-header synonym list already maps a sheet column literally
+// titled "Occupation" onto this field (see Modals.jsx's COLS map) — so this
+// is what "Occupation" already means elsewhere in this app.
+const clientOccupation = (c) => c.clientDetails?.profession || '';
+const clientRmId = (c) => c.clientDetails?.relationshipManager || '';
 
 const OPTIONAL_COLUMNS = [
   {
@@ -61,7 +97,49 @@ const OPTIONAL_COLUMNS = [
     key: 'accidentalInsurance', label: 'Accidental Insurance', icon: Activity,
     cell: (c) => <td className="px-6 py-4"><StatusPill ok={c.clientDetails?.insuranceAccidental === 'Yes'} yesIcon={Activity} /></td>,
   },
+  {
+    key: 'city', label: 'City', icon: MapPin,
+    cell: (c) => <td className="px-6 py-4 text-slate-700 dark:text-slate-300">{clientCity(c) || '—'}</td>,
+  },
+  {
+    key: 'state', label: 'State', icon: Map,
+    cell: (c) => <td className="px-6 py-4 text-slate-700 dark:text-slate-300">{clientState(c) || '—'}</td>,
+  },
+  {
+    key: 'clientType', label: 'Client Type', icon: Tag,
+    cell: (c) => <td className="px-6 py-4 text-slate-700 dark:text-slate-300">{clientTypeOf(c) || '—'}</td>,
+  },
+  {
+    key: 'clientStatus', label: 'Client Status', icon: BadgeCheck,
+    cell: (c) => <td className="px-6 py-4"><ClientStatusPill status={clientStatusOf(c)} /></td>,
+  },
+  {
+    key: 'occupation', label: 'Occupation', icon: Briefcase,
+    cell: (c) => <td className="px-6 py-4 text-slate-700 dark:text-slate-300">{clientOccupation(c) || '—'}</td>,
+  },
+  {
+    key: 'rm', label: 'RM', icon: UserCheck,
+    cell: (c) => <td className="px-6 py-4 text-slate-700 dark:text-slate-300">{teamName(clientRmId(c)) || '—'}</td>,
+  },
 ];
+
+// Mirrors ClientProfile.jsx's own StatusBadge (Active/Inactive/Dead) at
+// table-cell size — that component isn't exported, so this is a compact
+// twin rather than a cross-file import.
+function ClientStatusPill({ status }) {
+  const s = status || 'Active';
+  const theme = s === 'Active'
+    ? { cls: 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 ring-emerald-200/50 dark:ring-emerald-900/30', Icon: CheckCircle2 }
+    : s === 'Inactive'
+      ? { cls: 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 ring-amber-200/50 dark:ring-amber-900/30', Icon: Clock }
+      : { cls: 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 ring-rose-200/50 dark:ring-rose-900/30', Icon: Skull };
+  const Icon = theme.Icon;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full ring-1 ${theme.cls}`}>
+      <Icon size={11} /> {s}
+    </span>
+  );
+}
 
 function StatusPill({ ok, yesIcon: YesIcon = CheckCircle2, noIcon: NoIcon = AlertCircle }) {
   return ok ? (
@@ -96,6 +174,12 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
   const [goalsMax, setGoalsMax] = useState(savedFilters.goalsMax);
   const [goalSet, setGoalSet] = useState(savedFilters.goalSet);
   const [allocSet, setAllocSet] = useState(savedFilters.allocSet);
+  const [cityFilters, setCityFilters] = useState(savedFilters.cities);
+  const [stateFilters, setStateFilters] = useState(savedFilters.states);
+  const [clientTypeFilters, setClientTypeFilters] = useState(savedFilters.clientTypes);
+  const [statusFilters, setStatusFilters] = useState(savedFilters.statuses);
+  const [occupationFilters, setOccupationFilters] = useState(savedFilters.occupations);
+  const [rmFilters, setRmFilters] = useState(savedFilters.rms);
   const [visibleColumns, setVisibleColumns] = useState(() => {
     try {
       const raw = localStorage.getItem(COLUMNS_STORAGE_KEY);
@@ -161,6 +245,20 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
     };
   }, [showColumnPicker]);
 
+  // Offered in the City/State/Client Type/Client Status/Occupation pickers:
+  // whatever values actually exist in the data, same as Leads/Prospects do
+  // for their own free-text-ish filter dimensions — never an option that
+  // could match zero clients.
+  const cityOptions = useMemo(() => Array.from(new Set(clients.map(clientCity).filter(Boolean))).sort(), [clients]);
+  const stateOptions = useMemo(() => Array.from(new Set(clients.map(clientState).filter(Boolean))).sort(), [clients]);
+  const clientTypeOptions = useMemo(() => Array.from(new Set(clients.map(clientTypeOf).filter(Boolean))).sort(), [clients]);
+  const statusOptions = useMemo(() => Array.from(new Set(clients.map(clientStatusOf))).sort(), [clients]);
+  const occupationOptions = useMemo(() => Array.from(new Set(clients.map(clientOccupation).filter(Boolean))).sort(), [clients]);
+  // Full team roster (+ Unassigned), not just RMs currently in use — mirrors
+  // Leads' own RM filter exactly (also computed fresh each render, off the
+  // already-cached team directory), so both modules behave the same way.
+  const rmOptions = [{ value: 'unassigned', label: 'Unassigned' }, ...loadTeam().map(m => ({ value: m.id, label: m.name }))];
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const aMin = ageMin === '' ? null : Number(ageMin);
@@ -181,26 +279,59 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
         if (allocSet === 'yes' && !allocated) return false;
         if (allocSet === 'no' && allocated) return false;
       }
+      if (cityFilters.length > 0 && !cityFilters.includes(clientCity(c))) return false;
+      if (stateFilters.length > 0 && !stateFilters.includes(clientState(c))) return false;
+      if (clientTypeFilters.length > 0 && !clientTypeFilters.includes(clientTypeOf(c))) return false;
+      if (statusFilters.length > 0 && !statusFilters.includes(clientStatusOf(c))) return false;
+      if (occupationFilters.length > 0 && !occupationFilters.includes(clientOccupation(c))) return false;
+      if (rmFilters.length > 0 && !rmFilters.includes(clientRmId(c) || 'unassigned')) return false;
       return true;
     });
-  }, [clients, query, ageMin, ageMax, goalsMin, goalsMax, goalSet, allocSet]);
+  }, [clients, query, ageMin, ageMax, goalsMin, goalsMax, goalSet, allocSet,
+      cityFilters, stateFilters, clientTypeFilters, statusFilters, occupationFilters, rmFilters]);
 
   const activeCount =
     (ageMin !== '' || ageMax !== '' ? 1 : 0) +
     (goalsMin !== '' || goalsMax !== '' ? 1 : 0) +
     (goalSet !== 'all' ? 1 : 0) +
-    (allocSet !== 'all' ? 1 : 0);
+    (allocSet !== 'all' ? 1 : 0) +
+    (cityFilters.length > 0 ? 1 : 0) +
+    (stateFilters.length > 0 ? 1 : 0) +
+    (clientTypeFilters.length > 0 ? 1 : 0) +
+    (statusFilters.length > 0 ? 1 : 0) +
+    (occupationFilters.length > 0 ? 1 : 0) +
+    (rmFilters.length > 0 ? 1 : 0);
 
   useEffect(() => {
     try {
-      localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify({ ageMin, ageMax, goalsMin, goalsMax, goalSet, allocSet }));
+      localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify({
+        ageMin, ageMax, goalsMin, goalsMax, goalSet, allocSet,
+        cities: cityFilters, states: stateFilters, clientTypes: clientTypeFilters,
+        statuses: statusFilters, occupations: occupationFilters, rms: rmFilters,
+      }));
     } catch { /* private mode / quota — filters just won't persist */ }
-  }, [ageMin, ageMax, goalsMin, goalsMax, goalSet, allocSet]);
+  }, [ageMin, ageMax, goalsMin, goalsMax, goalSet, allocSet,
+      cityFilters, stateFilters, clientTypeFilters, statusFilters, occupationFilters, rmFilters]);
 
   const clearAll = () => {
     setAgeMin(DEFAULT_FILTERS.ageMin); setAgeMax(DEFAULT_FILTERS.ageMax);
     setGoalsMin(DEFAULT_FILTERS.goalsMin); setGoalsMax(DEFAULT_FILTERS.goalsMax);
     setGoalSet(DEFAULT_FILTERS.goalSet); setAllocSet(DEFAULT_FILTERS.allocSet);
+    setCityFilters(DEFAULT_FILTERS.cities); setStateFilters(DEFAULT_FILTERS.states);
+    setClientTypeFilters(DEFAULT_FILTERS.clientTypes); setStatusFilters(DEFAULT_FILTERS.statuses);
+    setOccupationFilters(DEFAULT_FILTERS.occupations); setRmFilters(DEFAULT_FILTERS.rms);
+  };
+
+  // Table-header icon filter buttons (per optional column) drive the EXACT
+  // same state as the panel pickers above, so whichever affordance is used
+  // they always agree — keyed by OPTIONAL_COLUMNS key.
+  const columnFilterProps = {
+    city: { options: cityOptions.map(v => ({ value: v, label: v })), selected: cityFilters, onChange: setCityFilters, label: 'cities' },
+    state: { options: stateOptions.map(v => ({ value: v, label: v })), selected: stateFilters, onChange: setStateFilters, label: 'states' },
+    clientType: { options: clientTypeOptions.map(v => ({ value: v, label: v })), selected: clientTypeFilters, onChange: setClientTypeFilters, label: 'types' },
+    clientStatus: { options: statusOptions.map(v => ({ value: v, label: v })), selected: statusFilters, onChange: setStatusFilters, label: 'statuses' },
+    occupation: { options: occupationOptions.map(v => ({ value: v, label: v })), selected: occupationFilters, onChange: setOccupationFilters, label: 'occupations' },
+    rm: { options: rmOptions, selected: rmFilters, onChange: setRmFilters, label: 'RM' },
   };
 
   return (
@@ -324,6 +455,24 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
                 </CoolSelect>
               </div>
             </Field>
+            <Field label="City" hint="Pick any number — leave empty for all">
+              <MultiSelect label="cities" allLabel="All Cities" options={cityOptions.map(v => ({ value: v, label: v }))} selected={cityFilters} onChange={setCityFilters} />
+            </Field>
+            <Field label="State" hint="Pick any number — leave empty for all">
+              <MultiSelect label="states" allLabel="All States" options={stateOptions.map(v => ({ value: v, label: v }))} selected={stateFilters} onChange={setStateFilters} />
+            </Field>
+            <Field label="Client Type" hint="Pick any number — leave empty for all">
+              <MultiSelect label="client types" allLabel="All Client Types" options={clientTypeOptions.map(v => ({ value: v, label: v }))} selected={clientTypeFilters} onChange={setClientTypeFilters} />
+            </Field>
+            <Field label="Client Status" hint="Pick any number — leave empty for all">
+              <MultiSelect label="statuses" allLabel="All Statuses" options={statusOptions.map(v => ({ value: v, label: v }))} selected={statusFilters} onChange={setStatusFilters} />
+            </Field>
+            <Field label="Occupation" hint="Pick any number — leave empty for all">
+              <MultiSelect label="occupations" allLabel="All Occupations" options={occupationOptions.map(v => ({ value: v, label: v }))} selected={occupationFilters} onChange={setOccupationFilters} />
+            </Field>
+            <Field label="RM" hint="Pick any number — leave empty for all">
+              <MultiSelect label="RM" allLabel="All RMs" options={rmOptions} selected={rmFilters} onChange={setRmFilters} />
+            </Field>
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4 pt-4 border-t border-slate-200/40 dark:border-slate-800/40">
             {/* Import Excel lives inside the filter panel */}
@@ -354,7 +503,18 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
                 <th className="text-left px-6 py-4 font-bold">Age</th>
                 {visibleColumns.map(key => {
                   const col = OPTIONAL_COLUMNS.find(c => c.key === key);
-                  return col ? <th key={key} className="text-left px-6 py-4 font-bold">{col.label}</th> : null;
+                  if (!col) return null;
+                  const cf = columnFilterProps[key];
+                  return (
+                    <th key={key} className="text-left px-6 py-4 font-bold">
+                      {cf ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          {col.label}
+                          <MultiSelect variant="icon" label={cf.label} options={cf.options} selected={cf.selected} onChange={cf.onChange} />
+                        </span>
+                      ) : col.label}
+                    </th>
+                  );
                 })}
                 <th className="px-3 py-4 w-10 text-right">
                   <button
