@@ -53,8 +53,10 @@ const INSURANCE_PREMIUM_TYPES = [
 ];
 
 // Indian financial year (1 April – 31 March), server-local — mirrors the
-// dashboard's fyStartYearFor()/rangeForFilter(). Always the CURRENT FY: these
-// cards deliberately ignore whatever period filter a user has set elsewhere.
+// dashboard's fyStartYearFor()/rangeForFilter(). Used for Managed Insurance
+// below, which is always the CURRENT FY regardless of any period filter a
+// user has set elsewhere (Total SIP Book, the other flow figure this route
+// computes, is all-time and doesn't use this at all — see computeGlobals()).
 function currentFy(now = new Date()) {
   const startYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
   return {
@@ -92,21 +94,29 @@ async function computeGlobals() {
     where: { deletedAt: null },
     select: { proposalCategory: true, stage: true, payload: true, createdAt: true },
   });
+  const categoryOf = (r) => r.payload?.proposalCategory ?? r.proposalCategory;
+
+  // Total SIP Book is a cumulative running book, not a per-period flow —
+  // every SIP Registration/Purchase with SIP ever recorded, minus every SIP
+  // Cancellation ever recorded, with NO date window (same idea as the AUM
+  // total above it, which is likewise never period-scoped). This used to be
+  // restricted to the current FY only, which could go — and did, in
+  // production — negative whenever a FY happened to see more cancellations
+  // than new registrations, even though the firm's actual all-time book was
+  // healthy and positive.
+  const investment = prospectRows.filter((r) => categoryOf(r) === 'investment');
+  const sumInv = (types) => investment
+    .filter((r) => types.includes(r.payload?.proposalType))
+    .reduce((s, r) => s + num(r.payload?.amount), 0);
+  const netSipAllTime = sumInv(SIP_IN_TYPES) - sumInv(SIP_OUT_TYPES);
+
+  // Net insurance flow, unlike SIP Book above, stays a per-FY figure —
+  // Managed Insurance wasn't asked to change and isn't named "Total".
   const inFy = prospectRows.filter((r) => {
     const iso = r.payload?.createdAt ?? r.createdAt;
     const d = iso ? new Date(iso) : null;
     return d && !Number.isNaN(d.getTime()) && d >= fy.start && d <= fy.end;
   });
-  const categoryOf = (r) => r.payload?.proposalCategory ?? r.proposalCategory;
-
-  const investment = inFy.filter((r) => categoryOf(r) === 'investment');
-  const sumInv = (types) => investment
-    .filter((r) => types.includes(r.payload?.proposalType))
-    .reduce((s, r) => s + num(r.payload?.amount), 0);
-  const netSipFy = sumInv(SIP_IN_TYPES) - sumInv(SIP_OUT_TYPES);
-
-  // Net insurance flow = premium across the six policy types, less anything
-  // that ended up rejected (rejections count whatever their type).
   const insurance = inFy.filter((r) => categoryOf(r) === 'insurance');
   const premium = insurance
     .filter((r) => INSURANCE_PREMIUM_TYPES.includes(r.payload?.proposalType))
@@ -126,7 +136,7 @@ async function computeGlobals() {
     aum,
     clientGroups: clientRows.length,
     mappedClients: clientRows.filter((c) => hasAllocation(c.assetAllocation)).length,
-    netSipFy,
+    netSipAllTime,
     netInsuranceFy,
     fyLabel: fy.label,
   };

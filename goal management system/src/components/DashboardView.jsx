@@ -413,17 +413,22 @@ export default function DashboardView({
     return { aum, totalNetWorth, withAlloc };
   }, [clients]);
 
-  // Managed Portfolio — always the CURRENT financial year, never any section's
-  // period filter: these are firm-level headline figures, so they must not move
-  // when someone changes what Business Overview or Investment Operations is
-  // looking at. The server sends the authoritative firm-wide totals; the local
-  // FY figures below are only a fallback for the moment before that lands (and
-  // if the call fails), computed off the same math over this user's own data.
+  // Managed Portfolio — firm-level headline figures that must not move when
+  // someone changes what Business Overview or Investment Operations is
+  // looking at. The server sends the authoritative firm-wide totals; the
+  // local figures below are only a fallback for the moment before that lands
+  // (and if the call fails), computed off the same math over this user's own
+  // data. Total SIP Book is a cumulative running book (same idea as Total AUM
+  // Managed right next to it) — every SIP ever registered minus every one
+  // ever cancelled, no date window — NOT "this FY", which used to make it
+  // swing negative whenever a given FY happened to see more cancellations
+  // than new registrations even though the firm's actual book was healthy.
+  // Managed Insurance stays FY-scoped (unchanged, not asked to be otherwise).
+  const localAllTimeInv = useMemo(() => computeInv(prospects), [prospects]);
   const fixedFy = useMemo(() => defaultFilter('year'), []);
-  const localFyInv = useMemo(() => computeInv(filterByFilter(prospects, fixedFy, prospectReportDate)), [prospects, fixedFy]);
   const localFyIns = useMemo(() => computeIns(filterByFilter(prospects, fixedFy, prospectReportDate)), [prospects, fixedFy]);
 
-  const crmNetSip = mpComputed?.netSipFy ?? localFyInv.netSip;
+  const crmNetSip = mpComputed?.netSipAllTime ?? localAllTimeInv.netSip;
   const crmNetInsurance = mpComputed?.netInsuranceFy ?? localFyIns.netFlow;
   const crmAum = mpComputed?.aum ?? rev.aum;
   const crmClientGroups = mpComputed?.clientGroups ?? clients.length;
@@ -431,8 +436,8 @@ export default function DashboardView({
 
   // AUM is a stated balance — the manual entry REPLACES the computed figure
   // (it's the number confirmed against the custodian/RTA, as of a given date).
-  // SIP Book and Managed Insurance instead ADD the manual entry on top of what
-  // the CRM already booked this financial year.
+  // SIP Book and Managed Insurance instead ADD the manual entry on top of the
+  // computed figure (all-time for SIP, this financial year for Insurance).
   const displayAum = mpOverride?.aumAmount ?? crmAum;
   const displaySip = (mpOverride?.sipAmount ?? 0) + crmNetSip;
   const displayInsurance = (mpOverride?.insuranceAmount ?? 0) + crmNetInsurance;
