@@ -1189,10 +1189,17 @@ export default function InsuranceProposal({ client, isViewer }) {
                       <div className="col-span-1 md:col-span-2 lg:col-span-2">
                         <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Name</label>
                         {applicantOptions.length > 0 ? (
+                          // freeInput: without it, typing a name that isn't
+                          // an existing client/family member showed "No
+                          // matches found" and then discarded whatever was
+                          // typed the moment you clicked away — this member
+                          // isn't always someone already on file.
                           <CoolSelect
                             value={member.name}
                             onChange={(e) => updateApplicantName(index, e.target.value)}
+                            placeholder="Select or type name..."
                             className={selectCls + ' text-xs py-2 px-3'}
+                            freeInput
                           >
                             <option value="">Select applicant…</option>
                             {applicantOptions.map(o => (
