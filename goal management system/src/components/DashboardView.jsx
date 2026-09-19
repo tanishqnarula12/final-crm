@@ -261,17 +261,23 @@ function computeServicing(tasksInPeriod) {
     list.forEach(t => { const s = t.stage || 'Qualified'; m[s] = (m[s] || 0) + 1; });
     return m;
   };
-  // The headline count/amount reports BOOKED business only, while the stage
-  // breakdown still covers every record in the period — otherwise the
-  // pipeline view would collapse to just the one stage that counts.
+  // The headline count/amount reports BOOKED business only, while `total`
+  // (and the stage breakdown) still cover every record in the period — so
+  // the KPI can show "booked out of every record we're tracking" instead of
+  // silently hiding the ones still in earlier stages.
   const build = (list, amountKey, isBooked) => {
     const booked = list.filter(isBooked);
-    return { count: booked.length, amount: sumBy(booked, amountKey), stages: stageMapOf(list) };
+    return { count: booked.length, total: list.length, amount: sumBy(booked, amountKey), stages: stageMapOf(list) };
   };
   return {
     renewal: build(tasksInPeriod.filter(isRenewal), 'premiumAmount', isBookedRenewal),
     claim: build(tasksInPeriod.filter(isClaim), 'claimAmount', isBookedClaim),
-    fd: build(tasksInPeriod.filter(isFd), 'maturityAmount', isBookedFd),
+    // Maturity Amount is the FD's contractual value entered at creation —
+    // Investment Amount is what the client actually chose to invest with us
+    // once the FD reached "Invested With Us", which is the real business
+    // figure this card is meant to report (and matches its own "invested
+    // with us" hint below).
+    fd: build(tasksInPeriod.filter(isFd), 'investmentAmount', isBookedFd),
     policy: build(tasksInPeriod.filter(isPolicy), 'premiumAmount', () => true),
   };
 }
@@ -1084,10 +1090,10 @@ export default function DashboardView({
               <PeriodFilter filter={servicingFilter} onChange={setServicingFilter} defaultMode="month" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-              <HeroKpi icon={CalendarCheck} accent="blue" label="Renewal Premium" value={fmtINR(servicing.renewal.amount)} hint={`${servicing.renewal.count} renewal${servicing.renewal.count === 1 ? '' : 's'} paid`} />
-              <HeroKpi icon={AlertCircle} accent="cyan" label="Claims Amount" value={fmtINR(servicing.claim.amount)} hint={`${servicing.claim.count} claim${servicing.claim.count === 1 ? '' : 's'} settled`} />
-              <HeroKpi icon={Landmark} accent="violet" label="FD Maturity Value" value={fmtINR(servicing.fd.amount)} hint={`${servicing.fd.count} FD${servicing.fd.count === 1 ? '' : 's'} invested with us`} />
-              <HeroKpi icon={Shield} accent="emerald" label="Other Policies Premium" value={fmtINR(servicing.policy.amount)} hint={`${servicing.policy.count} polic${servicing.policy.count === 1 ? 'y' : 'ies'}`} />
+              <HeroKpi icon={CalendarCheck} accent="blue" label="Renewal Premium" value={fmtINR(servicing.renewal.amount)} hint={`${servicing.renewal.count} of ${servicing.renewal.total} renewal${servicing.renewal.total === 1 ? '' : 's'} paid`} />
+              <HeroKpi icon={AlertCircle} accent="cyan" label="Claims Amount" value={fmtINR(servicing.claim.amount)} hint={`${servicing.claim.count} of ${servicing.claim.total} claim${servicing.claim.total === 1 ? '' : 's'} settled`} />
+              <HeroKpi icon={Landmark} accent="violet" label="FD Invested Amount" value={fmtINR(servicing.fd.amount)} hint={`${servicing.fd.count} of ${servicing.fd.total} FD${servicing.fd.total === 1 ? '' : 's'} invested with us`} />
+              <HeroKpi icon={Shield} accent="emerald" label="Other Policies Premium" value={fmtINR(servicing.policy.amount)} hint={`${servicing.policy.count} of ${servicing.policy.total} polic${servicing.policy.total === 1 ? 'y' : 'ies'}`} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
