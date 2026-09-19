@@ -1531,16 +1531,22 @@ export default function InsuranceProposal({ client, isViewer }) {
                       {/* Header Inputs */}
                       <div className="max-w-xs">
                         <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Insured Name</label>
-                        <select
+                        {/* freeInput: the insured isn't always an existing
+                            client/applicant (e.g. a nominee or someone not
+                            yet on file) — lets an advisor pick from the
+                            family list OR just type a name. */}
+                        <CoolSelect
                           value={group.insuredName}
                           onChange={(e) => updateTermGroupInsured(gi, e.target.value)}
+                          placeholder="Select or type member..."
                           className={selectCls + ' text-xs py-1.5 px-2 bg-white dark:bg-slate-950'}
+                          freeInput
                         >
-                          <option value="">Select or type member...</option>
+                          <option value="">-- Select Applicant --</option>
                           {applicants.map((a, ai) => (
                             <option key={ai} value={a.name}>{a.name} ({a.relation})</option>
                           ))}
-                        </select>
+                        </CoolSelect>
                       </div>
 
                       {/* Policies Table */}

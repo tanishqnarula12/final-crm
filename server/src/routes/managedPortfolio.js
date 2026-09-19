@@ -104,7 +104,14 @@ async function computeGlobals() {
   // production — negative whenever a FY happened to see more cancellations
   // than new registrations, even though the firm's actual all-time book was
   // healthy and positive.
-  const investment = prospectRows.filter((r) => categoryOf(r) === 'investment');
+  // Only Close Won counts — mirrors DashboardView.jsx's isBookedInvestment()
+  // exactly. Without this, a SIP Cancellation still sitting in an earlier
+  // pipeline stage (never actually confirmed/completed) still dragged this
+  // total down, which is also how it could show one number to an Admin
+  // (whose own browser briefly renders the correctly Close-Won-gated client
+  // fallback before this endpoint's response overwrites it) and a different
+  // one once this endpoint's un-gated total landed.
+  const investment = prospectRows.filter((r) => categoryOf(r) === 'investment' && (r.payload?.stage ?? r.stage) === 'Close Won');
   const sumInv = (types) => investment
     .filter((r) => types.includes(r.payload?.proposalType))
     .reduce((s, r) => s + num(r.payload?.amount), 0);
