@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Megaphone, Cake, PartyPopper, MessageSquare, Calendar, Palmtree, Pin, Trash2, Plus, X } from 'lucide-react';
+import { Megaphone, Cake, PartyPopper, MessageSquare, Calendar, Palmtree, Pin, Trash2, Plus, X, Smile } from 'lucide-react';
 import { Card, Avatar, inputCls, selectCls, btnPrimary, btnSecondary, CoolSelect } from './UI';
-import { listNotices, createNotice, deleteNotice, NOTICE_TYPES, VISIBLE_FOR_OPTIONS } from '../services/notices';
+import { listNotices, createNotice, deleteNotice, reactToNotice, NOTICE_TYPES, VISIBLE_FOR_OPTIONS } from '../services/notices';
 import { teamName } from '../services/team';
 import { onChatEvent } from '../services/chat';
 import { getCurrentUser } from '../utils/auth';
+import { QUICK_REACTIONS } from './chat/emojiData';
+import EmojiPicker from './chat/EmojiPicker';
 import logoImg from '../assets/logo.png';
 
 const TYPE_META = {
@@ -85,7 +87,15 @@ export default function NoticeBoard() {
     const offDeleted = onChatEvent('notice:deleted', ({ id }) => {
       setNotices((cur) => cur.filter((n) => n.id !== id));
     });
-    return () => { window.removeEventListener('focus', onFocus); offNew(); offDeleted(); };
+    // A reaction (by anyone, on any device) patches that one notice's
+    // reactions live — this is also how MY OWN reaction round-trips back in,
+    // since the optimistic update below is overwritten by this once the
+    // server responds/broadcasts, keeping a single source of truth.
+    const offUpdated = onChatEvent('notice:updated', ({ notice }) => {
+      if (!notice) return;
+      setNotices((cur) => cur.map((n) => (n.id === notice.id ? notice : n)));
+    });
+    return () => { window.removeEventListener('focus', onFocus); offNew(); offDeleted(); offUpdated(); };
   }, [refresh]);
 
   const handleDelete = async (id) => {
@@ -95,8 +105,44 @@ export default function NoticeBoard() {
     try { await deleteNotice(id); } catch { setNotices(prev); }
   };
 
+  // Optimistic, mirroring the same one-emoji-per-user toggle the server
+  // applies, so the click feels instant instead of waiting on a round trip —
+  // reconciled moments later by the notice:updated broadcast above (or, for
+  // the reactor's own tab if the socket event races the HTTP response,
+  // simply left as-is since both land on the same end state).
+  const handleReact = async (id, emoji) => {
+    const meId = me?.id;
+    setNotices((cur) => cur.map((n) => {
+      if (n.id !== id) return n;
+      const reactions = {};
+      for (const [e, ids] of Object.entries(n.reactions || {})) {
+        const kept = (ids || []).filter((uid) => uid !== meId);
+        if (kept.length) reactions[e] = kept;
+      }
+      const hadSame = (n.reactions?.[emoji] || []).includes(meId);
+      if (!hadSame) reactions[emoji] = [...(reactions[emoji] || []), meId];
+      return { ...n, reactions };
+    }));
+    try {
+      const { notice } = await reactToNotice(id, emoji);
+      setNotices((cur) => cur.map((n) => (n.id === id ? notice : n)));
+    } catch {
+      refresh(); // reconcile with the server rather than leave a stale optimistic state
+    }
+  };
+
   const canDelete = (n) => n.createdBy === me?.id || (me?.roles || []).some((r) => MANAGER_ROLES.includes(r));
   const visible = showAll ? notices : notices.slice(0, 5);
+
+  // { id, anchorRect } of the notice whose reaction popover is open, or null.
+  const [reactPopover, setReactPopover] = useState(null);
+  const [reactFull, setReactFull] = useState(false);
+  const openReactPopover = (id, e) => {
+    setReactPopover({ id, anchorRect: e.currentTarget.getBoundingClientRect() });
+    setReactFull(false);
+  };
+  const closeReactPopover = () => { setReactPopover(null); setReactFull(false); };
+  const pickReaction = (emoji) => { handleReact(reactPopover.id, emoji); closeReactPopover(); };
 
   return (
     <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900">
@@ -124,6 +170,8 @@ export default function NoticeBoard() {
           const posterName = n.createdBy ? teamName(n.createdBy) : 'Team Fintness';
           const isLong = n.message.length > 110;
           const isExpanded = expanded.has(n.id);
+          const reactionEntries = Object.entries(n.reactions || {}).filter(([, ids]) => (ids || []).length > 0);
+          const myEmoji = reactionEntries.find(([, ids]) => ids.includes(me?.id))?.[0] || null;
           return (
             <div key={n.id} className="p-3 rounded-2xl border border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/10 group">
               <div className="flex items-start gap-2.5">
@@ -154,11 +202,80 @@ export default function NoticeBoard() {
                     <Avatar name={posterName} photo={n.createdBy ? undefined : logoImg} size="xs" />
                     <span className="text-[9px] text-slate-400 dark:text-slate-500 font-bold">{posterName} · {timeAgo(n.createdAt)}</span>
                   </div>
+
+                  {/* Reactions — emoji pills (click yours to remove, click any
+                      to switch) plus a React button that opens the picker. */}
+                  <div className="flex items-center flex-wrap gap-1 mt-1.5">
+                    {reactionEntries.map(([emoji, ids]) => {
+                      const reactedByMe = ids.includes(me?.id);
+                      return (
+                        <button
+                          key={emoji}
+                          onClick={() => handleReact(n.id, emoji)}
+                          title={ids.map((uid) => teamName(uid) || 'Someone').join(', ')}
+                          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer hover:scale-105 ${
+                            reactedByMe
+                              ? 'bg-blue-50 dark:bg-blue-950/50 border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                          }`}
+                        >
+                          <span className="text-xs leading-none">{emoji}</span>
+                          <span className="tabular-nums">{ids.length}</span>
+                        </button>
+                      );
+                    })}
+                    <button
+                      onClick={(e) => openReactPopover(n.id, e)}
+                      title="React"
+                      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
+                        myEmoji
+                          ? 'opacity-0 group-hover:opacity-100 border-transparent text-slate-400 hover:text-amber-500'
+                          : 'border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-500 hover:border-amber-300 dark:hover:border-amber-800'
+                      }`}
+                    >
+                      <Smile size={11} /> {!myEmoji && 'React'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           );
         })}
+
+        {reactPopover && createPortal(
+          <>
+            <div className="fixed inset-0 z-40" onClick={closeReactPopover} />
+            <div
+              style={{
+                position: 'fixed',
+                top: reactPopover.anchorRect.bottom + 6,
+                left: Math.min(reactPopover.anchorRect.left, window.innerWidth - (reactFull ? 300 : 240)),
+                zIndex: 50,
+              }}
+              className="animate-scale-up"
+            >
+              {reactFull ? (
+                <EmojiPicker onPick={pickReaction} />
+              ) : (
+                <div className="flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-2xl px-1.5 py-1">
+                  {QUICK_REACTIONS.map((e) => (
+                    <button
+                      key={e}
+                      onClick={() => pickReaction(e)}
+                      className="w-9 h-9 text-xl leading-none rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 hover:scale-125 transition-all cursor-pointer flex items-center justify-center"
+                    >
+                      {e}
+                    </button>
+                  ))}
+                  <button onClick={() => setReactFull(true)} title="More emojis" className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 hover:text-blue-600 flex items-center justify-center cursor-pointer transition-colors">
+                    <Plus size={16} />
+                  </button>
+                </div>
+              )}
+            </div>
+          </>,
+          document.body
+        )}
 
         {!loading && notices.length === 0 && (
           <div className="p-4 border border-dashed border-slate-200 dark:border-slate-850 rounded-2xl flex flex-col items-center justify-center text-center text-slate-400 dark:text-slate-500">

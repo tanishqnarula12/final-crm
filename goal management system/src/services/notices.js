@@ -22,3 +22,7 @@ export const listNotices = () => api.get('/notices').then((d) => d.notices || []
 // (including the poster) until that date arrives.
 export const createNotice = (payload) => api.post('/notices', payload);
 export const deleteNotice = (id) => api.del(`/notices/${id}`);
+// Toggle an emoji reaction on a notice — one emoji per user, WhatsApp-style
+// (same emoji again removes it, a different one replaces it). Returns the
+// updated { notice }.
+export const reactToNotice = (id, emoji) => api.post(`/notices/${id}/react`, { emoji });

@@ -5,7 +5,7 @@
 import React from 'react';
 import {
   Bell, CheckCheck, Check, ClipboardList, AlarmClock, Video,
-  Briefcase, UserPlus, Cake, HelpCircle, CalendarClock, CalendarCheck2, CheckCircle2, MessageSquare,
+  Briefcase, UserPlus, Cake, HelpCircle, CalendarClock, CalendarCheck2, CheckCircle2, MessageSquare, ThumbsUp,
 } from 'lucide-react';
 
 // Per-type icon + accent colour.
@@ -24,6 +24,7 @@ const TYPE_META = {
   QUERY_COMMENTED:  { icon: MessageSquare, cls: 'bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400' },
   LEAVE_APPLIED:    { icon: CalendarClock, cls: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400' },
   LEAVE_RESPONDED:  { icon: CalendarCheck2, cls: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400' },
+  NOTICE_REACTED:   { icon: ThumbsUp,       cls: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400' },
 };
 const fallbackMeta = { icon: Bell, cls: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' };
 

@@ -28,6 +28,7 @@ export const NOTIF = {
   LEAVE_APPLIED: 'LEAVE_APPLIED',
   LEAVE_RESPONDED: 'LEAVE_RESPONDED',
   NOTICE_POSTED: 'NOTICE_POSTED',
+  NOTICE_REACTED: 'NOTICE_REACTED',
 };
 
 export const serializeNotification = (n) => ({
@@ -364,4 +365,21 @@ export async function notifyNoticePosted(prisma, noticeRow, posterName) {
       link: { view: 'dashboard' },
     }));
   await pushNotifications(prisma, items);
+}
+
+// Someone reacted to a notice → the poster (never for a system post, which
+// has no poster to tell, and never for reacting to your own notice).
+export async function notifyNoticeReacted(prisma, noticeRow, reactorId, reactorName, emoji) {
+  if (!noticeRow.createdBy || noticeRow.createdBy === reactorId) return;
+  await pushNotifications(prisma, [{
+    userId: noticeRow.createdBy, type: NOTIF.NOTICE_REACTED,
+    title: `${reactorName} reacted ${emoji} to your notice`,
+    body: noticeRow.title,
+    link: { view: 'dashboard' },
+    // One row per (poster, notice, reactor, emoji) — switching to a
+    // different emoji notifies again, re-picking the same one does not spam
+    // a second time. Keyed by user id, not display name, so two people who
+    // happen to share a name can't collide or shadow each other.
+    dedupeKey: `notice-react:${noticeRow.id}:${reactorId}:${emoji}`,
+  }]);
 }

@@ -81,9 +81,14 @@ const normalizeUrl = (url) => {
 // silently merged into one of these buckets.
 // "Purchase with SIP" is itself a SIP registration (a fresh systematic
 // investment, same as the "SIP Registration" proposal type) — it counts
-// toward the SIP-in side, not Other Proposals. Must stay in step with
-// server/src/routes/managedPortfolio.js's own SIP_IN_TYPES.
-const SIP_IN_TYPES = ['SIP Registration', 'Purchase with SIP'];
+// toward the SIP-in side, not Other Proposals. "Fresh SIP" is that exact
+// same proposal type's old name (renamed to "Purchase with SIP" 2026-08-17)
+// — every prospect created before that rename still has proposalType stored
+// as literally "Fresh SIP" and always did count toward SIP-in, so it has to
+// stay in this list or that older, still-real business silently drops out of
+// the total. Must stay in step with server/src/routes/managedPortfolio.js's
+// own SIP_IN_TYPES.
+const SIP_IN_TYPES = ['SIP Registration', 'Purchase with SIP', 'Fresh SIP'];
 const SIP_OUT_TYPES = ['SIP Cancellation'];
 const LUMP_TYPES = ['Lumpsum Investment'];
 const REDEEM_TYPES = ['Redemption Proposal'];

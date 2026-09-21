@@ -421,13 +421,6 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
               </span>
             )}
           </button>
-          <button
-            onClick={handleExportExcel}
-            title={`Export the ${filtered.length} prospect${filtered.length === 1 ? '' : 's'} currently listed`}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider border border-emerald-200 dark:border-emerald-900/50 bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all cursor-pointer shrink-0"
-          >
-            <FileSpreadsheet size={14} /> Export Excel
-          </button>
         </div>
       </div>
 
@@ -476,11 +469,23 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
               Showing <strong className="text-slate-800 dark:text-slate-200">{filtered.length}</strong> of {prospects.length} prospect{prospects.length === 1 ? '' : 's'}
               {(fromDate || toDate) && ` · ${dateType === 'closing' ? 'Closing' : 'Created'} ${fromDate || '…'} to ${toDate || '…'}`}
             </p>
-            {activeFilterCount > 0 && (
-              <button onClick={clearFilters} className={btnGhost}>
-                <X size={14} /> Clear filters
+            <div className="flex items-center gap-2">
+              {activeFilterCount > 0 && (
+                <button onClick={clearFilters} className={btnGhost}>
+                  <X size={14} /> Clear filters
+                </button>
+              )}
+              {/* Lives only here (not the main toolbar) so it's a deliberate
+                  step after opening Filter, not a button people click by
+                  reflex right next to Search/View/Sort. */}
+              <button
+                onClick={handleExportExcel}
+                title={`Export the ${filtered.length} prospect${filtered.length === 1 ? '' : 's'} currently listed`}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider border border-emerald-200 dark:border-emerald-900/50 bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all cursor-pointer shrink-0"
+              >
+                <FileSpreadsheet size={14} /> Export Excel
               </button>
-            )}
+            </div>
           </div>
         </Card>
       )}

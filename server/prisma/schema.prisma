@@ -481,6 +481,7 @@ model Notice {
   // to every open dashboard around the moment it lapses.
   expiresAt     DateTime?
   dedupeKey     String?   @unique
+  reactions     Json      @default("{}") // { "👍": [userId, ...], ... } — one emoji per user
   deletedAt     DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

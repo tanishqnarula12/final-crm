@@ -10,7 +10,7 @@ import { prisma } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/error.js';
 import { parseBody } from '../lib/validate.js';
-import { notifyNoticePosted } from '../lib/notify.js';
+import { notifyNoticePosted, notifyNoticeReacted } from '../lib/notify.js';
 import { emitToAll } from '../chat/socket.js';
 
 const router = Router();
@@ -108,6 +108,7 @@ export const serializeNotice = (n) => {
     effectiveDate: n.effectiveDate,
     effectiveTime: n.effectiveTime,
     expiresAt: n.expiresAt,
+    reactions: n.reactions || {},
     createdAt: n.createdAt,
     updatedAt: n.updatedAt,
   };
@@ -203,6 +204,34 @@ router.post('/', asyncHandler(async (req, res) => {
   if (triggered) {
     emitToAll('notice:new', { notice });
     notifyNoticePosted(prisma, row, req.user.name).catch((err) => console.error('[notify] notice posted:', err));
+  }
+}));
+
+// POST /api/notices/:id/react — toggle an emoji reaction. Same WhatsApp-style
+// rule as chat messages: each user gets at most ONE reaction on a notice,
+// reacting with the same emoji again removes it, a different emoji replaces
+// it. Broadcast live to every dashboard, and — unless you're reacting to
+// your own notice — the poster gets a notification naming you and the emoji.
+router.post('/:id/react', asyncHandler(async (req, res) => {
+  const { emoji } = parseBody(z.object({ emoji: z.string().min(1).max(16) }), req.body);
+  const existing = await prisma.notice.findUnique({ where: { id: req.params.id } });
+  if (!existing || existing.deletedAt) return res.status(404).json({ error: 'Notice not found.' });
+
+  const reactions = { ...(existing.reactions || {}) };
+  const uid = req.user.id;
+  const hadSame = (reactions[emoji] || []).includes(uid);
+  for (const key of Object.keys(reactions)) {
+    reactions[key] = reactions[key].filter((id) => id !== uid);
+    if (reactions[key].length === 0) delete reactions[key];
+  }
+  if (!hadSame) reactions[emoji] = [...(reactions[emoji] || []), uid];
+
+  const updated = await prisma.notice.update({ where: { id: existing.id }, data: { reactions } });
+  const notice = serializeNotice(updated);
+  res.json({ notice });
+  emitToAll('notice:updated', { notice });
+  if (!hadSame) {
+    notifyNoticeReacted(prisma, updated, uid, req.user.name, emoji).catch((err) => console.error('[notify] notice reacted:', err));
   }
 }));
 
