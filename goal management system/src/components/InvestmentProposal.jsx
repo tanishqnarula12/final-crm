@@ -138,7 +138,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     lumpsum: [{ category: '', scheme: '', amount: '' }],
     stp: [{ fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '' }],
     swp: [{ category: '', scheme: '', date: '', amount: '' }],
-    switch: [{ fromCategory: '', fromScheme: '', toCategory: '', toScheme: '', toAmount: '' }]
+    switch: [{ fromCategory: '', fromScheme: '', allUnits: false, toCategory: '', toScheme: '', toAmount: '' }]
   }));
 
   const [remarks, setRemarks] = useState(() => getSavedVal('remarks', {
@@ -186,7 +186,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
             lumpsum: [{ category: '', scheme: '', amount: '' }],
             stp: [{ fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '' }],
             swp: [{ category: '', scheme: '', date: '', amount: '' }],
-            switch: [{ fromCategory: '', fromScheme: '', toCategory: '', toScheme: '', toAmount: '' }],
+            switch: [{ fromCategory: '', fromScheme: '', allUnits: false, toCategory: '', toScheme: '', toAmount: '' }],
             ...parsed.sections
           };
           setSections(mergedSections);
@@ -223,7 +223,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       lumpsum: [{ category: '', scheme: '', amount: '' }],
       stp: [{ fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '' }],
       swp: [{ category: '', scheme: '', date: '', amount: '' }],
-      switch: [{ fromCategory: '', fromScheme: '', toCategory: '', toScheme: '', toAmount: '' }]
+      switch: [{ fromCategory: '', fromScheme: '', allUnits: false, toCategory: '', toScheme: '', toAmount: '' }]
     });
     setRemarks({
       sip: '', specialsip: '', sipchanges: '', sipcancel: '', sippause: '', sipregistration: '', stpcancel: '', swpcancel: '', redemption: '', lumpsum: '', stp: '', swp: '', switch: ''
@@ -366,7 +366,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       lumpsum: [{ category: '', scheme: '', amount: '' }],
       stp: [{ fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '' }],
       swp: [{ category: '', scheme: '', date: '', amount: '' }],
-      switch: [{ fromCategory: '', fromScheme: '', toCategory: '', toScheme: '', toAmount: '' }]
+      switch: [{ fromCategory: '', fromScheme: '', allUnits: false, toCategory: '', toScheme: '', toAmount: '' }]
     });
     setRemarks({
       sip: '', specialsip: '', sipchanges: '', sipcancel: '', sippause: '', sipregistration: '', stpcancel: '', swpcancel: '', redemption: '', lumpsum: '', stp: '', swp: '', switch: ''
@@ -580,6 +580,8 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
           keys.forEach((key) => {
             if (type === "sipchanges" && key === "totalSip") {
               r.push(totalSip(row) || "");
+            } else if (key === "allUnits") {
+              r.push(!!row.allUnits);
             } else {
               r.push(row[key] || "");
             }
@@ -900,6 +902,8 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
         let val = '';
         if (type === 'sipchanges' && key === 'totalSip') {
           val = fmtINRhtml(String(parseNum(row.currentSip) + parseNum(row.proposedSip)));
+        } else if (key === 'allUnits') {
+          val = row.allUnits ? "&#10003; All Units" : "-";
         } else {
           val = currList.includes(key) ? fmtINRhtml(row[key]) : (row[key] || "-");
         }
@@ -1168,7 +1172,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     lumpsum: ["Category", "Scheme Name", "Amount (Rs)"],
     stp: ["From Category", "From Scheme Name", "From Amount (Rs)", "To Category", "To Scheme Name", "To Amount (Rs)"],
     swp: ["Category", "Scheme Name", "Date of SWP", "Amount (Rs)"],
-    switch: ["From Category", "From Scheme Name", "To Category", "To Scheme Name", "To Amount (Rs)"]
+    switch: ["From Category", "From Scheme Name", "All Units", "To Category", "To Scheme Name", "To Amount (Rs)"]
   };
 
   const KEYS = {
@@ -1184,7 +1188,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     lumpsum: ["category", "scheme", "amount"],
     stp: ["fromCategory", "fromScheme", "fromAmount", "toCategory", "toScheme", "toAmount"],
     swp: ["category", "scheme", "date", "amount"],
-    switch: ["fromCategory", "fromScheme", "toCategory", "toScheme", "toAmount"]
+    switch: ["fromCategory", "fromScheme", "allUnits", "toCategory", "toScheme", "toAmount"]
   };
 
   const CURR = {
@@ -1209,7 +1213,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     // labelCols + cols.length must equal the total column count (incl. S.No)
     sipchanges: { labelCols: 4, cols: ["currentSip", "proposedSip", "totalSip"] },
     stp: { labelCols: 3, cols: ["fromAmount", "", "", "toAmount"] },
-    switch: { labelCols: 5, cols: ["toAmount"] },
+    switch: { labelCols: 6, cols: ["toAmount"] },
     stpcancel: { labelCols: 5, cols: ["amount"] }
   };
 
@@ -1499,15 +1503,16 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
                       }
 
                       // "All Units" — a plain flag with no calculation tied to
-                      // it, just marks this row as a full (not partial) redemption.
-                      if (activeTab === 'redemption' && key === 'allUnits') {
+                      // it, just marks this row as a full (not partial)
+                      // redemption/switch-out.
+                      if ((activeTab === 'redemption' || activeTab === 'switch') && key === 'allUnits') {
                         return (
                           <td key={ki} className="px-3 py-2 text-center" style={getColStyle(key)}>
                             <input
                               type="checkbox"
                               checked={!!row.allUnits}
                               onChange={(e) => updateRow(activeTab, index, key, e.target.checked)}
-                              className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                              className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 accent-blue-600 focus:ring-blue-500 cursor-pointer"
                             />
                           </td>
                         );

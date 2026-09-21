@@ -4,7 +4,7 @@ import SCHEMES from '../utils/schemes.json';
 import {
   UserCheck, Search, X, Trash2, Pencil, Briefcase, CalendarClock, IndianRupee, CheckCircle2,
   LayoutGrid, Table as TableIcon, History, ArrowRight, Crown, Upload, Paperclip, ShieldCheck, Plus, Check, Download, Eye, Copy,
-  SlidersHorizontal, FileSpreadsheet
+  SlidersHorizontal, FileSpreadsheet, ArrowDownWideNarrow, ArrowUpWideNarrow
 } from 'lucide-react';
 import { Card, Avatar, btnPrimary, btnGhost, inputCls, selectCls, Field, CoolSelect, MultiSelect } from './UI';
 import {
@@ -19,6 +19,7 @@ import { getCurrentUser } from '../utils/auth';
 import { canDo, isAdmin, allowedStageOptions } from '../utils/permissions';
 import { updateClient } from '../services/db';
 import { CountrySelect, StateSelect, CitySelect } from './LocationPicker';
+import { useBlobUrl } from '../utils/documents';
 import { triggerInsuranceProspectDownload } from '../utils/prospectDownload';
 import { DOCUMENT_TYPES, documentTypeLabel } from '../utils/documentTypes';
 
@@ -157,7 +158,7 @@ const getSchemesForCategory = (cat) => {
 // stage / cat / proposalType are multi-select — [] means "no restriction",
 // so an empty array reads as All, same convention the Leads filters use.
 const FILTERS_KEY = 'crm:prospect-filters';
-const DEFAULT_FILTERS = { stages: [], cats: [], proposalTypes: [], dateType: 'created', from: '', to: '' };
+const DEFAULT_FILTERS = { stages: [], cats: [], proposalTypes: [], dateType: 'created', from: '', to: '', sortDir: 'desc' };
 const asArray = (v, fallback) => (Array.isArray(v) ? v : fallback);
 const loadSavedFilters = () => {
   try {
@@ -169,6 +170,7 @@ const loadSavedFilters = () => {
       stages: asArray(parsed?.stages, DEFAULT_FILTERS.stages),
       cats: asArray(parsed?.cats, DEFAULT_FILTERS.cats),
       proposalTypes: asArray(parsed?.proposalTypes, DEFAULT_FILTERS.proposalTypes),
+      sortDir: parsed?.sortDir === 'asc' ? 'asc' : DEFAULT_FILTERS.sortDir,
     };
   } catch {
     return { ...DEFAULT_FILTERS };
@@ -188,6 +190,7 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
   const [dateType, setDateType] = useState(savedFilters.dateType); // 'created' | 'closing'
   const [fromDate, setFromDate] = useState(savedFilters.from);
   const [toDate, setToDate] = useState(savedFilters.to);
+  const [sortDir, setSortDir] = useState(savedFilters.sortDir); // 'asc' | 'desc' — by Closing Date; dateless prospects always float to the top
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'card'
   const [editing, setEditing] = useState(null); // local fallback modal when no onOpenProspect is supplied
@@ -242,10 +245,10 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
     try {
       localStorage.setItem(FILTERS_KEY, JSON.stringify({
         stages: stageFilters, cats: catFilters, proposalTypes: proposalTypeFilters,
-        dateType, from: fromDate, to: toDate,
+        dateType, from: fromDate, to: toDate, sortDir,
       }));
     } catch { /* private mode / quota — filters just won't persist */ }
-  }, [stageFilters, catFilters, proposalTypeFilters, dateType, fromDate, toDate]);
+  }, [stageFilters, catFilters, proposalTypeFilters, dateType, fromDate, toDate, sortDir]);
 
   // Offered in the Proposal Type picker: whatever types actually exist in the
   // data, so the list can never offer a type that matches nothing (or miss a
@@ -293,17 +296,24 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
         (p.groupLeader || '').toLowerCase().includes(q) ||
         (p.proposalType || '').toLowerCase().includes(q) ||
         (p.pan || '').toLowerCase().includes(q))
-      // Newest Closing Date on top (the date the list's own "Closing" column
-      // shows) — Dec before Nov before Oct, and within the same month the
-      // higher day first (15th, then 8th, then 2nd). A prospect with no
-      // closing date yet (still Pre-Qualified) falls back to its creation
-      // date so it still lands in a sensible slot instead of the bottom.
+      // Sorted by Closing Date (the list's own "Closing" column), direction
+      // driven by the Sort toggle — descending: Dec before Nov before Oct,
+      // and within the same month the higher day first (15th, then 8th,
+      // then 2nd); ascending is the exact reverse. Either way, a prospect
+      // with no closing date yet (still Pre-Qualified) floats to the very
+      // top — it has nothing to compare, so it isn't buried by date math.
       .sort((a, b) => {
-        const da = toLocalDay(prospectClosingDate(a)) || toLocalDay(a.createdAt);
-        const db = toLocalDay(prospectClosingDate(b)) || toLocalDay(b.createdAt);
-        return db.localeCompare(da);
+        const rawA = prospectClosingDate(a);
+        const rawB = prospectClosingDate(b);
+        const blankA = !rawA;
+        const blankB = !rawB;
+        if (blankA !== blankB) return blankA ? -1 : 1;
+        if (blankA && blankB) return toLocalDay(b.createdAt).localeCompare(toLocalDay(a.createdAt));
+        const da = toLocalDay(rawA);
+        const db = toLocalDay(rawB);
+        return sortDir === 'asc' ? da.localeCompare(db) : db.localeCompare(da);
       });
-  }, [prospects, query, stageFilters, catFilters, proposalTypeFilters, dateType, fromDate, toDate]);
+  }, [prospects, query, stageFilters, catFilters, proposalTypeFilters, dateType, fromDate, toDate, sortDir]);
 
   // Exports exactly what's on screen — same `filtered` rows the list renders.
   const handleExportExcel = () => {
@@ -389,6 +399,14 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
             <button onClick={() => setViewMode('card')} title="Card view" className={`p-1.5 rounded-lg cursor-pointer transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><LayoutGrid size={15} /></button>
           </div>
           <button
+            onClick={() => setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))}
+            title={`Sorted by Closing Date, ${sortDir === 'asc' ? 'oldest first' : 'newest first'} (prospects with no closing date always stay on top) — click to flip`}
+            className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold uppercase tracking-wider border rounded-xl transition-all cursor-pointer shrink-0 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            {sortDir === 'asc' ? <ArrowUpWideNarrow size={14} /> : <ArrowDownWideNarrow size={14} />}
+            {sortDir === 'asc' ? 'Oldest First' : 'Newest First'}
+          </button>
+          <button
             onClick={() => setShowFilters(s => !s)}
             className={`relative inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider border rounded-xl transition-all cursor-pointer shrink-0 ${
               showFilters
@@ -467,24 +485,24 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
         </Card>
       )}
 
-      {/* Stage / business-type chips — multi-select toggles over the same
-          state the filter panel's pickers use, so either affordance works and
-          the two always agree. "All" clears that axis back to no restriction. */}
+      {/* Stage / business-type chips — single-select shortcuts (like tabs)
+          over the same state the Filter panel's pickers use, so picking one
+          here always agrees with the panel. Multiselect only lives in the
+          Filter panel itself; up here, clicking a chip jumps straight to
+          just that one value, and "All" clears back to no restriction. */}
       <div className="flex flex-wrap gap-2">
         <FilterChip label="All" count={stageCounts.all} active={stageFilters.length === 0} onClick={() => setStageFilters([])} />
         {ALL_PROSPECT_STAGES.filter(s => stageCounts[s] > 0 || stageFilters.includes(s)).map(s => (
-          <FilterChip key={s} label={s} count={stageCounts[s]} active={stageFilters.includes(s)}
-            onClick={() => setStageFilters(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])} />
+          <FilterChip key={s} label={s} count={stageCounts[s]} active={stageFilters.length === 1 && stageFilters[0] === s}
+            onClick={() => setStageFilters([s])} />
         ))}
         <span className="mx-1 w-px self-stretch bg-slate-200 dark:bg-slate-800" />
         {['all', 'investment', 'insurance', 'othercode'].map(c => {
-          const active = c === 'all' ? catFilters.length === 0 : catFilters.includes(c);
+          const active = c === 'all' ? catFilters.length === 0 : catFilters.length === 1 && catFilters[0] === c;
           return (
             <button
               key={c}
-              onClick={() => setCatFilters(prev => (
-                c === 'all' ? [] : prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]
-              ))}
+              onClick={() => setCatFilters(c === 'all' ? [] : [c])}
               className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${
                 active
                   ? 'bg-blue-600 text-white border-blue-600'
@@ -1942,6 +1960,10 @@ function DocUploadGroup({ label, required, files, onAdd, onRemove, existingDocs 
   // Hover tooltip state: { dataUrl, name, x, y }
   const [tooltip, setTooltip] = useState(null);
   const tooltipTimer = useRef(null);
+  // A raw base64 data: URL silently fails to load in an <iframe> once it's
+  // long enough (a multi-page/landscape PDF crosses that well under any sane
+  // upload-size limit) — see useBlobUrl in utils/documents for why.
+  const previewPdfBlobUrl = useBlobUrl(previewFile?.dataUrl?.startsWith('data:application/pdf') ? previewFile.dataUrl : null);
 
   const handleFiles = (e) => {
     if (isViewer) return;
@@ -2029,7 +2051,7 @@ function DocUploadGroup({ label, required, files, onAdd, onRemove, existingDocs 
               {previewFile.dataUrl.startsWith('data:image/') ? (
                 <img src={previewFile.dataUrl} alt={previewFile.name} className="max-w-full max-h-full object-contain rounded-lg" />
               ) : previewFile.dataUrl.startsWith('data:application/pdf') ? (
-                <iframe src={previewFile.dataUrl} title={previewFile.name} className="w-full h-[70vh] rounded-lg border-0" />
+                <iframe src={previewPdfBlobUrl} title={previewFile.name} className="w-full h-[70vh] rounded-lg border-0" />
               ) : (
                 <div className="text-center space-y-3">
                   <Paperclip size={32} className="mx-auto text-slate-400" />

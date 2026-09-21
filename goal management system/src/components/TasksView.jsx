@@ -15,6 +15,7 @@ import {
 } from '../utils/tasks';
 import { uid } from '../utils/calc';
 import { updateClient } from '../services/db';
+import { useBlobUrl } from '../utils/documents';
 
 export default function TasksView({ clients = [], isViewer, activeTaskId, setActiveTaskId, onOpenTask, tasksChangeCounter }) {
   const me = getCurrentUser();
@@ -251,6 +252,10 @@ function DocUploadGroup({ label, required, files, onAdd, onRemove, existingDocs 
   // Hover tooltip state: { dataUrl, name, x, y }
   const [tooltip, setTooltip] = useState(null);
   const tooltipTimer = useRef(null);
+  // A raw base64 data: URL silently fails to load in an <iframe> once it's
+  // long enough (a multi-page/landscape PDF crosses that well under any sane
+  // upload-size limit) — see useBlobUrl in utils/documents for why.
+  const previewPdfBlobUrl = useBlobUrl(previewFile?.dataUrl?.startsWith('data:application/pdf') ? previewFile.dataUrl : null);
 
   const handleFiles = (e) => {
     if (isViewer) return;
@@ -338,7 +343,7 @@ function DocUploadGroup({ label, required, files, onAdd, onRemove, existingDocs 
               {previewFile.dataUrl.startsWith('data:image/') ? (
                 <img src={previewFile.dataUrl} alt={previewFile.name} className="max-w-full max-h-full object-contain rounded-lg" />
               ) : previewFile.dataUrl.startsWith('data:application/pdf') ? (
-                <iframe src={previewFile.dataUrl} title={previewFile.name} className="w-full h-[70vh] rounded-lg border-0" />
+                <iframe src={previewPdfBlobUrl} title={previewFile.name} className="w-full h-[70vh] rounded-lg border-0" />
               ) : (
                 <div className="text-center space-y-3">
                   <Paperclip size={32} className="mx-auto text-slate-400" />

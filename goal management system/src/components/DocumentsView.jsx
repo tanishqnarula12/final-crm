@@ -8,7 +8,7 @@ import { calcGoal, fmtINR, fmtFull, fmtSip, goalEmoji, monthLabel, fmtDate } fro
 import { hasAllocation, allocationTotals, filledItems } from '../utils/assets';
 import { updateClient, deleteMom } from '../services/db';
 import { getCurrentUser } from '../utils/auth';
-import { printHtmlDocument, printSafeDataUrl, wrapStandaloneHtml } from '../utils/documents';
+import { printHtmlDocument, printSafeDataUrl, wrapStandaloneHtml, useBlobUrl } from '../utils/documents';
 import { buildMomHtml } from '../utils/momHtml';
 import { cobrWorkspaceDocuments } from '../utils/cobrModules';
 import { DOCUMENT_TYPE_GROUPS } from '../utils/documentTypes';
@@ -689,6 +689,11 @@ function CustomDocPreview({ doc }) {
   // carries the same stale-CSS gap as file.html, so a downloaded copy would
   // still print washed-out even after the in-app Print button was fixed.
   const dataUrl = isHtml ? printSafeDataUrl(file.html) : (file.dataUrl || file.data);
+  // A raw base64 data: URL silently fails to load in an <iframe> once it's
+  // long enough (a multi-page/landscape PDF crosses that well under any
+  // sane upload-size limit) — see useBlobUrl for why. Only the PDF branch
+  // below actually needs this; image/html rendering is unaffected.
+  const pdfBlobUrl = useBlobUrl(isPdf ? dataUrl : null);
 
   return (
     <div className="space-y-6">
@@ -724,7 +729,7 @@ function CustomDocPreview({ doc }) {
         ) : isHtml ? (
           <iframe srcDoc={file.html} title={file.name} className="w-full h-[500px] border-0 bg-white" />
         ) : isPdf ? (
-          <iframe src={dataUrl} title={file.name} className="w-full h-[500px] border-0" />
+          <iframe src={pdfBlobUrl} title={file.name} className="w-full h-[500px] border-0" />
         ) : (
           <div className="text-center p-8 space-y-3">
             <FolderOpen size={40} className="mx-auto text-slate-400 dark:text-slate-650" />

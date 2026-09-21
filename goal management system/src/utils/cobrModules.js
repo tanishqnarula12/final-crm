@@ -44,6 +44,7 @@ export const INSURANCE_TYPES = [
   'Travel',
   'Endowment / Savings',
   'ULIP',
+  'Paid Up',
   'Other',
 ];
 

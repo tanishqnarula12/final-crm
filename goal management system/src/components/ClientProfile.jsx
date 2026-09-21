@@ -22,7 +22,7 @@ import { DOCUMENT_TYPE_GROUPS } from '../utils/documentTypes';
 import { hasAllocation, allocationTotals, filledItems } from '../utils/assets';
 import { cobrTotals } from '../utils/cobr';
 import { cobrWorkspaceDocuments } from '../utils/cobrModules';
-import { printHtmlDocument, printSafeDataUrl, wrapStandaloneHtml } from '../utils/documents';
+import { printHtmlDocument, printSafeDataUrl, wrapStandaloneHtml, useBlobUrl } from '../utils/documents';
 import { buildMomHtml } from '../utils/momHtml';
 
 export default function ClientProfileView({
@@ -2017,6 +2017,11 @@ function CustomDocPreview({ doc }) {
   // Rebuild from the patched (print-safe) HTML, not the stale file.dataUrl
   // captured at save time — same fix as DocumentsView's CustomDocPreview.
   const dataUrl = isHtml ? printSafeDataUrl(file.html) : (file.dataUrl || file.data);
+  // See DocumentsView's CustomDocPreview — a raw base64 data: URL silently
+  // fails to load in an <iframe> past ~2M characters (a multi-page/landscape
+  // PDF crosses that well under any sane upload-size limit); blob: URLs have
+  // no such ceiling.
+  const pdfBlobUrl = useBlobUrl(isPdf ? dataUrl : null);
 
   return (
     <div className="space-y-6">
@@ -2052,7 +2057,7 @@ function CustomDocPreview({ doc }) {
         ) : isHtml ? (
           <iframe srcDoc={file.html} title={file.name} className="w-full h-[500px] border-0 bg-white" />
         ) : isPdf ? (
-          <iframe src={dataUrl} title={file.name} className="w-full h-[500px] border-0" />
+          <iframe src={pdfBlobUrl} title={file.name} className="w-full h-[500px] border-0" />
         ) : (
           <div className="text-center p-8 space-y-3">
             <FolderOpen size={40} className="mx-auto text-slate-400 dark:text-slate-655" />

@@ -6,8 +6,46 @@
 // HTML-backed generated document carries { fileType:'text/html', html, dataUrl }
 // so the existing preview components can render it in an iframe and download it.
 
+import { useEffect, useMemo } from 'react';
 import { updateClient } from '../services/db';
 import { getCurrentUser } from './auth';
+
+// Converts a base64 `data:` URL into an in-memory `blob:` URL. Chromium caps
+// the length of every URL (any scheme, `data:` included) at roughly 2M
+// characters — a base64-encoded file is ~33% larger than its raw bytes, so a
+// PDF as small as ~1.5MB can already cross that cap. Past it, the browser
+// silently refuses to load the URL: no console error, the <iframe>/<embed>
+// just renders blank. This is exactly what a multi-page/landscape PDF
+// (bigger per page, so it crosses the cap well under typical upload-size
+// limits) looks like when previewed directly from its stored data URL. A
+// `blob:` URL has no such ceiling — it's just a short in-memory reference —
+// so converting to one before handing it to an <iframe>/<embed> fixes it.
+export const dataUrlToBlobUrl = (dataUrl) => {
+  if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return dataUrl;
+  try {
+    const commaIdx = dataUrl.indexOf(',');
+    const header = dataUrl.slice(0, commaIdx);
+    if (!/;base64$/i.test(header)) return dataUrl; // not base64 — nothing to decode
+    const mime = (/^data:([^;]+)/.exec(header) || [])[1] || 'application/octet-stream';
+    const binary = atob(dataUrl.slice(commaIdx + 1));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return URL.createObjectURL(new Blob([bytes], { type: mime }));
+  } catch {
+    return dataUrl; // fall back to the original rather than break the caller
+  }
+};
+
+// React hook wrapper — memoizes the blob URL per source `dataUrl` and revokes
+// the previous one whenever it changes or the component unmounts, so preview
+// modals don't leak object URLs as different files are opened.
+export function useBlobUrl(dataUrl) {
+  const blobUrl = useMemo(() => dataUrlToBlobUrl(dataUrl), [dataUrl]);
+  useEffect(() => () => {
+    if (blobUrl && blobUrl.startsWith('blob:')) URL.revokeObjectURL(blobUrl);
+  }, [blobUrl]);
+  return blobUrl;
+}
 
 const pad = (n) => String(n).padStart(2, '0');
 

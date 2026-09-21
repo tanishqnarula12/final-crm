@@ -10,9 +10,14 @@ import { Upload, X, Paperclip, Download, Lock, FileText } from 'lucide-react';
 import { btnGhost } from '../UI';
 import { getCurrentUser } from '../../utils/auth';
 import { uid } from '../../utils/calc';
+import { useBlobUrl } from '../../utils/documents';
 
 export function AttachmentChips({ files = [], onRemove, compact = false }) {
   const [preview, setPreview] = useState(null);
+  // A raw base64 data: URL silently fails to load in an <iframe> once it's
+  // long enough (a multi-page/landscape PDF crosses that well under any sane
+  // upload-size limit) — see useBlobUrl in utils/documents for why.
+  const previewPdfBlobUrl = useBlobUrl((preview?.dataUrl || '').startsWith('data:application/pdf') ? preview.dataUrl : null);
   if (!files.length) return null;
 
   return (
@@ -68,7 +73,7 @@ export function AttachmentChips({ files = [], onRemove, compact = false }) {
               {(preview.dataUrl || '').startsWith('data:image/') ? (
                 <img src={preview.dataUrl} alt={preview.fileName} className="max-w-full max-h-full object-contain rounded-lg" />
               ) : (preview.dataUrl || '').startsWith('data:application/pdf') ? (
-                <iframe src={preview.dataUrl} title={preview.fileName} className="w-full h-[70vh] rounded-lg border-0" />
+                <iframe src={previewPdfBlobUrl} title={preview.fileName} className="w-full h-[70vh] rounded-lg border-0" />
               ) : (
                 <div className="text-center space-y-3 py-10">
                   <FileText size={40} className="mx-auto text-slate-300 dark:text-slate-700" />

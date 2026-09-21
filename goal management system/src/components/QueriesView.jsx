@@ -11,6 +11,7 @@ import {
   MAX_ATTACHMENT_BYTES, ATTACHMENT_ACCEPT, humanFileSize, previewKind,
 } from '../utils/queries';
 import { uid } from '../utils/calc';
+import { useBlobUrl } from '../utils/documents';
 
 // --- Activity log (audit trail) display helpers ------------------------
 // action -> human label. Mirrors what syncModule.js actually logs for
@@ -360,6 +361,15 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
   const [hoverPreview, setHoverPreview] = useState(null); // { att, dataUrl, top, left }
   const [lightbox, setLightbox] = useState(null);         // { att, dataUrl }
   const hoverToken = useRef(0);
+  // A raw base64 data: URL silently fails to load in an <iframe>/<embed>
+  // once it's long enough (a multi-page/landscape PDF crosses that well
+  // under any sane upload-size limit) — see useBlobUrl in utils/documents.
+  const lightboxPdfBlobUrl = useBlobUrl(
+    lightbox && previewKind(lightbox.att.type, lightbox.att.name) === 'pdf' ? lightbox.dataUrl : null
+  );
+  const hoverPdfBlobUrl = useBlobUrl(
+    hoverPreview && previewKind(hoverPreview.att.type, hoverPreview.att.name) === 'pdf' ? hoverPreview.dataUrl : null
+  );
 
   const loadBlob = async (att) => {
     if (blobCache.current.has(att.id)) return blobCache.current.get(att.id);
@@ -807,7 +817,7 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
             <video src={hoverPreview.dataUrl} muted className="w-full max-h-48 rounded-lg" />
           )}
           {previewKind(hoverPreview.att.type, hoverPreview.att.name) === 'pdf' && (
-            <embed src={hoverPreview.dataUrl} type="application/pdf" className="w-full h-48 rounded-lg" />
+            <embed src={hoverPdfBlobUrl} type="application/pdf" className="w-full h-48 rounded-lg" />
           )}
           <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate mt-1.5 px-1">{hoverPreview.att.name}</p>
         </div>,
@@ -834,7 +844,7 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
               <video src={lightbox.dataUrl} controls autoPlay className="max-h-[80vh] w-full rounded-2xl shadow-2xl animate-scale-up" />
             )}
             {previewKind(lightbox.att.type, lightbox.att.name) === 'pdf' && (
-              <iframe src={lightbox.dataUrl} title={lightbox.att.name} className="w-full h-[80vh] rounded-2xl bg-white shadow-2xl animate-scale-up" />
+              <iframe src={lightboxPdfBlobUrl} title={lightbox.att.name} className="w-full h-[80vh] rounded-2xl bg-white shadow-2xl animate-scale-up" />
             )}
           </div>
         </div>,
