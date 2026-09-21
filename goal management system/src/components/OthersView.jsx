@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Wrench, AlertCircle } from 'lucide-react';
 import { Card, inputCls, Field } from './UI';
+import TopPerformingSchemes from './TopPerformingSchemes';
 
 // Sub-tab is controlled by the sidebar flyout → App.jsx → here via `subTab` prop.
 export default function OthersView({ subTab = 'other_tools' }) {
@@ -41,11 +42,19 @@ export default function OthersView({ subTab = 'other_tools' }) {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Others Module</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Access utility tools.</p>
-      </div>
+      {/* Page Header — the Top Schemes module carries its own heading, so the
+          generic one is shown only for the tools that don't. */}
+      {activeSubTab === 'other_tools' && (
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Others Module</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Access utility tools.</p>
+        </div>
+      )}
+
+      {/* ====================================================================
+          TOP PERFORMING SCHEMES TAB
+          ==================================================================== */}
+      {activeSubTab === 'top_schemes' && <TopPerformingSchemes />}
 
       {/* ====================================================================
           CALCULATOR TAB

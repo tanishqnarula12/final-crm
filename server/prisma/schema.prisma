@@ -531,3 +531,122 @@ model PushSubscription {
   @@index([userId])
   @@map("push_subscriptions")
 }
+
+// ============================================================================
+// TOP PERFORMING SCHEMES (Others → Top Performing Schemes)
+// ============================================================================
+// A monthly mutual-fund scheme-performance workbook, imported sheet-by-sheet.
+//
+// Three levels, mirroring the workbook itself:
+//   SchemePerfUpload  (one uploaded workbook = one monthly snapshot/version)
+//     └── SchemePerfCategory   (one worksheet = one fund category)
+//           └── SchemePerfScheme  (one scheme row = one analysis record)
+//
+// Two deliberately separate representations of the same data live here, and
+// they must never be conflated (see the module's "raw vs analysis" rule):
+//   • RAW      — Category.rawHeaders / rawRows hold the worksheet exactly as
+//                it was uploaded, cell for cell, as display strings. Nothing
+//                reorders, renames, recalculates or drops a column. This is
+//                what the "Uploaded Data" view renders.
+//   • ANALYSIS — SchemePerfScheme rows are SYSTEM-GENERATED from the raw data
+//                by the Median > Average Median screening rule. Derived, and
+//                safe to recompute; never written back over the raw rows.
+//
+// Uploads are append-only: a second workbook for a month that already has one
+// becomes a new `version` rather than overwriting it, so every past month
+// stays reproducible. Nothing is ever hard-deleted by an ordinary action.
+model SchemePerfUpload {
+  id             String    @id @default(cuid())
+  // "YYYY-MM" — the reporting month this workbook describes. Not the upload
+  // date: a September file is routinely uploaded in early October.
+  reportingMonth String
+  // 1, 2, 3… within the same reportingMonth. A re-upload never overwrites.
+  version        Int       @default(1)
+  // The version the module shows by default for this month (the newest one).
+  // Older versions stay fully readable from the History tab's version picker.
+  isCurrent      Boolean   @default(true)
+  // Set when a LATER upload explicitly replaced this one ("Replace Existing").
+  // The row and all its data are kept — this only records that it was
+  // superseded, so History can label it honestly instead of it vanishing.
+  supersededAt   DateTime?
+  fileName       String
+  fileSize       Int       @default(0)
+  // The original workbook, base64 data URL — so "View Original Excel" always
+  // returns the exact bytes that were uploaded, not a re-export.
+  fileDataUrl    String
+  uploadedBy     String? // User.id, null = the account was since removed
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  categories SchemePerfCategory[]
+  schemes    SchemePerfScheme[]
+
+  @@index([reportingMonth, version])
+  @@index([deletedAt, reportingMonth])
+  @@map("scheme_perf_uploads")
+}
+
+model SchemePerfCategory {
+  id         String  @id @default(cuid())
+  uploadId   String
+  // The worksheet name, used verbatim as the category name. Categories are
+  // whatever the workbook contains — never a hard-coded list.
+  name       String
+  sheetIndex Int     @default(0)
+  // The category's Average Median. NULL is meaningful and must be preserved:
+  // it means the worksheet carried no Average Median, so screening cannot run
+  // for this category and every scheme in it is NOT_AVAILABLE. A missing value
+  // is never guessed, defaulted or back-filled.
+  avgMedian  Float?
+  // Plain-English note on where avgMedian came from (which column or labelled
+  // cell), shown in the UI so the number is auditable rather than magic.
+  avgMedianSource String?
+  // RAW, untouched worksheet content — headers row + every data row, as the
+  // display strings Excel itself shows. Arrays of strings, column order intact.
+  rawHeaders Json    @default("[]")
+  rawRows    Json    @default("[]")
+  // Which raw column each analysed field was read from (0-based indexes into
+  // rawHeaders), plus the header row's own offset. Recorded so the import is
+  // reproducible and reviewable, and so the UI can point at the exact source
+  // column. Null = that field could not be located in this worksheet.
+  headerRowIndex Int  @default(0)
+  schemeCol  Int?
+  medianCol  Int?
+
+  upload  SchemePerfUpload   @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  schemes SchemePerfScheme[]
+
+  @@index([uploadId])
+  @@map("scheme_perf_categories")
+}
+
+model SchemePerfScheme {
+  id             String  @id @default(cuid())
+  categoryId     String
+  // Denormalised from the parent category so the consolidated cross-category
+  // views ("Top Performing Schemes", search, per-scheme history) can filter and
+  // sort in one indexed query instead of fanning out over every category.
+  uploadId       String
+  reportingMonth String
+  categoryName   String
+  schemeName     String
+  median         Float?
+  avgMedian      Float?
+  // median - avgMedian. Null whenever either side is missing.
+  difference     Float?
+  // TOP_PERFORMING | BELOW_THRESHOLD | NOT_AVAILABLE — the screening verdict.
+  // NOT_AVAILABLE covers both "this category has no Average Median" and "this
+  // row has no readable Median": in neither case is a verdict invented.
+  result         String  @default("NOT_AVAILABLE")
+  // Position in the worksheet, so analysis lists can be shown in file order.
+  rowIndex       Int     @default(0)
+
+  category SchemePerfCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  upload   SchemePerfUpload   @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+
+  @@index([categoryId])
+  @@index([uploadId, result])
+  @@index([schemeName])
+  @@map("scheme_perf_schemes")
+}

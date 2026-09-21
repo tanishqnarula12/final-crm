@@ -44,6 +44,10 @@ export function StatTile({ label, value, hint, icon: Icon, accent = 'blue' }) {
     indigo: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 ring-1 ring-indigo-100/50 dark:ring-indigo-900/30',
     emerald: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-100/50 dark:ring-emerald-900/30',
     amber: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 ring-1 ring-amber-100/50 dark:ring-amber-900/30',
+    // Neutral grey — for counts that are informational rather than good or bad
+    // (e.g. "Below Screening Threshold", which is a screening outcome, not a
+    // warning). Added alongside the others; no existing caller uses it.
+    slate: 'bg-slate-100 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 ring-1 ring-slate-200/60 dark:ring-slate-700/40',
   };
 
   return (

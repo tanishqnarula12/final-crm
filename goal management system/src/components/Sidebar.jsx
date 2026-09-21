@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Users, UserPlus, ListChecks, FolderOpen, UserCheck, LayoutDashboard, Video, TrendingUp, MoreHorizontal, Calculator, FileSpreadsheet, HelpCircle } from 'lucide-react';
+import { Users, UserPlus, ListChecks, FolderOpen, UserCheck, LayoutDashboard, Video, TrendingUp, MoreHorizontal, Calculator, FileSpreadsheet, HelpCircle, Trophy } from 'lucide-react';
 import logoImg from '../assets/logo.png';
 
 const NAV = [
@@ -23,6 +23,7 @@ const NAV = [
 
 const OTHERS_TOOLS = [
   { id: 'other_tools', label: 'Calculator', icon: Calculator, gradient: 'from-blue-500 to-indigo-600' },
+  { id: 'top_schemes', label: 'Top Schemes', icon: Trophy, gradient: 'from-amber-500 to-orange-600' },
 ];
 
 export default function Sidebar({ view, setView, onNavDoubleClick, badges = {}, onSelectOthersTab, othersSubTab }) {
