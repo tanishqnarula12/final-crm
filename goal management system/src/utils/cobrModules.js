@@ -299,7 +299,7 @@ export const fdActionsFor = (stage) => FD_ACTIONS[stage] || [];
 // ---------------------------------------------------------------------------
 // Real-world status of the underlying policy itself — plain descriptive
 // metadata, independent of (and not read by) the CRM workflow stage above.
-export const POLICY_STATUS_OPTIONS = ['Active', 'Due for Renewal', 'Lapsed', 'Matured', 'Surrendered', 'Closed'];
+export const POLICY_STATUS_OPTIONS = ['Active', 'Paid Up', 'Due for Renewal', 'Lapsed', 'Matured', 'Surrendered', 'Closed'];
 export const PAYMENT_FREQUENCY_OPTIONS = ['Monthly', 'Quarterly', 'Half-Yearly', 'Yearly', 'Single'];
 
 export const POLICY_STAGES = [

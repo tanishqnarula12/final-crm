@@ -848,22 +848,22 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
   // for a section — the big date heading and intro blurb only make sense
   // once, not repeated on every page a long table happens to overflow onto.
   const runningHeader = (LOGO) => `
-    <div style='display:flex;justify-content:space-between;align-items:flex-start;'>
+    <div style='display:flex;justify-content:space-between;align-items:center;'>
       <div>
-        <div style='font-family:serif;font-size:22px;color:#0d2b5e;font-weight:bold;'>Team Fintness</div>
-        <div style='font-size:9px;color:#1a4a9c;letter-spacing:2px;text-transform:uppercase;font-weight:600;margin-top:2px;'>Investment Advisory</div>
+        <div style='font-family:serif;font-size:23px;color:#0d2b5e;font-weight:bold;letter-spacing:0.3px;'>Team Fintness</div>
+        <div style='font-size:9px;color:#1a4a9c;letter-spacing:2.5px;text-transform:uppercase;font-weight:700;margin-top:3px;'>Investment Advisory</div>
       </div>
-      <img src='${LOGO}' style='max-height:48px;max-width:120px;object-fit:contain;'/>
+      <img src='${LOGO}' style='max-height:44px;max-width:110px;object-fit:contain;'/>
     </div>
-    <div style='height:2px;background:linear-gradient(90deg,#0d2b5e 0%,#1558d6 60%,#0ea5e9 100%);margin:10px 0 18px;border-radius:2px;'></div>
+    <div style='height:2px;background:linear-gradient(90deg,#0d2b5e 0%,#1558d6 60%,#0ea5e9 100%);margin:12px 0 20px;border-radius:2px;'></div>
   `;
 
   const pageHeader = (type, cn) => {
     const dStr = new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
     return `
-      <div style='font-size:36px;font-family:serif;color:#0d2b5e;margin-bottom:4px;font-weight:bold;'>${dStr}</div>
-      <div style='font-size:13.5px;color:#64748b;margin-bottom:28px;'>Prepared for: <strong style='color:#0d2b5e;'>${cn}</strong></div>
-      <div style='background:#eff6ff;border-left:4px solid #1a4a9c;padding:18px 22px;margin-bottom:34px;font-size:14px;line-height:1.85;color:#374151;border-radius:0 8px 8px 0;'>${getIntroText(type)}</div>
+      <div style='font-size:32px;font-family:serif;color:#0d2b5e;margin-bottom:3px;font-weight:bold;'>${dStr}</div>
+      <div style='font-size:13.5px;color:#64748b;margin-bottom:18px;'>Prepared for: <strong style='color:#0d2b5e;'>${cn}</strong></div>
+      <div style='background:#eff6ff;border-left:4px solid #1a4a9c;padding:14px 20px;margin-bottom:22px;font-size:13.5px;line-height:1.7;color:#374151;border-radius:0 8px 8px 0;'>${getIntroText(type)}</div>
     `;
   };
 
@@ -953,6 +953,12 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     return `
       <div style='margin-bottom:24px;'>
         <div style='font-size:16px;font-weight:700;color:#0d2b5e;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid #bfdbfe;'>${label}</div>
+        <!-- No break-inside:avoid on the table itself (on purpose): a big
+             table that doesn't fully fit the rest of THIS page should still
+             START here and fill it with whatever complete rows do fit (each
+             row is individually protected below), continuing the rest on
+             the next page with the header repeating — not defer as one
+             block and leave the remainder of this page blank. -->
         <table style='width:100%;border-collapse:collapse;'>
           <thead><tr>${headersHTML}</tr></thead>
           <tbody>${rowsHTML}${footerHTML}</tbody>
@@ -1012,7 +1018,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
 
     // Informational note on applicable capital-gains tax rates
     const noteHTML = `
-      <div style='margin-top:16px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #f59e0b;border-radius:4px;font-size:12px;color:#334155;line-height:1.5;display:flex;align-items:center;flex-wrap:wrap;gap:8px;break-inside:avoid;page-break-inside:avoid;'>
+      <div style='margin-top:12px;padding:8px 12px;background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #f59e0b;border-radius:4px;font-size:11.5px;color:#334155;line-height:1.4;display:flex;align-items:center;flex-wrap:wrap;gap:8px;break-inside:avoid;page-break-inside:avoid;'>
         <strong style='color:#92400e;text-transform:uppercase;font-size:11px;letter-spacing:1px;display:flex;align-items:center;gap:4px;margin-right:4px;'>
           <span style='font-size:14px;'>💡</span> Applicable Tax Rates:
         </strong>
@@ -1052,28 +1058,37 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
           ${rs.includeExemption ? '✓ ₹1.25 Lakh Exemption Included' : '✗ ₹1.25 Lakh Exemption Excluded'}${rs.booked > 0 ? ` &nbsp;|&nbsp; Booked Gain: ₹ ${rs.booked.toLocaleString('en-IN')}` : ''}
         </div>
 
-        <div style='margin-top:14px;display:flex;gap:14px;break-inside:avoid;page-break-inside:avoid;'>
-          <div style='flex:1;padding:14px 20px;background:#0d2b5e;border-radius:8px;color:#fff;'>
-            <div style='font-size:10px;letter-spacing:1.5px;text-transform:uppercase;opacity:0.8;margin-bottom:8px;font-weight:700;'>Equity Tax Liability</div>
-            <div style='font-size:20px;font-weight:800;margin-bottom:8px;'>₹ ${Math.round(calc.equityTax).toLocaleString('en-IN')}</div>
-            <div style='font-size:12px;opacity:0.9;line-height:1.6;'>
-              Short Term: ₹ ${Math.round(calc.equitySTTax).toLocaleString('en-IN')}<br>
-              Long Term: ₹ ${Math.round(calc.equityLTTax).toLocaleString('en-IN')}
+        <!-- Tax-liability cards + bank details + rate note + remarks are one
+             atomic trailing group, not four independent break-inside:avoid
+             blocks. Grouped, a page break either falls BEFORE the whole
+             group (which then starts cleanly at the top of the next page as
+             one substantial, intentional-looking block) or not at all —
+             never mid-way, leaving one small element (e.g. just the rate
+             note) stranded alone on an otherwise-blank page. -->
+        <div style='margin-top:12px;break-inside:avoid;page-break-inside:avoid;'>
+          <div style='display:flex;gap:12px;'>
+            <div style='flex:1;padding:12px 18px;background:#0d2b5e;border-radius:8px;color:#fff;'>
+              <div style='font-size:10px;letter-spacing:1.5px;text-transform:uppercase;opacity:0.8;margin-bottom:6px;font-weight:700;'>Equity Tax Liability</div>
+              <div style='font-size:19px;font-weight:800;margin-bottom:6px;'>₹ ${Math.round(calc.equityTax).toLocaleString('en-IN')}</div>
+              <div style='font-size:12px;opacity:0.9;line-height:1.5;'>
+                Short Term: ₹ ${Math.round(calc.equitySTTax).toLocaleString('en-IN')}<br>
+                Long Term: ₹ ${Math.round(calc.equityLTTax).toLocaleString('en-IN')}
+              </div>
+            </div>
+            <div style='flex:1;padding:12px 18px;background:#1a4a9c;border-radius:8px;color:#fff;'>
+              <div style='font-size:10px;letter-spacing:1.5px;text-transform:uppercase;opacity:0.8;margin-bottom:6px;font-weight:700;'>Debt Tax Liability</div>
+              ${calc.hasDebtST ? `<span style='display:inline-block;margin-bottom:6px;padding:3px 10px;background:rgba(255,255,255,0.92);color:#1a4a9c;font-size:10px;font-weight:700;border-radius:999px;letter-spacing:0.3px;'>As Per Tax Slab</span>` : ''}
+              ${calc.hasDebtLT ? `<div style='font-size:19px;font-weight:800;margin-bottom:6px;'>₹ ${Math.round(calc.debtLTTax).toLocaleString('en-IN')}</div>` : ''}
+              <div style='font-size:12px;opacity:0.9;line-height:1.5;'>
+                Short Term: ${calc.hasDebtST ? 'As Per Tax Slab, will be added to your income' : '₹ 0'}<br>
+                Long Term: ₹ ${Math.round(calc.debtLTTax).toLocaleString('en-IN')}
+              </div>
             </div>
           </div>
-          <div style='flex:1;padding:14px 20px;background:#1a4a9c;border-radius:8px;color:#fff;'>
-            <div style='font-size:10px;letter-spacing:1.5px;text-transform:uppercase;opacity:0.8;margin-bottom:8px;font-weight:700;'>Debt Tax Liability</div>
-            ${calc.hasDebtST ? `<span style='display:inline-block;margin-bottom:8px;padding:3px 10px;background:rgba(255,255,255,0.92);color:#1a4a9c;font-size:10px;font-weight:700;border-radius:999px;letter-spacing:0.3px;'>As Per Tax Slab</span>` : ''}
-            ${calc.hasDebtLT ? `<div style='font-size:20px;font-weight:800;margin-bottom:8px;'>₹ ${Math.round(calc.debtLTTax).toLocaleString('en-IN')}</div>` : ''}
-            <div style='font-size:12px;opacity:0.9;line-height:1.6;'>
-              Short Term: ${calc.hasDebtST ? 'As Per Tax Slab, will be added to your income' : '₹ 0'}<br>
-              Long Term: ₹ ${Math.round(calc.debtLTTax).toLocaleString('en-IN')}
-            </div>
-          </div>
+          ${bankHTML}
+          ${noteHTML}
+          ${remHTML}
         </div>
-        ${bankHTML}
-        ${noteHTML}
-        ${remHTML}
       </div>
     `;
   };
@@ -1098,7 +1113,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     });
 
     return `
-      <div style='margin-top:20px;break-inside:avoid;page-break-inside:avoid;'>
+      <div style='margin-top:12px;break-inside:avoid;page-break-inside:avoid;'>
         <div style='font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#0d2b5e;margin-bottom:8px;'>Accompanying Bank Details</div>
         <table style='width:100%;border-collapse:collapse;'>
           <thead>
@@ -1847,18 +1862,46 @@ const INVESTMENT_PRINT_STYLES = `
       print-color-adjust: exact !important;
     }
     .inv-proposal-doc .inv-page {
-      padding: 40px 48px 24px !important;
-      min-height: 297mm !important;
+      /* Horizontal only now — see the thead/tfoot rule below for why the
+         top/bottom breathing room moved off this element entirely. */
+      padding: 0 48px !important;
       box-sizing: border-box !important;
       page-break-after: always;
     }
+    /* min-height:297mm was removed on purpose: forcing every section to
+       claim a FULL physical page (even a short one, e.g. a 3-row Redemption)
+       is exactly what caused a small trailing block (the tax-rates note,
+       protected by break-inside:avoid so it can't be sliced) to overflow
+       onto its own separate, almost entirely BLANK page once the padded
+       section's height nudged past one page — a near-empty page after a
+       page that itself had a lot of empty space at the bottom, looking
+       broken. Without the forced min-height, each section is exactly as
+       tall as its real content, so it fits on one page whenever it
+       genuinely can — a printed page ending partway down with blank space
+       below is normal, expected document behavior, not a defect; an
+       orphaned blank page is. page-break-after:always still gives every
+       proposal TYPE its own fresh page regardless of this change. */
     .inv-proposal-doc .inv-page:last-child { page-break-after: avoid; }
     /* thead/tfoot repeat natively on every page the table spans once it's
        actually allowed to break — the old break-inside:avoid-page hint is
        gone on purpose, since a long section needs to span pages, not be
-       forced onto one. */
-    .inv-proposal-doc .inv-page-table thead td { padding-bottom: 0 !important; }
-    .inv-proposal-doc .inv-page-table tfoot td { padding-top: 16px !important; }
+       forced onto one.
+       The top/bottom breathing room around the page edge lives HERE, on the
+       thead/tfoot cells themselves, rather than on .inv-page's own padding.
+       .inv-page is the PARENT of a table that can fragment across several
+       physical pages — a fragmenting box's own top/bottom padding is only
+       guaranteed to apply at the true start of its first fragment and the
+       true end of its last one, not at every intermediate page boundary in
+       between. thead/tfoot don't have that problem: each is a genuinely
+       separate, complete element that repeats in full on every single page,
+       so padding set directly on them is guaranteed on every page — the
+       first, the last, and everything in between — which is exactly why a
+       2-page proposal previously showed good spacing on page 1 (a true
+       first/last-fragment edge, where the parent's padding did apply) but
+       the header/footer read as glued on the OTHER page of that same
+       document (an intermediate boundary the parent's padding skipped). */
+    .inv-proposal-doc .inv-page-table thead td { padding-top: 32px !important; padding-bottom: 0 !important; }
+    .inv-proposal-doc .inv-page-table tfoot td { padding-top: 16px !important; padding-bottom: 36px !important; }
   }
 `;
 
