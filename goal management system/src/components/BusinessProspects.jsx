@@ -2365,13 +2365,34 @@ function ProspectTable({ table, onChange, hideCols = [] }) {
                 return (
                   <td key={ci} style={{ minWidth: columnMinWidth(colName) }} className={`px-1 py-1 ${isCheckboxCol ? 'text-center' : ''}`}>
                     {isCheckboxCol ? (
-                      <input
-                        type="checkbox"
-                        checked={!!cell}
-                        disabled={!onChange}
-                        onChange={(e) => onChange(ri, ci, e.target.checked)}
-                        className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:cursor-default"
-                      />
+                      // A custom visual chip, not a native <input type="checkbox">.
+                      // This table sits inside a native <fieldset disabled> when the
+                      // prospect is locked/read-only (see BusinessProspects' detail
+                      // modal) — a real checkbox there gets the browser's own
+                      // disabled-widget rendering (a washed-out grey box the accent
+                      // color can't override), which read as "confusing" since
+                      // checked/unchecked became hard to tell apart. A span isn't a
+                      // form control, so no fieldset can mute it: All Units keeps
+                      // reading unambiguously blue-when-true whether the row is
+                      // editable or just being viewed.
+                      <span
+                        role={onChange ? 'checkbox' : undefined}
+                        aria-checked={onChange ? !!cell : undefined}
+                        tabIndex={onChange ? 0 : undefined}
+                        onClick={onChange ? () => onChange(ri, ci, !cell) : undefined}
+                        onKeyDown={onChange ? (e) => {
+                          if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); onChange(ri, ci, !cell); }
+                        } : undefined}
+                        className={`inline-flex w-4 h-4 rounded border items-center justify-center transition-colors ${
+                          onChange ? 'cursor-pointer hover:border-blue-400 dark:hover:border-blue-500' : 'cursor-default'
+                        } ${
+                          cell
+                            ? 'bg-blue-600 border-blue-600 text-white'
+                            : 'bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700'
+                        }`}
+                      >
+                        {cell && <Check size={11} strokeWidth={3} />}
+                      </span>
                     ) : onChange ? (
                       isCategoryCol ? (
                         <CategoryCell

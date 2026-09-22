@@ -71,7 +71,6 @@ export const wrapStandaloneHtml = (innerHtml, title = 'Document', extraCss = '')
   body { font-family: 'DM Sans', system-ui, -apple-system, sans-serif; background: #ffffff; color: #1e293b; padding: 20px; }
   table { border-collapse: collapse; }
   img { max-width: 100%; }
-  ${extraCss}
   /* This is what actually renders when someone prints/saves-as-PDF a saved
      document later (Documents tab, Client Profile) — the live in-app print
      styles never apply there, this saved HTML is all a print dialog ever
@@ -97,6 +96,17 @@ export const wrapStandaloneHtml = (innerHtml, title = 'Document', extraCss = '')
       flex: 1 1 200px !important;
     }
   }
+  /* extraCss goes LAST, after the generic @media print block above, so a
+     caller with its own carefully-sized page rules (Investment/Other-Code
+     Proposal's zero-margin, precisely-297mm-tall .inv-page boxes) wins the
+     cascade instead of silently losing to the generic 6mm @page here. Before
+     this reordering, a proposal's own "@page{margin:0}" was declared FIRST
+     and the generic "@page{margin:6mm}" below it won by source order (same
+     specificity, no !important on either side) — so every saved proposal
+     PDF was actually rendered against a page 12mm shorter/narrower than what
+     its .inv-page boxes were sized for, pushing content past the real page
+     edge and forcing extra, wrongly-split pages. */
+  ${extraCss}
 </style></head>
 <body>${innerHtml}</body></html>`;
 
@@ -107,16 +117,20 @@ export const wrapStandaloneHtml = (innerHtml, title = 'Document', extraCss = '')
 // white — since browsers strip background colors by default when printing —
 // leaving white-on-white/near-invisible text. Injecting it here fixes every
 // saved document retroactively, old and new, without touching stored data.
-const PRINT_SAFETY_CSS = `
-  @media print {
+//
+// Split into two pieces so patchHtmlForPrint can skip just the geometry
+// rules for a document that already defines its own @page — see there.
+const PRINT_SAFETY_GEOMETRY = `
     @page { margin: 6mm; size: A4; }
-    html, body { background: #ffffff !important; }
     /* @page margin support is inconsistent across print engines — body
        padding is the reliable fallback so pages never end up flush edge-
        to-edge even where @page is ignored. Overrides any padding:0 the
        stored HTML's own print block may have set (this rule is injected
        after it, so it wins at equal specificity). */
-    body { padding: 10mm 8mm !important; }
+    body { padding: 10mm 8mm !important; }`;
+
+const PRINT_SAFETY_REST = `
+    html, body { background: #ffffff !important; }
     * {
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
@@ -141,17 +155,31 @@ const PRINT_SAFETY_CSS = `
     }
     div[style*="grid-template-columns"] > div {
       flex: 1 1 200px !important;
-    }
-  }
-`;
+    }`;
+
+const PRINT_SAFETY_CSS = `@media print {${PRINT_SAFETY_GEOMETRY}${PRINT_SAFETY_REST}
+  }`;
 
 // Injects PRINT_SAFETY_CSS into a saved document's raw HTML, regardless of
 // whether that HTML already carries print CSS of its own.
 export const patchHtmlForPrint = (html) => {
   if (!html) return html;
+  // A document that already declares its own @page rule (Investment/
+  // Other-Code Proposal's zero-margin .inv-page boxes, sized exactly for a
+  // full untouched 297mm page) manages its own page geometry end to end.
+  // Forcing this generic 6mm @page + body padding on top of that broke its
+  // math — the box still assumed a full page was available, so content ran
+  // past the real (now 12mm-shrunk) printable area and spilled onto extra,
+  // wrongly-split pages. Skip ONLY the geometry rules in that case; the
+  // background/color-adjust/break-inside safety nets below are harmless
+  // everywhere and still applied, exactly as before, for every other
+  // document (which never declares @page itself and still needs them).
+  const css = /@page\b/.test(html)
+    ? `@media print {${PRINT_SAFETY_REST}\n  }`
+    : PRINT_SAFETY_CSS;
   return /<\/head>/i.test(html)
-    ? html.replace(/<\/head>/i, `<style>${PRINT_SAFETY_CSS}</style></head>`)
-    : `<style>${PRINT_SAFETY_CSS}</style>${html}`;
+    ? html.replace(/<\/head>/i, `<style>${css}</style></head>`)
+    : `<style>${css}</style>${html}`;
 };
 
 // Build a fresh, print-safe data: URL for a saved document's HTML — used so

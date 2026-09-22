@@ -897,7 +897,11 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     let rowsHTML = '';
     rows.forEach((row, i) => {
       const bg = i % 2 === 1 ? "#f8fafc" : "#ffffff";
-      rowsHTML += `<tr style='background:${bg}'><td style='${tdS}color:#1a4a9c;font-weight:700;'>${i + 1}</td>`;
+      // break-inside:avoid keeps a single row from being cut in half across a
+      // page boundary (top half on one page, bottom half on the next) — the
+      // table as a WHOLE still spans multiple pages fine for a long section,
+      // only an individual row is protected.
+      rowsHTML += `<tr style='background:${bg};break-inside:avoid;page-break-inside:avoid;'><td style='${tdS}color:#1a4a9c;font-weight:700;'>${i + 1}</td>`;
       keys.forEach(key => {
         let val = '';
         if (type === 'sipchanges' && key === 'totalSip') {
@@ -918,14 +922,14 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     if (HAS_TOTAL.includes(type)) {
       if (SPLIT_TOTAL[type]) {
         const sp = SPLIT_TOTAL[type];
-        footerHTML += `<tr><td colspan='${sp.labelCols}' style='background:#0047AB;color:#fff;padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;text-align:right;'>TOTAL</td>`;
+        footerHTML += `<tr style='break-inside:avoid;page-break-inside:avoid;'><td colspan='${sp.labelCols}' style='background:#0047AB;color:#fff;padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;text-align:right;'>TOTAL</td>`;
         sp.cols.forEach(key => {
           if (key === "") footerHTML += `<td style='background:#0047AB;'></td>`;
           else footerHTML += `<td style='background:#0047AB;color:#fff;padding:10px 12px;font-size:13px;font-weight:700;text-align:right;white-space:nowrap;'>${fmtINRhtml(String(calcTotal(type, key)))}</td>`;
         });
         footerHTML += `</tr>`;
       } else {
-        footerHTML += `<tr><td colspan='${fci + 1}' style='background:#0047AB;color:#fff;padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;text-align:right;'>TOTAL</td>`;
+        footerHTML += `<tr style='break-inside:avoid;page-break-inside:avoid;'><td colspan='${fci + 1}' style='background:#0047AB;color:#fff;padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;text-align:right;'>TOTAL</td>`;
         currList.forEach(key => {
           footerHTML += `<td style='background:#0047AB;color:#fff;padding:10px 12px;font-size:13px;font-weight:700;text-align:right;white-space:nowrap;'>${fmtINRhtml(String(calcTotal(type, key)))}</td>`;
         });
@@ -986,7 +990,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
 
       const bg = i % 2 === 1 ? "#f8fafc" : "#ffffff";
       rowsHTML += `
-        <tr style='background:${bg}'>
+        <tr style='background:${bg};break-inside:avoid;page-break-inside:avoid;'>
           <td style='${tdS}color:#1a4a9c;font-weight:700;'>${i + 1}</td>
           <td style='${tdS}'>${row.category || "-"}</td>
           <td style='${tdS}'>${row.scheme || "-"}${row.allUnits ? " <span style='color:#0047AB;font-weight:700;font-size:10px;white-space:nowrap;'>(All Units)</span>" : ""}</td>
@@ -1034,7 +1038,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
           </thead>
           <tbody>
             ${rowsHTML}
-            <tr>
+            <tr style='break-inside:avoid;page-break-inside:avoid;'>
               <td colspan='3' style='background:#0047AB;color:#fff;padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;text-align:right;'>TOTAL</td>
               <td style='background:#0047AB;color:#fff;padding:10px 12px;font-size:13px;font-weight:700;text-align:right;white-space:nowrap;'>${fmtINRhtml(String(totalAmt))}</td>
               <td style='background:#0047AB;color:#fff;padding:10px 12px;font-size:13px;font-weight:700;text-align:right;white-space:nowrap;'>${fmtINRhtml(String(totalST))}</td>
