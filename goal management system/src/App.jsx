@@ -61,7 +61,7 @@ import { loadTasks, saveTasks, hydrateTasks } from './utils/tasks';
 import { loadQueries, saveQueries, hydrateQueries, QUERY_STAGES, uploadQueryAttachment } from './utils/queries';
 import { loadLeave, hydrateLeave } from './utils/leave';
 import { canRespondToLeave } from './utils/permissions';
-import { loadProspects, saveProspects, hydrateProspects } from './utils/prospects';
+import { loadProspects, saveProspect, hydrateProspects } from './utils/prospects';
 import { loadMeetings, saveMeetings, hydrateMeetings } from './utils/meetings';
 import { hydrateTeam, loadTeam, teamName } from './services/team';
 import { hydratePermissions } from './services/permissions';
@@ -735,12 +735,12 @@ export default function App() {
   };
 
   // Saves edits to an existing prospect (the "Create Prospect" flow from the
-  // proposal pages writes new prospects directly and is not routed through here).
+  // proposal pages writes new prospects directly and is not routed through
+  // here). A single-record PATCH now, not a rebuild-and-resend of every
+  // prospect — see utils/prospects.js.
   const handleSaveProspectGlobal = (list) => {
     const updated = list[0];
-    const allProspects = loadProspects();
-    const updatedProspects = allProspects.map(p => p.id === updated.id ? updated : p);
-    saveProspects(updatedProspects);
+    saveProspect(updated).catch(() => {}); // saveProspect already alerts on failure
     window.dispatchEvent(new Event('crm:prospects-updated'));
     setShowProspectForm(false);
     setEditingProspect(null);

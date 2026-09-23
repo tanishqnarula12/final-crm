@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { Card, Avatar, btnPrimary, btnGhost, inputCls, selectCls, Field, CoolSelect, MultiSelect } from './UI';
 import {
-  loadProspects, saveProspects, addProspects, CATEGORY_THEME, CATEGORY_LABEL, fmtProspectStamp, fmtAmountINR,
+  loadProspects, saveProspect, deleteProspect, addProspects, CATEGORY_THEME, CATEGORY_LABEL, fmtProspectStamp, fmtAmountINR,
   PROSPECT_STAGES, INSURANCE_PROSPECT_STAGES, ALL_STAGE_THEME, ALL_PROSPECT_STAGES
 } from '../utils/prospects';
 import { uid, fmtFileDate } from '../utils/calc';
@@ -225,8 +225,6 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProspectId, prospects]);
 
-  const persist = (next) => { setProspects(next); saveProspects(next); };
-
   // RBAC: which module governs this prospect (investment vs insurance), and
   // whether the current account may do anything with it at all — used to
   // hide the Edit affordance entirely for a prospect the account has neither
@@ -326,13 +324,18 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
     return c;
   }, [prospects]);
 
+  // saveProspect/deleteProspect update the shared cache and dispatch
+  // crm:prospects-updated themselves (see utils/prospects.js) — the listener
+  // registered above already re-syncs `prospects` from it, so there's no
+  // separate local setProspects() needed here. Each is a single-record PATCH/
+  // DELETE, not a save of the whole list.
   const handleSaveEdit = (updated) => {
-    persist(prospects.map(p => p.id === updated.id ? updated : p));
+    saveProspect(updated).catch(() => {}); // saveProspect already alerts on failure
     setEditing(null);
   };
   const handleDelete = (id) => {
     if (!window.confirm('Delete this prospect? This cannot be undone.')) return;
-    persist(prospects.filter(p => p.id !== id));
+    deleteProspect(id).catch(() => {}); // deleteProspect already alerts on failure
   };
 
   // Duplicate — reopens the standard "create prospect" modal pre-filled with
@@ -1142,7 +1145,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
     // Strip base64 file data from documents before saving to localStorage.
     // Uploaded files (Aadhaar, PAN, photos etc.) can be several MB each; including
     // them in the prospect object silently blows past the 5 MB localStorage quota
-    // and causes saveProspects() to silently fail — prospect never appears anywhere.
+    // and causes the save to silently fail — prospect never appears anywhere.
     // The actual binaries are written to client.clientDetails.attachments by
     // syncDocumentsToClient() which runs immediately after onConfirm().
     const safeDocuments = {};

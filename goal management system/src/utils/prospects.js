@@ -4,8 +4,12 @@
 // carrying the generated proposal table, amount and the client's coverage team.
 //
 // Same "in-memory cache hydrated from the API" seam as tasks/leads/meetings:
-// `loadProspects()` stays synchronous, `saveProspects()` updates the cache
-// immediately and persists the whole array to the server in the background.
+// `loadProspects()` stays synchronous. Every WRITE below is a targeted,
+// single-record call (POST for create, PATCH /:id for edit/stage-change,
+// DELETE /:id for delete) — never a full-array PUT of every prospect, which
+// is what this used to do and is exactly why a save used to cost more the
+// more prospects existed, regardless of how small the actual change was (see
+// server/src/routes/prospects.js for the full story and the new routes).
 // Prospects can carry large embedded documents (base64), which is exactly why
 // this used to hit the localStorage ~5MB quota — moving to Postgres removes
 // that ceiling entirely.
@@ -17,7 +21,8 @@ let cache = [];
 export const loadProspects = () => cache;
 
 // Fetches every prospect from the server and populates the cache. Call once
-// on login/app-load (App.jsx `loadData`) before any component reads prospects.
+// on login/app-load (App.jsx `loadData`) before any component reads prospects,
+// or as a recovery step after a write fails (see the .catch()s below).
 export async function hydrateProspects() {
   const { prospects } = await api.get('/prospects');
   cache = Array.isArray(prospects) ? prospects : [];
@@ -25,59 +30,65 @@ export async function hydrateProspects() {
   return cache;
 }
 
-export const saveProspects = (prospects) => {
-  // Every caller (persist a single edit, addProspects a new create, a
-  // Client-Profile-driven update) builds its "next" array by copying the
-  // FULL previous list and changing only the record(s) it actually means to
-  // touch — so `before` (this tab's own cache, one line up) still lines up
-  // 1:1 with everything in `prospects` this tab did NOT just edit.
-  const before = cache;
-  cache = prospects;
+// Persists an edit (a detail change, a stage move, or both together) to ONE
+// existing prospect. Updates the cache optimistically, then reconciles to
+// whatever the server actually applied — the server may only grant PART of
+// what was asked (e.g. a stage move an actor is allowed to make, saved
+// alongside a detail edit they aren't), so the response is the record's real
+// resulting state, not necessarily an echo of what was sent.
+export async function saveProspect(prospect) {
+  cache = cache.map((p) => (p.id === prospect.id ? prospect : p));
   window.dispatchEvent(new Event('crm:prospects-updated'));
-  const beforeById = new Map(before.map((p) => [p.id, p]));
-  // This tab's cache only refreshes on login, an explicit re-hydrate, or a
-  // PROSPECT_ASSIGNED notification — a stage move by someone else (no
-  // reassignment involved) never reaches an open tab. Blindly PUTting the
-  // full array would then resend THIS tab's stale copy of every prospect it
-  // never touched, and the server — seeing a real, authorized change —
-  // silently reverts whoever else's more recent edit, mis-attributed to
-  // whoever happened to save next (e.g. creating an unrelated prospect from
-  // a proposal). So: re-fetch live state first, and for every record this
-  // tab did NOT itself just change (identical to what `before` already had),
-  // ship the server's current value instead of this tab's possibly-stale one
-  // — only this tab's own real, intended edits ever get sent as-is.
-  api.get('/prospects')
-    .then(({ prospects: fresh } = {}) => {
-      const freshById = new Map((Array.isArray(fresh) ? fresh : []).map((p) => [p.id, p]));
-      const rebased = prospects.map((p) => {
-        const prior = beforeById.get(p.id);
-        const touchedByThisTab = !prior || JSON.stringify(prior) !== JSON.stringify(p);
-        if (touchedByThisTab) return p;
-        return freshById.get(p.id) || p;
-      });
-      return api.put('/prospects', { prospects: rebased });
-    })
-    .then((res) => {
-      if (Array.isArray(res?.prospects)) {
-        cache = res.prospects;
-        window.dispatchEvent(new Event('crm:prospects-updated'));
-      }
-      if (res?.stats?.rejected > 0) {
-        alert(`${res.stats.rejected} change${res.stats.rejected === 1 ? '' : 's'} could not be saved — you may not have permission for this prospect type. The list has been refreshed.`);
-      }
+  try {
+    const { prospect: saved } = await api.patch(`/prospects/${prospect.id}`, prospect);
+    cache = cache.map((p) => (p.id === saved.id ? saved : p));
+    window.dispatchEvent(new Event('crm:prospects-updated'));
+    return saved;
+  } catch (err) {
+    console.error('saveProspect failed:', err);
+    hydrateProspects().catch(() => {});
+    alert(err?.message?.includes('permission')
+      ? err.message
+      : 'Could not save the prospect — the server rejected the request. Please try again.');
+    throw err;
+  }
+}
+
+// Removes ONE prospect (Admin only, enforced server-side).
+export async function deleteProspect(id) {
+  const before = cache;
+  cache = cache.filter((p) => p.id !== id);
+  window.dispatchEvent(new Event('crm:prospects-updated'));
+  try {
+    await api.del(`/prospects/${id}`);
+  } catch (err) {
+    console.error('deleteProspect failed:', err);
+    cache = before; // restore — the delete didn't actually happen
+    window.dispatchEvent(new Event('crm:prospects-updated'));
+    alert('Could not delete the prospect — the server rejected the request. Please try again.');
+    throw err;
+  }
+}
+
+// Creates one or a few new prospects (a "Create Prospect" confirm can produce
+// several at once — one per proposal type selected — but that count is
+// always bounded by what's on screen, never by how many prospects already
+// exist). Returns the merged cache.
+export const addProspects = (newOnes) => {
+  cache = [...newOnes, ...cache];
+  window.dispatchEvent(new Event('crm:prospects-updated'));
+  api.post('/prospects', { prospects: newOnes })
+    .then(({ prospects: created } = {}) => {
+      const createdById = new Map((Array.isArray(created) ? created : []).map((p) => [p.id, p]));
+      cache = cache.map((p) => createdById.get(p.id) || p);
+      window.dispatchEvent(new Event('crm:prospects-updated'));
     })
     .catch((err) => {
-      console.error('saveProspects failed:', err);
+      console.error('addProspects failed:', err);
       hydrateProspects().catch(() => {});
-      alert('Could not save the prospect — the server rejected the request. Please try again.');
+      alert('Could not save the new prospect — the server rejected the request. Please try again.');
     });
-};
-
-// Append new prospects and persist; returns the merged list.
-export const addProspects = (newOnes) => {
-  const all = [...newOnes, ...loadProspects()];
-  saveProspects(all);
-  return all;
+  return cache;
 };
 
 export const CATEGORY_THEME = {
