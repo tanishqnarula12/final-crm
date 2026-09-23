@@ -1073,11 +1073,24 @@ export default function App() {
     }
   };
 
+  // These three used to end with `await loadData()` — the same full,
+  // ten-module reload the initial app load runs (all clients+goals+moms, all
+  // leads, tasks, queries, leave, meetings, prospects, team, permissions).
+  // That was never noticeable with a handful of records, but every one of
+  // those collections has grown a lot since — so a goal add/edit/delete now
+  // visibly sits waiting on nine OTHER modules' data it never even touched,
+  // on top of a full unfiltered clients+goals+moms refetch for the one it
+  // did. The server already hands back exactly the changed goal; merge it
+  // into the ONE client that owns it (same targeted-local-update pattern the
+  // document-upload fix already established via patchClientLocal — see the
+  // comment on that function below) instead of reloading everything.
   const handleAddGoal = async (clientId, goal) => {
     const newGoal = { ...goal, id: uid() };
     try {
-      await addGoal(clientId, newGoal);
-      await loadData();
+      const created = await addGoal(clientId, newGoal);
+      setClients((prev) => prev.map((c) => (
+        c.id === clientId ? { ...c, goals: [...(c.goals || []), created || newGoal] } : c
+      )));
     } catch (err) {
       alert('Error adding goal: ' + err.message);
     }
@@ -1085,8 +1098,12 @@ export default function App() {
 
   const handleUpdateGoal = async (clientId, goalId, updates) => {
     try {
-      await updateGoal(clientId, goalId, updates);
-      await loadData();
+      const updated = await updateGoal(clientId, goalId, updates);
+      setClients((prev) => prev.map((c) => (
+        c.id === clientId
+          ? { ...c, goals: (c.goals || []).map((g) => (g.id === goalId ? (updated || { ...g, ...updates }) : g)) }
+          : c
+      )));
     } catch (err) {
       alert('Error updating goal: ' + err.message);
     }
@@ -1097,7 +1114,9 @@ export default function App() {
     try {
       await deleteGoal(clientId, goalId);
       if (selectedGoalId === goalId) setSelectedGoalId(null);
-      await loadData();
+      setClients((prev) => prev.map((c) => (
+        c.id === clientId ? { ...c, goals: (c.goals || []).filter((g) => g.id !== goalId) } : c
+      )));
     } catch (err) {
       alert('Error deleting goal: ' + err.message);
     }

@@ -30,6 +30,7 @@ export const DOCUMENT_TYPES = [
   { key: 'rationCard',        label: 'Ration Card',                  group: 'Address Proof' },
   // Financial
   { key: 'cancelledCheque',   label: 'Cancelled Cheque',             group: 'Financial' },
+  { key: 'bankPassbook',      label: 'Bank Passbook',                group: 'Financial' },
   { key: 'bankStatement3m',   label: 'Bank Statement (3 Months)',    group: 'Financial' },
   { key: 'bankStatement6m',   label: 'Bank Statement (6 Months)',    group: 'Financial' },
   { key: 'bankStatement12m',  label: 'Bank Statement (12 Months)',   group: 'Financial' },

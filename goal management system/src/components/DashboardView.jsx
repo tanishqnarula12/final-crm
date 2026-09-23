@@ -1700,51 +1700,51 @@ function FlowCard({ title, net, icon: TitleIcon, accent = 'blue', rows, grid, wi
   const badge = FLOW_ACCENT[accent] || FLOW_ACCENT.blue;
   const negative = net < 0;
   return (
-    <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none transition-colors h-full flex flex-col">
-      <div className="flex items-center gap-2.5">
-        <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${badge}`}>
-          <TitleIcon size={15} />
+    <Card className="p-5 border border-slate-200/70 dark:border-slate-800/70 rounded-2xl bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none transition-colors h-full flex flex-col">
+      <div className="flex items-center gap-2">
+        <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${badge}`}>
+          <TitleIcon size={13} />
         </span>
-        <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">{title}</h4>
+        <h4 className="text-[10.5px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">{title}</h4>
       </div>
 
-      <div className="flex items-baseline gap-2 mt-5">
-        <span className={`text-[26px] font-bold tabular-nums tracking-tight whitespace-nowrap ${negative ? 'text-rose-600/90 dark:text-rose-400' : 'text-slate-800 dark:text-white'}`}>
+      <div className="flex items-baseline gap-1.5 mt-3">
+        <span className={`text-[21px] font-bold tabular-nums tracking-tight whitespace-nowrap ${negative ? 'text-rose-600/90 dark:text-rose-400' : 'text-slate-800 dark:text-white'}`}>
           {fmtINR(net)}
         </span>
         {negative
-          ? <TrendingDown size={14} className="text-slate-400 dark:text-slate-500 shrink-0" />
-          : <TrendingUp size={14} className="text-slate-400 dark:text-slate-500 shrink-0" />}
+          ? <TrendingDown size={13} className="text-slate-400 dark:text-slate-500 shrink-0" />
+          : <TrendingUp size={13} className="text-slate-400 dark:text-slate-500 shrink-0" />}
       </div>
 
-      <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex-1">
+      <div className="mt-3.5 pt-3 border-t border-slate-100 dark:border-slate-800 flex-1">
         {grid ? (
-          <div className={`grid grid-cols-2 ${wide ? 'sm:grid-cols-4' : ''} gap-2.5`}>
+          <div className={`grid grid-cols-2 ${wide ? 'sm:grid-cols-4' : ''} gap-2`}>
             {rows.map((r) => {
               const tone = FLOW_ROW_TONE[r.tone] || FLOW_ROW_TONE.ref;
               return (
-                <div key={r.label} className="rounded-xl bg-slate-50/80 dark:bg-slate-950/30 px-3 py-2.5 min-w-0">
+                <div key={r.label} className="rounded-xl bg-slate-50/80 dark:bg-slate-950/30 px-2.5 py-2 min-w-0">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <r.icon size={12} className={`shrink-0 ${tone.icon}`} />
-                    <span className="min-w-0 text-[9.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide leading-tight">{r.label}</span>
+                    <r.icon size={11} className={`shrink-0 ${tone.icon}`} />
+                    <span className="min-w-0 text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide leading-tight">{r.label}</span>
                   </div>
-                  <div className={`text-[13px] font-bold tabular-nums mt-1.5 whitespace-nowrap ${tone.text}`}>{fmtINR(r.value)}</div>
+                  <div className={`text-[12px] font-bold tabular-nums mt-1 whitespace-nowrap ${tone.text}`}>{fmtINR(r.value)}</div>
                 </div>
               );
             })}
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {rows.map((r) => {
               const tone = FLOW_ROW_TONE[r.tone] || FLOW_ROW_TONE.ref;
               return (
                 <div key={r.label} className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2 min-w-0">
-                    <r.icon size={13} className={`shrink-0 ${tone.icon}`} />
-                    <span className="text-[12.5px] font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">{r.label}</span>
+                    <r.icon size={12} className={`shrink-0 ${tone.icon}`} />
+                    <span className="text-[12px] font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">{r.label}</span>
                     {r.info && <InfoTip text={r.info} />}
                   </div>
-                  <span className={`text-[12.5px] font-bold tabular-nums shrink-0 ${tone.text}`}>{fmtINR(r.value)}</span>
+                  <span className={`text-[12px] font-bold tabular-nums shrink-0 ${tone.text}`}>{fmtINR(r.value)}</span>
                 </div>
               );
             })}
@@ -1828,7 +1828,13 @@ function StageList({ map, order, emptyText }) {
 
 function OpsCard({ icon: Icon, title, total, map, order, emptyText }) {
   return (
-    <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl flex flex-col justify-between bg-white dark:bg-slate-900 transition-colors">
+    // flex-col WITHOUT justify-between on purpose: with three cards forced to
+    // equal height by the grid (Tasks has 5 stages, Meetings only 3), a
+    // justify-between here pushed the shorter cards' stage rows apart to fill
+    // the leftover height — leaving an ugly gap in the MIDDLE, between the
+    // header and the rows. Rows now sit right under the header, and any
+    // leftover height reads as ordinary blank space at the bottom instead.
+    <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl flex flex-col bg-white dark:bg-slate-900 transition-colors">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Icon size={15} className="text-slate-400 dark:text-slate-500 shrink-0" />

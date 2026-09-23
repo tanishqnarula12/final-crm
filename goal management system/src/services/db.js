@@ -47,12 +47,17 @@ export async function fetchClientActivity(clientId) {
   return logs;
 }
 
+// Returns the server-created goal (with its real createdAt/etc.) so the
+// caller can merge it straight into local state instead of reloading
+// everything — see App.jsx's handleAddGoal.
 export async function addGoal(clientId, goal) {
-  await api.post(`/clients/${clientId}/goals`, goal);
+  const { goal: created } = await api.post(`/clients/${clientId}/goals`, goal);
+  return created;
 }
 
 export async function updateGoal(clientId, goalId, updates) {
-  await api.patch(`/goals/${goalId}`, updates);
+  const { goal: updated } = await api.patch(`/goals/${goalId}`, updates);
+  return updated;
 }
 
 export async function deleteGoal(clientId, goalId) {
