@@ -1,13 +1,26 @@
 // Portfolio Review — AI-powered mutual fund portfolio PDF analysis.
 //
-// A single endpoint: accepts a base64 PDF, calls Gemini server-side (the API
-// key never reaches the browser — unlike the original standalone tool, which
-// fetched the key to the client to dodge a serverless timeout; our Express
-// server is long-running, so there's no timeout to dodge and the key can
-// stay put), and returns the parsed portfolio JSON. The extraction prompt is
-// copied verbatim from the original tool so the analysis is byte-for-byte
+// Accepts a base64 PDF, calls Gemini server-side (the API key never reaches
+// the browser), and returns the parsed portfolio JSON. The extraction prompt
+// is copied verbatim from the original tool so the analysis is byte-for-byte
 // the same as what was already tuned and verified there.
+//
+// Two ways in:
+//  - POST /jobs + GET /jobs/:jobId — what the app uses. The upload returns a
+//    job id immediately and the browser polls for the result. In production
+//    the API sits behind Cloudflare, which kills any request that hasn't
+//    answered within 100 seconds (HTTP 524) — and a real family statement
+//    takes Gemini ~50s on a good day and well past 100s for bigger ones, so a
+//    single long request was failing outright. Each poll answers instantly,
+//    so no request ever gets near that limit however long the analysis runs.
+//  - POST /analyze — the original single-request endpoint, kept with its exact
+//    contract so a PWA still running a cached older bundle keeps working.
+//
+// Both go through analyzePortfolio(), which retries when Gemini reports it's
+// overloaded ("This model is currently experiencing high demand") instead of
+// failing the upload on the first such reply.
 import { Router } from 'express';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/error.js';
@@ -161,18 +174,38 @@ Return this exact JSON structure:
   ]
 }`;
 
-// POST /api/portfolio-review/analyze — upload a portfolio statement PDF
-// (base64), get back the extracted+structured portfolio JSON.
-router.post('/analyze', asyncHandler(async (req, res) => {
-  const { b64, filename } = parseBody(analyzeSchema, req.body);
+const MISSING_KEY_ERROR = 'Portfolio Review is not configured on the server (missing GEMINI_API_KEY).';
 
-  if (!config.geminiApiKey) {
-    return res.status(500).json({ error: 'Portfolio Review is not configured on the server (missing GEMINI_API_KEY).' });
+// `retryable` marks failures worth another attempt: Gemini overloaded or
+// rate-limited (429 / 5xx), a network blip, or a garbled/empty answer. A 4xx
+// such as a bad or revoked API key fails at once — retrying can't fix it.
+// `modelGone` is Google's 404 for a model this key can no longer use (it's
+// retiring the 2.5 generation: 2.5-pro already answers "no longer available
+// to new users").
+class AnalysisError extends Error {
+  constructor(message, { retryable = false, modelGone = false } = {}) {
+    super(message);
+    this.retryable = retryable;
+    this.modelGone = modelGone;
   }
+}
 
+// A 429 is usually a per-minute limit that clears within seconds (retried like
+// any overload), but on Google's free tier it can also be the per-day request
+// quota — which no retry can fix until it resets, so say so plainly instead.
+// Google names the exhausted quota in the error details, e.g.
+// quotaId "GenerateRequestsPerDayPerProjectPerModel-FreeTier".
+const DAILY_QUOTA_ERROR = "Today's AI limit for Portfolio Review has been used up (the Gemini API key is on Google's free tier). Please try again tomorrow, or ask the admin to enable billing on the key.";
+
+function isDailyQuotaExhausted(data) {
+  return (data.error?.details || []).some((detail) =>
+    (detail.violations || []).some((v) => /PerDay/i.test(v.quotaId || '')));
+}
+
+async function callGemini(model, b64, filename) {
   let response;
   try {
-    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${config.geminiApiKey}`, {
+    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.geminiApiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -191,12 +224,18 @@ router.post('/analyze', asyncHandler(async (req, res) => {
       }),
     });
   } catch (err) {
-    return res.status(502).json({ error: 'Could not reach the AI service. Please try again.' });
+    throw new AnalysisError('Could not reach the AI service. Please try again.', { retryable: true });
   }
 
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
+  if (response.status === 429 && isDailyQuotaExhausted(data)) {
+    throw new AnalysisError(DAILY_QUOTA_ERROR);
+  }
   if (!response.ok) {
-    return res.status(502).json({ error: data.error?.message || `AI service error (${response.status})` });
+    throw new AnalysisError(data.error?.message || `AI service error (${response.status})`, {
+      retryable: response.status === 429 || response.status >= 500,
+      modelGone: response.status === 404,
+    });
   }
 
   const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
@@ -206,10 +245,108 @@ router.post('/analyze', asyncHandler(async (req, res) => {
   try {
     portfolio = JSON.parse(clean);
   } catch (err) {
-    return res.status(502).json({ error: 'The AI returned an unreadable response. Please try uploading again.' });
+    throw new AnalysisError('The AI returned an unreadable response. Please try uploading again.', { retryable: true });
   }
+  if (!portfolio?.members?.length) {
+    throw new AnalysisError('No data returned from AI. Please try again.', { retryable: true });
+  }
+  return portfolio;
+}
 
-  res.json(portfolio);
+// gemini-2.5-flash is the model the prompt was tuned and verified on. Its
+// "high demand" 503s come and go within seconds to minutes, so it gets several
+// spaced-out tries. The newer flash models were no help there (they were
+// overloaded even more often in testing), so the fallback model is only used
+// if Google stops serving 2.5-flash to this API key altogether.
+const PRIMARY_MODEL = 'gemini-2.5-flash';
+const FALLBACK_MODEL = 'gemini-3.5-flash';
+const RETRY_WAITS_MS = [0, 5000, 15000, 30000];
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function analyzePortfolio(b64, filename) {
+  let model = PRIMARY_MODEL;
+  let lastErr;
+  for (const waitMs of RETRY_WAITS_MS) {
+    if (waitMs) await sleep(waitMs);
+    try {
+      return await callGemini(model, b64, filename);
+    } catch (err) {
+      lastErr = err;
+      console.warn(`[portfolio-review] ${model} failed: ${err.message}`);
+      if (err.modelGone && model !== FALLBACK_MODEL) {
+        model = FALLBACK_MODEL;
+        continue;
+      }
+      if (!err.retryable) break;
+    }
+  }
+  throw lastErr;
+}
+
+// In-memory job store. The API runs as a single instance (chat presence and
+// the permission cache already live in process memory the same way), so a
+// Map is enough. A job lost to a restart/deploy mid-analysis just answers 404
+// and the user uploads again. Finished jobs are kept for JOB_TTL_MS so a poll
+// whose response got lost in transit can simply be repeated.
+const JOB_TTL_MS = 15 * 60 * 1000;
+const jobs = new Map(); // jobId -> { userId, status: 'running'|'done'|'error', portfolio?, error?, createdAt }
+
+function sweepJobs() {
+  const cutoff = Date.now() - JOB_TTL_MS;
+  for (const [id, job] of jobs) {
+    if (job.createdAt < cutoff) jobs.delete(id);
+  }
+}
+
+// POST /api/portfolio-review/jobs — start analyzing a portfolio statement PDF
+// (base64). Answers at once with { jobId }; poll GET /jobs/:jobId for the result.
+router.post('/jobs', asyncHandler(async (req, res) => {
+  const { b64, filename } = parseBody(analyzeSchema, req.body);
+  if (!config.geminiApiKey) return res.status(500).json({ error: MISSING_KEY_ERROR });
+
+  sweepJobs();
+  const jobId = randomUUID();
+  const job = { userId: req.user.id, status: 'running', createdAt: Date.now() };
+  jobs.set(jobId, job);
+
+  analyzePortfolio(b64, filename)
+    .then((portfolio) => {
+      job.status = 'done';
+      job.portfolio = portfolio;
+    })
+    .catch((err) => {
+      job.status = 'error';
+      job.error = err.message || 'Something went wrong. Please try uploading again.';
+    });
+
+  res.status(202).json({ jobId });
+}));
+
+// GET /api/portfolio-review/jobs/:jobId — { status: 'running' } until the
+// analysis finishes, then { status: 'done', portfolio } or { status: 'error', error }.
+router.get('/jobs/:jobId', (req, res) => {
+  const job = jobs.get(req.params.jobId);
+  if (!job || job.userId !== req.user.id) {
+    return res.status(404).json({ error: 'This analysis is no longer available (the server may have restarted). Please upload the PDF again.' });
+  }
+  if (job.status === 'running') return res.json({ status: 'running' });
+  if (job.status === 'error') return res.json({ status: 'error', error: job.error });
+  res.json({ status: 'done', portfolio: job.portfolio });
+});
+
+// POST /api/portfolio-review/analyze — the original single-request endpoint:
+// upload a portfolio statement PDF (base64), get back the portfolio JSON.
+// Kept for app bundles cached before the switch to /jobs.
+router.post('/analyze', asyncHandler(async (req, res) => {
+  const { b64, filename } = parseBody(analyzeSchema, req.body);
+  if (!config.geminiApiKey) return res.status(500).json({ error: MISSING_KEY_ERROR });
+
+  try {
+    res.json(await analyzePortfolio(b64, filename));
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
 }));
 
 export default router;

@@ -1682,6 +1682,17 @@ const PAGE_HTML = `
   </div>
 `;
 
+// Built ONCE, at module level, on purpose. React 19 re-applies
+// dangerouslySetInnerHTML whenever it receives a new object — even when the
+// HTML string inside is identical — and an inline `{{ __html: PAGE_HTML }}` is
+// a new object on every render. Any re-render (App's 12-second auto-refresh of
+// the Clients data hands this component a fresh `client` object each time)
+// would then reset the whole tool to its blank upload page: the progress bar
+// jumped back to "Starting…" mid-analysis, and a finished dashboard vanished
+// within seconds of appearing. With a stable object React leaves the tool's
+// live DOM alone after mount.
+const PAGE_HTML_PROP = { __html: PAGE_HTML };
+
 export default function PortfolioReview({ client }) {
   // React 18 StrictMode (dev only) intentionally mounts → cleans up → mounts
   // again to help catch missing cleanup. This component's mount effect below
@@ -1834,10 +1845,42 @@ export default function PortfolioReview({ client }) {
 
 
     // GEMINI API CALL — proxied through our own backend (server/src/routes/portfolioReview.js)
-    // so the API key never reaches the browser. Same request/response shape
-    // the tool always used, just server-side now.
+    // so the API key never reaches the browser. Runs as a background job we
+    // poll: in production the API sits behind Cloudflare, which kills any
+    // single request that runs past 100s, and a big family statement can take
+    // Gemini longer than that. Every poll answers instantly, so no request
+    // ever gets near the limit.
     async function callGeminiAPI(b64, filename) {
-      return api.post('/portfolio-review/analyze', { b64, filename });
+      let jobId;
+      try {
+        ({ jobId } = await api.post('/portfolio-review/jobs', { b64, filename }));
+      } catch (err) {
+        // 404 = an API server that predates /jobs (e.g. mid-deploy, before
+        // the backend has rolled out): fall back to the single-request route.
+        if (err.status === 404) return api.post('/portfolio-review/analyze', { b64, filename });
+        throw err;
+      }
+      const startedAt = Date.now();
+      let pollFailures = 0;
+      while (Date.now() - startedAt < 10 * 60 * 1000) {
+        await sleep(3000);
+        if (Date.now() - startedAt > 60 * 1000) {
+          qs('prog-step').textContent = 'Still analysing — larger statements can take a few minutes…';
+        }
+        let job;
+        try {
+          job = await api.get(`/portfolio-review/jobs/${jobId}`);
+        } catch (err) {
+          // 404 = job gone (server restarted), 401 = logged out: stop. Anything
+          // else is a network blip on one poll — try the next one.
+          if (err.status === 404 || err.status === 401 || ++pollFailures >= 5) throw err;
+          continue;
+        }
+        pollFailures = 0;
+        if (job.status === 'done') return job.portfolio;
+        if (job.status === 'error') throw new Error(job.error);
+      }
+      throw new Error('The analysis is taking unusually long. Please try uploading again.');
     }
 
     // MAIN HANDLER
@@ -2993,7 +3036,7 @@ export default function PortfolioReview({ client }) {
         attached to it.
       */}
       <div id="doc-msg-toast" className="no-print" style={{ display: 'none', position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)', zIndex: 50, padding: '12px 20px', borderRadius: '12px', background: '#059669', color: '#fff', fontSize: '14px', fontWeight: 600, boxShadow: '0 12px 40px rgba(0,0,0,0.18)' }} />
-      <div dangerouslySetInnerHTML={{ __html: PAGE_HTML }} />
+      <div dangerouslySetInnerHTML={PAGE_HTML_PROP} />
     </div>
   );
 }
