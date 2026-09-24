@@ -11,7 +11,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/error.js';
 import { parseBody } from '../lib/validate.js';
 import { goalCreateSchema, momCreateSchema } from '../lib/schemas.js';
-import { canCreate, canEdit, canDelete } from '../lib/permissions.js';
+import { can, canCreate, canEdit, canDelete } from '../lib/permissions.js';
 import { findPanConflict, panConflictMessage, normalizePan } from '../lib/panUniqueness.js';
 import { logActivity, diffFields, listActivity } from '../lib/activityLog.js';
 
@@ -165,13 +165,112 @@ router.post('/', asyncHandler(async (req, res) => {
   res.status(201).json({ client });
 }));
 
+// A client PATCH carries several unrelated things, each governed by its OWN
+// matrix row. It used to demand Clients → Edit Personal Details for all of
+// them, so e.g. a Portfolio Manager granted Asset Allocation → Edit, or anyone
+// granted Documents → Upload, was still refused on save. Each part is now
+// checked against its own right:
+//   name / pan / age / assignedTo / clientDetails (bar attachments)
+//                                   → Clients · Edit Personal Details
+//   assumptions (Goal Report's planning notes) → Goal Report · Edit
+//   assetAllocation                 → Asset Allocation · Edit
+//   clientDetails.attachments       → Documents · Upload (add / rename) and
+//                                     Documents · Delete (remove)
+// Callers send the whole clientDetails object even to add one document, so
+// every part is diffed against the stored client and only what actually
+// changed is checked. A part the user may not change keeps its stored value
+// (which also stops a stale browser copy from undoing someone else's edit);
+// if nothing they asked for is allowed, the request is refused with the
+// specific right that's missing.
+const PERSONAL_TOP_KEYS = ['name', 'pan', 'age', 'assignedTo'];
+
+const attachmentKey = (a) => (a && typeof a === 'object' ? (a.id ? `id:${a.id}` : `file:${a.fileName || ''}:${a.name || ''}`) : `str:${a}`);
+
+function authorizeClientPatch(user, existing, data) {
+  const refusals = [];
+  const out = { ...data };
+  const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  let applied = 0;
+
+  // Top-level personal fields.
+  const personalTopChanged = PERSONAL_TOP_KEYS.filter((k) => k in data && !same(data[k], existing[k]));
+  const oldDetails = existing.clientDetails || {};
+  const newDetails = data.clientDetails;
+  const detailKeysChanged = newDetails
+    ? [...new Set([...Object.keys(oldDetails), ...Object.keys(newDetails)])]
+      .filter((k) => k !== 'attachments' && !same(newDetails[k], oldDetails[k]))
+    : [];
+  const mayEditPersonal = canEdit(user, 'clients', existing);
+  if (personalTopChanged.length || detailKeysChanged.length) {
+    if (mayEditPersonal) applied++;
+    else {
+      refusals.push('edit this client\'s personal details');
+      personalTopChanged.forEach((k) => { delete out[k]; });
+    }
+  }
+
+  // Goal Report planning notes.
+  if ('assumptions' in data && !same(data.assumptions, existing.assumptions)) {
+    if (can(user, 'goals', 'edit', existing)) applied++;
+    else { refusals.push('edit this client\'s goal planning notes'); delete out.assumptions; }
+  }
+
+  // Asset allocation.
+  if ('assetAllocation' in data && !same(data.assetAllocation, existing.assetAllocation)) {
+    if (can(user, 'assetAllocation', 'edit', existing)) applied++;
+    else { refusals.push('edit this client\'s asset allocation'); delete out.assetAllocation; }
+  }
+
+  // Documents, merged per item onto the STORED list so an allowed upload
+  // never drags along a removal (or vice versa) the user may not make.
+  let attachments = oldDetails.attachments;
+  if (newDetails && 'attachments' in newDetails && !same(newDetails.attachments, oldDetails.attachments)) {
+    const before = Array.isArray(oldDetails.attachments) ? oldDetails.attachments : [];
+    const after = Array.isArray(newDetails.attachments) ? newDetails.attachments : [];
+    const beforeByKey = new Map(before.map((a) => [attachmentKey(a), a]));
+    const afterKeys = new Set(after.map(attachmentKey));
+    const mayUpload = can(user, 'documents', 'upload', existing);
+    const mayDelete = can(user, 'documents', 'delete', existing);
+    let uploadRefused = false, deleteRefused = false;
+
+    const merged = [];
+    for (const a of after) {
+      const prev = beforeByKey.get(attachmentKey(a));
+      if (!prev) { // added
+        if (mayUpload) { merged.push(a); applied++; } else uploadRefused = true;
+      } else if (!same(prev, a)) { // renamed / re-categorised
+        if (mayUpload) { merged.push(a); applied++; } else { merged.push(prev); uploadRefused = true; }
+      } else merged.push(a);
+    }
+    for (const a of before) { // removed
+      if (afterKeys.has(attachmentKey(a))) continue;
+      if (mayDelete) applied++;
+      else { merged.push(a); deleteRefused = true; }
+    }
+    if (uploadRefused) refusals.push('upload documents for this client');
+    if (deleteRefused) refusals.push('delete this client\'s documents');
+    attachments = merged;
+  }
+
+  if (newDetails) {
+    // Personal detail keys the user may not change keep their stored values.
+    const details = mayEditPersonal ? { ...newDetails } : { ...oldDetails };
+    if (attachments === undefined) delete details.attachments;
+    else details.attachments = attachments;
+    out.clientDetails = details;
+  }
+
+  return { data: out, refusals, applied };
+}
+
 router.patch('/:id', asyncHandler(async (req, res) => {
   const existing = await prisma.client.findUnique({ where: { id: req.params.id } });
   if (!existing || existing.deletedAt) return res.status(404).json({ error: 'Client not found' });
-  if (!canEdit(req.user, 'clients', existing)) {
-    return forbidden(res, 'Only the Operations Manager can edit client details.');
+  const requested = parseBody(clientUpdateSchema, req.body);
+  const { data, refusals, applied } = authorizeClientPatch(req.user, existing, requested);
+  if (refusals.length && applied === 0) {
+    return forbidden(res, `You don't have permission to ${refusals.join(' or ')}.`);
   }
-  const data = parseBody(clientUpdateSchema, req.body);
   if (data.pan && normalizePan(data.pan) !== normalizePan(existing.pan)) {
     const conflict = await findPanConflict(data.pan, { excludeClientId: existing.id });
     if (conflict) return res.status(409).json({ error: panConflictMessage(conflict, data.pan) });
@@ -194,7 +293,7 @@ router.patch('/:id', asyncHandler(async (req, res) => {
     });
   }
   await logDocumentChanges(prisma, client.id, existing, client, req.user.id);
-  res.json({ client });
+  res.json({ client, ...(refusals.length ? { refused: refusals } : {}) });
 }));
 
 // GET /api/clients/:id/activity — this client's audit trail (personal-detail

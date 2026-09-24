@@ -11,7 +11,7 @@ import { Avatar, Card, btnPrimary, btnSecondary, btnGhost, inputCls, CoolSelect 
 import { MANAGER_ROLES } from '../utils/team';
 import { teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
-import { canEditClient, canDeleteClient } from '../utils/permissions';
+import { canEditClient, canDeleteClient, can } from '../utils/permissions';
 import { loadTasks, fetchClosedTasksForClient } from '../utils/tasks';
 import { loadProspects, CATEGORY_THEME, ALL_STAGE_THEME, fmtAmountINR } from '../utils/prospects';
 import { loadMeetings, MEETING_STATUS_THEME, MODE_THEME, fmtMeetingWhen, meetingDateTime } from '../utils/meetings';
@@ -1304,6 +1304,10 @@ function ClosedActivitiesBox({ items, emptyText }) {
 function AttachmentsBox({ staticItems = [], dynamicItems = [], onPreview, onDeleteDoc, onEditDoc, isViewer, client, emptyText }) {
   const hasStatic = staticItems && staticItems.length > 0;
   const hasDynamic = dynamicItems && dynamicItems.length > 0;
+  // Uploaded files follow the matrix's Documents rows: renaming counts as
+  // Upload, removing as Delete — the same rights the server checks on save.
+  const mayRenameDocs = can('documents', 'upload', client);
+  const mayDeleteDocs = can('documents', 'delete', client);
 
   if (!hasStatic && !hasDynamic) {
     return <p className="text-xs text-slate-450 dark:text-slate-500 italic font-medium">{emptyText}</p>;
@@ -1390,7 +1394,7 @@ function AttachmentsBox({ staticItems = [], dynamicItems = [], onPreview, onDele
               </div>
             </div>
             <div className="ml-auto flex items-center gap-1.5 shrink-0">
-              {!isViewer && onEditDoc && (
+              {!isViewer && onEditDoc && mayRenameDocs && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onEditDoc(doc); }}
                   className="p-1.5 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-955/20 rounded-xl transition-all cursor-pointer opacity-0 group-hover:opacity-100 shrink-0"
@@ -1399,7 +1403,7 @@ function AttachmentsBox({ staticItems = [], dynamicItems = [], onPreview, onDele
                   <Pencil size={13} />
                 </button>
               )}
-              {!isViewer && onDeleteDoc && (
+              {!isViewer && onDeleteDoc && mayDeleteDocs && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onDeleteDoc(e, doc); }}
                   className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-455 hover:bg-rose-50 dark:hover:bg-rose-955/20 rounded-xl transition-all cursor-pointer opacity-0 group-hover:opacity-100 shrink-0"

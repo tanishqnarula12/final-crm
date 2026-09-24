@@ -21,7 +21,9 @@ const OWNERSHIP_GUIDE = {
   self: 'the record\'s "Assigned To" is this person, or they created it.',
   creator: 'this person created the record. Being assigned to it does not count here — only the original creator does.',
   task: 'this person assigned the task (they\'re the "Assigned By") OR the task is assigned to them (they\'re the "Assigned To"). Nobody else can see or edit the task at all.',
-  client: 'this person is the Relationship Manager assigned to the client (or to the client the record belongs to, for Goals / Proposals / Reviews / Prospects / Documents), or they created it.',
+  client: 'this person is the Relationship Manager assigned to the client (or to the client the record belongs to, for Goals / Proposals / Reviews / Documents), or they created it.',
+  meeting: 'this person created the meeting, is its host, or is one of its attendees.',
+  prospect: 'this person is the prospect\'s Relationship Manager, Portfolio Manager, Service Manager or Insurance Manager, or they created it.',
   global: 'nothing — this is a global setting, not tied to any record. "Assigned" behaves exactly like "None" here; only "All" grants access.',
 };
 

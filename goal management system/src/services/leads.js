@@ -327,9 +327,10 @@ export function assignLead(id, { ownerId, contributors = [] }, actor = 'System')
   const now = new Date().toISOString();
 
   lead.ownerId = ownerId;
-  // RBAC ownership: the assigned RM's account id. The server only accepts this
-  // change from an Admin (leads assignOnEdit = 'admin'), matching the rule that
-  // only Admin assigns the RM; ownership then shifts to that account.
+  // RBAC ownership: the assigned RM's account id. The server accepts this —
+  // together with the RM, the others and the move to Qualified — from anyone
+  // the permission matrix grants Assign RM (Admin always); ownership then
+  // shifts to that account.
   lead.assignedTo = ownerId;
   lead.contributors = contributors;
   lead.stage = 'Qualified';

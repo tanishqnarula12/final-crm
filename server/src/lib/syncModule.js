@@ -65,12 +65,33 @@ const NOISE_KEYS = new Set([
 ]);
 
 // Who may set/change the assignment field, per module policy.
-function mayAssign(mode, actor, existing) {
+//   'admin'  — Admin only (modules with no assignment row in the matrix).
+//   'anyone' — whoever may create/edit the record.
+//   'editor' — the record's assigner (departmentOwner), or — for the
+//              two-party modules — anyone the matrix lets edit its details
+//              (e.g. Internal Manager's ALL oversight scope on Tasks/COBR).
+//              Before, only the assigner could reassign, so an Internal
+//              Manager editing a task's assignee saw it silently snap back
+//              despite holding ALL on Edit Details.
+//   'matrix' — the matrix's own Assign RM cell for this module (Leads). Before,
+//              Leads used 'admin' here, so a role the admin had granted
+//              Assign RM saw the button (the UI honours the matrix) but every
+//              assignment was rejected on save — "could not be saved, you may
+//              not have permission".
+function mayAssign(mode, actor, existing, mod, rec) {
   if (isAdmin(actor)) return true;
   if (mode === 'anyone') return true;
-  if (mode === 'editor') return existing ? existing.departmentOwner === actor.id : true;
+  if (mode === 'editor') {
+    if (!existing) return true;
+    if (existing.departmentOwner === actor.id) return true;
+    return TASK_SHAPED_MODULES.has(mod) && can(actor, mod, 'editDetails', existing);
+  }
+  if (mode === 'matrix') return can(actor, mod, 'assignRm', existing || rec);
   return false; // 'admin' (or unknown) → admin only
 }
+
+// Does `key` differ between the stored payload and the incoming record?
+const fieldChanged = (before, after, key) => JSON.stringify(before?.[key] ?? null) !== JSON.stringify(after?.[key] ?? null);
 
 /**
  * @param prisma  Prisma client
@@ -86,9 +107,19 @@ function mayAssign(mode, actor, existing) {
  *   actor,             // req.user ({ id, role })
  *   promote,           // (payload) => promoted column object
  *   stageField,        // e.g. 'stage' (or null)
- *   assignOnCreate,    // 'admin' | 'anyone' | 'editor'
- *   assignOnEdit,      // 'admin' | 'anyone' | 'editor'
+ *   assignOnCreate,    // 'admin' | 'anyone' | 'editor' | 'matrix'
+ *   assignOnEdit,      // 'admin' | 'anyone' | 'editor' | 'matrix'
  *   deptOwnerIsActor,  // bool — stamp departmentOwner = actor.id on create (tasks: assignedBy)
+ *   assignFields,      // extra payload keys that ARE part of the assignment
+ *                       // (Leads: ownerId, contributors) — governed only by
+ *                       // the assignment right, never the plain edit right
+ *   assignCompanions,  // keys that change as a side effect of an assignment
+ *                       // (Leads: leadScore) — ride on the assignment right
+ *                       // when one is granted in the same save; otherwise
+ *                       // they're ordinary detail edits
+ *   assignStage,       // { from, to } — the stage move an assignment makes
+ *                       // (Leads: Waiting for Assignment → Qualified), allowed
+ *                       // as part of a granted assignment
  * }
  * @returns { list, stats }
  */
@@ -96,7 +127,10 @@ export async function syncBulk(prisma, spec) {
   const {
     module, modelKey, incoming, actor, promote,
     stageField = null, assignOnCreate = 'admin', assignOnEdit = 'admin', deptOwnerIsActor = false,
+    assignFields = [], assignCompanions = [], assignStage = null,
   } = spec;
+  const assignFieldSet = new Set(assignFields);
+  const assignCompanionSet = new Set(assignCompanions);
   const moduleFor = typeof module === 'function' ? module : () => module;
   const model = prisma[modelKey];
 
@@ -124,7 +158,7 @@ export async function syncBulk(prisma, spec) {
       const owner = {
         createdBy: actor.id,
         departmentOwner: deptOwnerIsActor ? actor.id : (rec.departmentOwner ?? null),
-        assignedTo: mayAssign(assignOnCreate, actor, null) ? (rec.assignedTo ?? null) : null,
+        assignedTo: mayAssign(assignOnCreate, actor, null, mod, rec) ? (rec.assignedTo ?? null) : null,
       };
       const payload = { ...rec, ...owner, createdAt: now.toISOString(), updatedAt: now.toISOString() };
       try {
@@ -151,18 +185,33 @@ export async function syncBulk(prisma, spec) {
     if (JSON.stringify(existing.payload) === JSON.stringify(rec)) { stats.kept++; continue; }
 
     // ---- UPDATE --------------------------------------------------------------
-    // Resolve the desired assignment (ignore a forbidden change).
+    const mod = moduleFor(existing);
+
+    // Resolve the desired assignment (ignore a forbidden change). A change to
+    // any of the module's assignFields counts as an assignment request too.
     const wantAssigned = rec.assignedTo ?? null;
     const curAssigned = existing.assignedTo ?? null;
     let nextAssigned = curAssigned;
-    const assignmentRequested = wantAssigned !== curAssigned;
-    if (assignmentRequested && mayAssign(assignOnEdit, actor, existing)) nextAssigned = wantAssigned;
+    const assignFieldsChanged = assignFields.some((k) => fieldChanged(existing.payload, rec, k));
+    const assignmentRequested = wantAssigned !== curAssigned || assignFieldsChanged;
+    const assignAllowed = assignmentRequested && mayAssign(assignOnEdit, actor, existing, mod, rec);
+    if (assignAllowed) nextAssigned = wantAssigned;
+    // An assignment the actor may not make leaves every assignment field at
+    // its stored value (assignedTo itself is pinned via `owner` below).
+    if (assignmentRequested && !assignAllowed) {
+      assignFields.forEach((k) => { rec[k] = existing.payload?.[k]; });
+    }
 
     const from = stageField ? (existing[stageField] ?? null) : null;
     let to = stageField ? (rec[stageField] ?? null) : null;
     let stageChanged = stageField && from !== to;
-
-    const mod = moduleFor(existing);
+    // The stage move an assignment itself makes (Leads: Waiting for
+    // Assignment → Qualified) rides on the assignment right.
+    const assignmentStageMove = assignAllowed && !!assignStage && stageChanged
+      && from === assignStage.from && to === assignStage.to;
+    // Keys whose change is already settled by the assignment decision above,
+    // so they're kept out of the ordinary details check.
+    const settledByAssignment = (k) => assignFieldSet.has(k) || (assignAllowed && assignCompanionSet.has(k));
     let allowed;
     if (TASK_SHAPED_MODULES.has(mod)) {
       // Split the change into details / stage / log and require the matching
@@ -179,7 +228,7 @@ export async function syncBulk(prisma, spec) {
       // disallowed is reverted to its stored value and the rest still lands
       // — the same treatment the non-task-shaped branch below already got.
       const changed = Object.keys(diffFields(existing.payload, rec));
-      const detailKeys = changed.filter((k) => !TASK_LOG_KEYS.has(k) && !TASK_STAGE_KEYS.has(k) && !NOISE_KEYS.has(k));
+      const detailKeys = changed.filter((k) => !TASK_LOG_KEYS.has(k) && !TASK_STAGE_KEYS.has(k) && !NOISE_KEYS.has(k) && !settledByAssignment(k));
       const logKeys = changed.filter((k) => TASK_LOG_KEYS.has(k));
       const detailChanged = detailKeys.length > 0;
       const logChanged = logKeys.length > 0;
@@ -189,7 +238,7 @@ export async function syncBulk(prisma, spec) {
       // — alongside a detail/stage edit it rides on that aspect's own right.
       const logAllowed = !logChanged || detailChanged || stageChanged || can(actor, mod, 'editLog', existing);
       allowed = detailAllowed || stageAllowed || logAllowed;
-      if (!allowed && nextAssigned !== curAssigned) allowed = true;
+      if (!allowed && assignAllowed) allowed = true;
       if (!allowed) { stats.rejected++; continue; } // keep the stored version
 
       if (!detailAllowed) detailKeys.forEach((k) => { rec[k] = existing.payload[k]; });
@@ -215,7 +264,7 @@ export async function syncBulk(prisma, spec) {
       // real (unchanged) row. Now whichever aspect is disallowed is simply
       // reverted to its stored value instead of voiding the whole update.
       const changedKeys = Object.keys(diffFields(existing.payload, rec))
-        .filter((k) => k !== stageField && !NOISE_KEYS.has(k));
+        .filter((k) => k !== stageField && !NOISE_KEYS.has(k) && !settledByAssignment(k));
       const detailAllowed = changedKeys.length === 0 || canEdit(actor, mod, existing);
       // A stale browser tab re-sending an old `stage` value alongside an
       // unrelated edit must not silently walk the record backward (e.g.
@@ -235,14 +284,14 @@ export async function syncBulk(prisma, spec) {
       // still cannot.
       const intoPreQualified = mod === 'investmentProspects' && to === 'Pre-Qualified';
       const outOfPreQualified = mod === 'investmentProspects' && from === 'Pre-Qualified' && to === 'Qualified';
-      const stageAllowed = !stageChanged || (
+      const stageAllowed = !stageChanged || assignmentStageMove || (
         intoPreQualified || outOfPreQualified
           ? isPreQualifiedOwner(actor, existing)
           : canChangeStage(actor, mod, existing, from, to)
-            && (!isBackwardStage(mod, from, to) || canChangeStageBack(actor, mod, existing))
+          && (!isBackwardStage(mod, from, to) || canChangeStageBack(actor, mod, existing))
       );
       allowed = detailAllowed || stageAllowed;
-      if (!allowed && nextAssigned !== curAssigned) allowed = true;
+      if (!allowed && assignAllowed) allowed = true;
       if (!allowed) { stats.rejected++; continue; } // keep the stored version
 
       if (!detailAllowed) changedKeys.forEach((k) => { rec[k] = existing.payload[k]; });

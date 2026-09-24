@@ -8,6 +8,7 @@ import { calcGoal, fmtINR, fmtFull, fmtSip, goalEmoji, monthLabel, fmtDate } fro
 import { hasAllocation, allocationTotals, filledItems } from '../utils/assets';
 import { updateClient, deleteMom } from '../services/db';
 import { getCurrentUser } from '../utils/auth';
+import { can } from '../utils/permissions';
 import { printHtmlDocument, printSafeDataUrl, wrapStandaloneHtml, useBlobUrl } from '../utils/documents';
 import { buildMomHtml } from '../utils/momHtml';
 import { cobrWorkspaceDocuments } from '../utils/cobrModules';
@@ -411,7 +412,7 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
                     </div>
                   </div>
                   <div className="ml-auto flex items-center gap-2 shrink-0">
-                    {doc.deletable !== false && (doc.type === 'custom' || doc.type === 'mom') && (
+                    {doc.deletable !== false && (doc.type === 'mom' || (doc.type === 'custom' && can('documents', 'delete', doc.client))) && (
                       <button
                         onClick={(e) => handleDeleteDoc(e, doc)}
                         className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-455 hover:bg-rose-50 dark:hover:bg-rose-955/20 rounded-xl transition-all cursor-pointer opacity-0 group-hover:opacity-100 shrink-0"

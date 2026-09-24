@@ -1,7 +1,7 @@
 // Leads — bulk transport (whole-array PUT) preserved, but every create/edit/
 // assign/delete is now validated + logged server-side via syncBulk. Rules:
 //   • any user may create a lead (starts unassigned; createdBy = actor)
-//   • only Admin may set/change the assigned RM (assignedTo)
+//   • setting/changing the assigned RM needs the matrix's Assign RM right
 //   • only the assigned RM (or Admin) may edit after assignment
 //   • nobody deletes leads (omission never deletes)
 import { Router } from 'express';
@@ -149,8 +149,17 @@ router.put('/', asyncHandler(async (req, res) => {
     incoming: leads,
     actor: req.user,
     stageField: 'stage',
-    assignOnCreate: 'admin', // only Admin assigns an RM
-    assignOnEdit: 'admin',
+    // Assigning the RM is the matrix's own "Assign RM" right (Admin always).
+    // It used to be hard-wired to Admin only, so a role granted Assign RM got
+    // the button but every assignment bounced on save. The assignment writes
+    // the RM (ownerId + the assignedTo ownership column), the "others"
+    // (contributors), and moves the lead Waiting for Assignment → Qualified —
+    // all of which ride on Assign RM rather than also demanding plain Edit.
+    assignOnCreate: 'matrix',
+    assignOnEdit: 'matrix',
+    assignFields: ['ownerId', 'contributors'],
+    assignCompanions: ['leadScore'],
+    assignStage: { from: 'Waiting for Assignment', to: 'Qualified' },
     promote: (l) => ({
       stage: l.stage ?? null,
       status: l.status ?? null,

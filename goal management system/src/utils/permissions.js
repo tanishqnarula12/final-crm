@@ -30,7 +30,9 @@ export const isAdmin = (me) => Array.isArray(me?.roles) && me.roles.includes('AD
 // ---- Leads -----------------------------------------------------------------
 export const canCreateLead = () => can('leads', 'create');
 export const canEditLead = (_me, lead) => can('leads', 'edit', lead);
-export const canAssignLead = () => can('leads', 'assignRm');
+// Pass the lead so an "Assigned" scope on Assign RM resolves against it, the
+// same record the server checks (routes/leads.js → syncModule's 'matrix' mode).
+export const canAssignLead = (_me, lead) => can('leads', 'assignRm', lead);
 export const canDeleteLead = (_me, lead) => can('leads', 'delete', lead);
 
 // ---- Clients ---------------------------------------------------------------

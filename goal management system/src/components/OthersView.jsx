@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Wrench, AlertCircle } from 'lucide-react';
 import { Card, inputCls, Field } from './UI';
 import TopPerformingSchemes from './TopPerformingSchemes';
+import PlanningSandbox from './PlanningSandbox';
 
 // Sub-tab is controlled by the sidebar flyout → App.jsx → here via `subTab` prop.
 export default function OthersView({ subTab = 'other_tools' }) {
@@ -55,6 +56,13 @@ export default function OthersView({ subTab = 'other_tools' }) {
           TOP PERFORMING SCHEMES TAB
           ==================================================================== */}
       {activeSubTab === 'top_schemes' && <TopPerformingSchemes />}
+
+      {/* ====================================================================
+          GOAL PLANNER / ASSET ALLOCATION — client-free demo copies of the
+          client profile's Goal Mapping and Asset Allocation Mapping
+          ==================================================================== */}
+      {activeSubTab === 'goal_planner' && <PlanningSandbox mode="goals" />}
+      {activeSubTab === 'asset_planner' && <PlanningSandbox mode="assets" />}
 
       {/* ====================================================================
           CALCULATOR TAB

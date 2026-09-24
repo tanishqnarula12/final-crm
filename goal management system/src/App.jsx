@@ -60,7 +60,7 @@ import { loadLeads, hydrateLeads, updateLead, clientPayloadFromLead, markConnect
 import { loadTasks, saveTasks, hydrateTasks } from './utils/tasks';
 import { loadQueries, saveQueries, hydrateQueries, QUERY_STAGES, uploadQueryAttachment } from './utils/queries';
 import { loadLeave, hydrateLeave } from './utils/leave';
-import { canRespondToLeave } from './utils/permissions';
+import { canRespondToLeave, canDo } from './utils/permissions';
 import { loadProspects, saveProspect, hydrateProspects } from './utils/prospects';
 import { loadMeetings, saveMeetings, hydrateMeetings } from './utils/meetings';
 import { hydrateTeam, loadTeam, teamName } from './services/team';
@@ -2061,7 +2061,9 @@ export default function App() {
               client={assetClient}
               onEdit={() => setShowAllocModal(true)}
               onSaveRemark={(remark) => handleSaveAllocation(assetClientId, { remark })}
-              isViewer={isViewer}
+              // Editing follows the matrix's Asset Allocation → Edit row, the
+              // same right the server checks on save.
+              isViewer={isViewer || !canDo('assetAllocation', 'edit', assetClient)}
             />
           </div>
         )}

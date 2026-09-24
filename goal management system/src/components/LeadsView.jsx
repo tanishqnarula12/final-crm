@@ -531,7 +531,7 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
 
   const me = getCurrentUser();
   const meName = me?.name || 'System';
-  const canAssign = canAssignLead(me); // only Admin assigns the RM
+  const canAssign = canAssignLead(me, lead); // the matrix's Assign RM right
   const amAdmin = isAdmin(me);
   // Only the assigned RM (or Admin/Internal Manager per the matrix) may
   // actually DO anything to this lead — edit, mark lost/junk, progress the
@@ -714,10 +714,10 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
               )}
             </div>
 
-            {/* Stage-specific next action — assigning the RM is Admin-only. */}
+            {/* Stage-specific next action — assigning the RM needs the matrix's Assign RM right. */}
             {lead.stage === 'Waiting for Assignment' && canAssign && (
               <div className="p-3 rounded-xl bg-blue-50/50 dark:bg-blue-950/15 border border-blue-200/60 dark:border-blue-900/40 space-y-2.5">
-                <div className="text-[11px] font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wider">Admin — Assign Lead</div>
+                <div className="text-[11px] font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wider">Assign Lead</div>
                 <div className="flex flex-wrap items-end gap-2">
                   <div className="w-52"><Field label="Relationship Manager *"><CoolSelect value={assignRm} onChange={(e) => setAssignRm(e.target.value)} className={selectCls + ' text-xs py-1.5'}><option value="">Select RM…</option>{loadTeam().map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</CoolSelect></Field></div>
                   <button onClick={doAssign} className={btnPrimary + ' py-2 px-3'}><ArrowRight size={13} /> Assign &amp; Qualify</button>
