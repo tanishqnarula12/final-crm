@@ -356,13 +356,58 @@ export function detectReportingMonth(fileName, sheets, now = new Date()) {
  * parseNumber can read back correctly. With `raw: true` a percent-formatted
  * cell arrives as 0.1959 and would render as a wrong-looking number.
  */
+// Fixes a real, silent off-by-one-day bug on date columns (e.g. "Launch
+// Date") that only ever shows up on SOME rows of a real workbook, never in a
+// hand-typed test file — which is exactly what made it easy to ship.
+//
+// With `cellDates: true`, SheetJS turns a date cell's Excel serial number
+// into a JS Date. A serial that is meant to be an exact whole number (e.g.
+// 41418.000000 for 24-May-2013) routinely arrives as something like
+// 41417.999999991 instead — a few milliseconds of ordinary floating-point
+// noise, invisible in Excel itself because Excel ROUNDS to the nearest day
+// when it applies a date format. SheetJS's own formatter does not round: it
+// reads that value as "just before midnight" and renders the day BEFORE the
+// real one. This noise is common in launch-date columns specifically because
+// they're so often built by a formula or pasted in from another system/
+// database export rather than typed by hand in Excel — which is also why it
+// reproduces on a real uploaded workbook but not on a clean synthetic one.
+//
+// Fixed by rounding every parsed date cell back to a clean boundary — the
+// nearest day for a plain date format (the "Launch Date" case), or the
+// nearest second when the format actually carries a time component, so a
+// genuine date+time value isn't silently flattened to midnight.
+const TIME_FORMAT_RE = /[hHsS]|AM\/PM|A\/P/;
+
+function fixDateCellRounding(ws) {
+  for (const addr of Object.keys(ws)) {
+    if (addr.startsWith('!')) continue;
+    const cell = ws[addr];
+    if (!cell || cell.t !== 'd' || !(cell.v instanceof Date) || Number.isNaN(cell.v.getTime())) continue;
+    const hasTime = TIME_FORMAT_RE.test(String(cell.z || ''));
+    const unitMs = hasTime ? 1000 : 86400000; // nearest second vs. nearest day
+    const roundedMs = Math.round(cell.v.getTime() / unitMs) * unitMs;
+    if (roundedMs !== cell.v.getTime()) {
+      cell.v = new Date(roundedMs);
+      delete cell.w; // stale cached text (computed from the un-rounded value) — force a fresh format
+    }
+  }
+}
+
 export function parseWorkbook(arrayBuffer, fileName, now = new Date()) {
-  const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
+  // `cellNF: true` keeps each date cell's own number-format string on `.z`.
+  // Without it, SheetJS still uses that format once (to compute the cached
+  // `.w` text at read time) but then throws the format string away — so if
+  // fixDateCellRounding() below has to correct a date and drop the stale
+  // `.w`, there is nothing left telling it "dd-mm-yyyy" vs. the default
+  // "m/d/yy", and the regenerated text silently reformats to the wrong
+  // pattern even though the day/month/year values are right.
+  const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true, cellNF: true });
   const sheets = [];
 
   wb.SheetNames.forEach((name, sheetIndex) => {
     const ws = wb.Sheets[name];
     if (!ws) return;
+    fixDateCellRounding(ws);
 
     // `blankrows: true` keeps the array index of every row equal to its real
     // position in the sheet, so `headerRowIndex` and the "row N" note in
