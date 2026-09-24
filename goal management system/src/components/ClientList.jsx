@@ -154,8 +154,9 @@ function StatusPill({ ok, yesIcon: YesIcon = CheckCircle2, noIcon: NoIcon = Aler
 }
 
 export default function ClientList({ clients, onSelect, onSelectFreshly, onSelectApplicant, onAdd, onImport, onDelete, onDeleteAll, isViewer }) {
-  // RBAC: only the Operations Manager (or Admin) may create applicants; only
-  // Admin may delete (soft). The server enforces this too.
+  // RBAC: Clients → Create / Delete from the matrix; the server enforces the
+  // same. Per-row delete checks that client (so Assigned works); "delete all"
+  // needs Delete on every client (All).
   const me = getCurrentUser();
   const mayCreateClient = !isViewer && canCreateClient(me);
   const mayDeleteClient = canDeleteClient(me);
@@ -554,7 +555,7 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
                     return col ? React.cloneElement(col.cell(c), { key }) : null;
                   })}
                   <td className="px-3 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                    {mayDeleteClient && onDelete && (
+                    {canDeleteClient(me, c) && onDelete && (
                       <button
                         type="button"
                         onClick={() => onDelete(c.id)}

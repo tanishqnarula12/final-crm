@@ -11,7 +11,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/error.js';
 import { parseBody } from '../lib/validate.js';
 import { goalCreateSchema, momCreateSchema } from '../lib/schemas.js';
-import { can, canCreate, canEdit, canDelete } from '../lib/permissions.js';
+import { can, canCreate, canEdit, canDelete, canSomewhere } from '../lib/permissions.js';
 import { findPanConflict, panConflictMessage, normalizePan } from '../lib/panUniqueness.js';
 import { logActivity, diffFields, listActivity } from '../lib/activityLog.js';
 
@@ -128,32 +128,50 @@ const clientUpdateSchema = z.object({
 const include = { goals: true, moms: true };
 const forbidden = (res, msg) => res.status(403).json({ error: msg });
 
-// GET /api/clients — every non-deleted client with nested goals + moms.
+// GET /api/clients — every non-deleted client (with nested goals + moms) the
+// matrix's Clients → View lets this user see.
 router.get('/', asyncHandler(async (req, res) => {
   const clients = await prisma.client.findMany({
     where: { deletedAt: null },
     include: { goals: { where: { deletedAt: null } }, moms: { where: { deletedAt: null } } },
     orderBy: { createdAt: 'asc' },
   });
-  res.json({ clients });
+  res.json({ clients: clients.filter((c) => can(req.user, 'clients', 'view', c)) });
 }));
 
+// Who may create a client:
+//   • Clients → Create. On Assigned it's checked against the client being
+//     created, i.e. "a client whose Relationship Manager is you". It used to
+//     be checked against nothing, so Assigned could never create anything.
+//     Only roles the user really holds count here — picking yourself as the
+//     new client's RM doesn't make the RM column apply to you.
+//   • Or Leads → Convert on the lead this client is being converted from —
+//     converting a lead IS creating its client. Without this, an RM allowed
+//     to convert their own lead was refused at the very last step.
 router.post('/', asyncHandler(async (req, res) => {
-  if (!canCreate(req.user, 'clients')) {
-    return forbidden(res, 'Only the Operations Manager can create applicants.');
-  }
   const data = parseBody(clientCreateSchema, req.body);
-  if (data.pan) {
-    const conflict = await findPanConflict(data.pan);
-    if (conflict) return res.status(409).json({ error: panConflictMessage(conflict, data.pan) });
-    data.pan = normalizePan(data.pan);
-  }
   // The real "Relationship Manager" picker (Client Profile / Internal Team
   // Assignments) writes clientDetails.relationshipManager, not the dedicated
   // `assignedTo` RBAC column — keep them in sync so this client's contextual
   // RM (used everywhere: Goals, Proposals, Prospects, MOM, Reviews) is always
   // resolvable from the one real column, not a JSON field parse.
   const assignedTo = data.assignedTo ?? data.clientDetails?.relationshipManager ?? null;
+  let allowed = can(req.user, 'clients', 'create', { assignedTo, clientDetails: data.clientDetails }, { noContextualRm: true });
+  const leadId = data.clientDetails?.leadId;
+  if (!allowed && leadId) {
+    const lead = await prisma.lead.findUnique({ where: { id: String(leadId) } });
+    allowed = !!lead && !lead.deletedAt && can(req.user, 'leads', 'convert', lead);
+  }
+  if (!allowed) {
+    return forbidden(res, canSomewhere(req.user, 'clients', 'create')
+      ? 'You can only create clients you are the Relationship Manager of.'
+      : 'You don\'t have permission to create clients.');
+  }
+  if (data.pan) {
+    const conflict = await findPanConflict(data.pan);
+    if (conflict) return res.status(409).json({ error: panConflictMessage(conflict, data.pan) });
+    data.pan = normalizePan(data.pan);
+  }
   const client = await prisma.client.create({
     data: { ...data, assignedTo, createdBy: req.user.id, departmentOwner: req.user.roles?.[0] || null },
     include,

@@ -13,6 +13,7 @@ import { loadTasks, saveTasks } from '../utils/tasks';
 import { loadMeetings, saveMeetings } from '../utils/meetings';
 import { teamName } from '../services/team';
 import { updateLead } from '../services/leads';
+import { can, momRecord } from '../utils/permissions';
 
 // subjectType: 'client' (default) — the existing, unchanged flow. 'lead' — the
 // MoM is drafted against a Lead (before conversion, the "Create MoM" stage);
@@ -393,6 +394,20 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
   const [saving, setSaving] = useState(false);
   const [savedMomsList, setSavedMomsList] = useState([]);
   const [editingMomId, setEditingMomId] = useState(null);
+
+  // RBAC: MOM → Create for a new MOM, MOM → Edit for a saved one, MOM →
+  // Delete to remove one — checked against this client / lead (and the MOM
+  // itself), the same rights the server checks. Without the right the form
+  // still opens, so a MOM can be read and printed, just not saved.
+  const mayCreateMom = can('mom', 'create', client);
+  const mayEditMom = (mom) => can('mom', 'edit', momRecord(mom, client));
+  const mayDeleteMom = (mom) => can('mom', 'delete', momRecord(mom, client));
+  // A MOM this session just created isn't in savedMomsList until the next
+  // reload; it's this user's own.
+  const editingMom = editingMomId
+    ? (savedMomsList.find((m) => m.id === editingMomId) || { id: editingMomId, createdBy: getCurrentUser()?.id })
+    : null;
+  const maySaveMom = editingMom ? mayEditMom(editingMom) : mayCreateMom;
 
   // Clear the local recovery draft when the advisor actually LEAVES the
   // workspace (switches to a different top tab / closes the lead overlay)
@@ -993,20 +1008,22 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => handleEditSavedMom(mom)} 
+                  <button
+                    onClick={() => handleEditSavedMom(mom)}
                     className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg transition-all"
-                    title="Edit Draft"
+                    title={mayEditMom(mom) ? 'Edit Draft' : 'View Draft'}
                   >
                     <Edit size={16} />
                   </button>
-                  <button 
-                    onClick={() => handleDeleteSavedMom(mom.id)} 
-                    className="p-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-all"
-                    title="Delete Draft"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  {mayDeleteMom(mom) && (
+                    <button
+                      onClick={() => handleDeleteSavedMom(mom.id)}
+                      className="p-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-all"
+                      title="Delete Draft"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -1943,11 +1960,12 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
                 </button>
               ) : (
                 <button
-                  onClick={handleSaveAndGenerate}
+                  onClick={maySaveMom ? handleSaveAndGenerate : generateMOM}
                   disabled={saving}
+                  title={maySaveMom ? undefined : 'You can view and print this MOM, but you don\'t have permission to save it.'}
                   className="px-5 py-2.5 text-xs font-bold bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-xl hover:brightness-105 transition-all flex items-center gap-1.5 shadow-md shadow-orange-500/10 cursor-pointer disabled:opacity-60"
                 >
-                  {saving ? <RefreshCw size={14} className="animate-spin" /> : '⚡'} Save &amp; Generate MOM Draft
+                  {saving ? <RefreshCw size={14} className="animate-spin" /> : '⚡'} {maySaveMom ? <>Save &amp; Generate MOM Draft</> : 'Generate MOM (not saved)'}
                 </button>
               )}
             </div>
@@ -1971,7 +1989,7 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
                   (and would error) for a lead, which has no Documents store
                   of its own yet. Print/Copy don't depend on a client record,
                   so both stay available either way. */}
-              {subjectType !== 'lead' && (
+              {subjectType !== 'lead' && can('documents', 'upload', client) && (
                 <button
                   onClick={handleSaveDocument}
                   disabled={savingDoc}

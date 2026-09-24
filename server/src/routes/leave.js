@@ -85,8 +85,10 @@ router.get('/', asyncHandler(async (req, res) => {
   res.json({ leaves: visible.map(serialize) });
 }));
 
-// POST /api/leave — apply for leave. Anyone may create their own.
+// POST /api/leave — apply for leave (the matrix's Leave → Create; everyone by
+// default).
 router.post('/', asyncHandler(async (req, res) => {
+  if (!can(req.user, 'leave', 'create', { createdBy: req.user.id })) return res.status(403).json({ error: 'You don\'t have permission to apply for leave.' });
   const parsed = parseBody(applySchema, req.body);
   if (parsed.toDate < parsed.fromDate) return res.status(400).json({ error: '"To" date cannot be before the "From" date.' });
   const { error, data } = normalizeLeaveType(parsed);

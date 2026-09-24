@@ -86,11 +86,25 @@ function isMeetingParticipant(record, user) {
   return Array.isArray(attendees) && attendees.some((a) => (a || '').trim().toLowerCase() === myName);
 }
 
+// A MOM's writer, or the RM of the client / lead it belongs to — mirrors
+// isMomOwner() in the server engine. Pass the MOM with its parent attached as
+// `.client` / `.lead` (or the parent itself when creating one).
+function isMomOwner(record, uid) {
+  return record.createdBy === uid
+    || isClientRm(record, uid)
+    || record.ownerId === uid
+    || record?.lead?.assignedTo === uid
+    || record?.lead?.ownerId === uid;
+}
+
+const isUnassignedLead = (record) => !record.ownerId && !record.assignedTo;
+
 function ownsRecord(module, record, user) {
   if (!record) return false;
   const uid = user.id;
   const kind = ownershipKind(module);
   if (kind === 'creator') return record.createdBy === uid;
+  if (kind === 'mom') return isMomOwner(record, uid);
   // The people on a task: assigner, assignee and any sub-people.
   if (kind === 'task') return record.departmentOwner === uid || record.assignedTo === uid || taskSubPersons(record).includes(uid);
   if (kind === 'meeting') return isMeetingParticipant(record, user);
@@ -105,7 +119,9 @@ function ownsRecord(module, record, user) {
 function isRmOf(module, record, uid) {
   if (!record) return false;
   const kind = ownershipKind(module);
-  if (kind === 'client') return isClientRm(record, uid);
+  if (kind === 'client' || kind === 'prospect') return isClientRm(record, uid);
+  if (kind === 'mom') return isClientRm(record, uid) || record.ownerId === uid
+    || record?.lead?.assignedTo === uid || record?.lead?.ownerId === uid;
   if (kind === 'task') return false;
   return record.assignedTo === uid || record.ownerId === uid;
 }
@@ -166,18 +182,23 @@ export function can(module, action, record = null, ctx = {}) {
     return true;
   }
 
-  const roles = rolesFor(user, module, record);
+  // Unassigned leads are visible to whoever may Assign RM on them — mirrors
+  // the server engine.
+  if (module === 'leads' && action === 'view' && record && isUnassignedLead(record)
+      && can('leads', 'assignRm', record)) {
+    return true;
+  }
+
+  // ctx.noContextualRm: checking a record that doesn't exist yet — only the
+  // roles the user actually holds count (mirrors the server engine).
+  const roles = ctx.noContextualRm ? [...new Set(user.roles || [])] : rolesFor(user, module, record);
   const scope = maxScope(roles, module, action);
   if (scope === 'NONE') return false;
 
-  // Mirrors server/src/lib/permissions.js's TASK_SHAPED/STRICT_TWO_PARTY split.
-  const STRICT_TWO_PARTY = ['queries', 'renewals', 'claims', 'fixedDeposits'];
+  // Two-party overlay: narrows an ASSIGNED scope to the people on the record;
+  // ALL means every record, on every module (mirrors the server engine).
   if (TASK_SHAPED.includes(module) && ['editDetails', 'changeStage', 'editLog'].includes(action) && record) {
-    // Queries + three other COBR-workspace registers: a hard requirement,
-    // even for a role matrix-configured to ALL — only the assigner edits,
-    // only the assigner/assignee move the stage, no carve-out. Tasks/COBR/
-    // otherInsurancePolicies keep the ALL-bypass (see server engine).
-    if (scope === 'ALL' && !STRICT_TWO_PARTY.includes(module)) return true;
+    if (scope === 'ALL') return true;
     const isAssigner = record.departmentOwner === user.id;
     const isAssignee = record.assignedTo === user.id;
     const isSubPerson = taskSubPersons(record).includes(user.id);
@@ -197,6 +218,15 @@ export function can(module, action, record = null, ctx = {}) {
   // mirrors the server engine (server/src/lib/permissions.js).
   if (!record) return false;
   return ownsRecord(module, record, user);
+}
+
+// Does one of the current user's own roles grant this on at least SOME
+// record? Mirrors canSomewhere() in the server engine.
+export function canSomewhere(module, action) {
+  const user = getCurrentUser();
+  if (!user) return false;
+  if ((user.roles || []).includes('ADMIN')) return true;
+  return maxScope(user.roles || [], module, action) !== 'NONE';
 }
 
 // Only an investment prospect's own RM or Portfolio Manager (or Admin) may put

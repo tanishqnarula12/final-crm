@@ -18,13 +18,28 @@ const SCOPE_META = {
 // kind (server: permissionCatalog.js `OWNERSHIP`). Shown dynamically for the
 // module currently selected, so "Assigned" never feels like a mystery.
 const OWNERSHIP_GUIDE = {
-  self: 'the record\'s "Assigned To" is this person, or they created it.',
+  self: 'the record\'s "Assigned To" / RM is this person, or they created it. For Leads, anyone allowed to Assign RM also sees the leads still waiting for an RM. For creating a client, "Assigned" means creating one whose Relationship Manager is you.',
   creator: 'this person created the record. Being assigned to it does not count here — only the original creator does.',
-  task: 'this person assigned the task (they\'re the "Assigned By") OR the task is assigned to them (they\'re the "Assigned To"). Nobody else can see or edit the task at all.',
+  task: 'this person is on the record: the "Assigned By", the "Assigned To" or (for Edit / Add Log) a sub-person. Only the Assigned By edits details; the Assigned To moves the stage forward. "All" skips these rules and opens every record.',
   client: 'this person is the Relationship Manager assigned to the client (or to the client the record belongs to, for Goals / Proposals / Reviews / Documents), or they created it.',
-  meeting: 'this person created the meeting, is its host, or is one of its attendees.',
+  meeting: 'this person created the meeting, is its host, or is one of its attendees. Changing the host needs the creator or "All".',
   prospect: 'this person is the prospect\'s Relationship Manager, Portfolio Manager, Service Manager or Insurance Manager, or they created it.',
+  mom: 'this person wrote the MOM, or is the Relationship Manager of the client / lead it belongs to.',
   global: 'nothing — this is a global setting, not tied to any record. "Assigned" behaves exactly like "None" here; only "All" grants access.',
+};
+
+// What a module's rows actually control, where that isn't obvious from the
+// row name. Shown under the "Assigned" explanation for the open module.
+const MODULE_NOTES = {
+  leads: 'View decides which leads appear in the Leads list. Convert is needed to turn a lead into a client (it also creates the client, even without Clients → Create).',
+  goals: 'Edit covers editing goals, logging contributions and the planning notes.',
+  investmentProposal: 'View shows the Proposals tab. Create lets the person build an Investment / Other Code proposal and create its prospect. Edit has nothing separate to control yet.',
+  insuranceProposal: 'View shows the Proposals tab. Create lets the person build an Insurance proposal and create its prospect. Edit has nothing separate to control yet.',
+  portfolioReview: 'View shows the Portfolio Review tab. Create runs an analysis. Create or Edit saves it to the client\'s documents.',
+  policyReview: 'View shows the Policy Review tab. Edit saves the review to the client\'s documents.',
+  mom: 'Create saves a new MOM, Edit saves changes to an existing one, Delete removes one. Anyone who can View can still open and print a MOM.',
+  documents: 'Upload covers adding and renaming files. Delete removes uploaded files (MOM documents follow MOM → Delete).',
+  meetings: 'Edit covers rescheduling, marking done and cancelling.',
 };
 
 export default function PermissionsMatrix() {
@@ -147,6 +162,9 @@ export default function PermissionsMatrix() {
               <b className="text-slate-800 dark:text-slate-100">For {mod?.label || 'this module'}</b>, "Assigned" means:{' '}
               {OWNERSHIP_GUIDE[activeOwnershipKind]}
             </p>
+            {MODULE_NOTES[activeModule] && (
+              <p>{MODULE_NOTES[activeModule]}</p>
+            )}
             <p>
               <b className="text-slate-800 dark:text-slate-100">Admin</b> always has full access to everything and doesn't appear as an editable column — there is only ever one Admin account.
             </p>

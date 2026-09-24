@@ -14,7 +14,7 @@ import { syncBulk } from '../lib/syncModule.js';
 import { notifyFromEvents } from '../lib/notify.js';
 import { logActivity } from '../lib/activityLog.js';
 import { momCreateSchema } from '../lib/schemas.js';
-import { canCreate, canEdit } from '../lib/permissions.js';
+import { can, canCreate, canEdit } from '../lib/permissions.js';
 import { findPanConflict, panConflictMessage, normalizePan } from '../lib/panUniqueness.js';
 
 const router = Router();
@@ -23,9 +23,14 @@ router.use(requireAuth);
 const leadSchema = z.object({ id: z.string().min(1) }).passthrough();
 const bulkSchema = z.object({ leads: z.array(leadSchema) });
 
+// Only the leads the matrix's Leads → View lets this user see: All → every
+// lead; Assigned → the leads they're the RM of or created, plus the
+// unassigned ones if they may Assign RM (see can()). This used to return
+// every lead to everyone, so View set to Assigned did nothing.
 router.get('/', asyncHandler(async (req, res) => {
   const rows = await prisma.lead.findMany({ where: { deletedAt: null }, orderBy: { createdAt: 'desc' } });
-  res.json({ leads: rows.map((r) => r.payload) });
+  const visible = rows.filter((r) => can(req.user, 'leads', 'view', r));
+  res.json({ leads: visible.map((r) => r.payload) });
 }));
 
 // The Minutes of Meeting drafted against this lead (the "Create MoM" stage,
@@ -160,6 +165,8 @@ router.put('/', asyncHandler(async (req, res) => {
     assignFields: ['ownerId', 'contributors'],
     assignCompanions: ['leadScore'],
     assignStage: { from: 'Waiting for Assignment', to: 'Qualified' },
+    // Marking a lead Converted is the matrix's own Convert right.
+    stageRights: { Converted: 'convert' },
     promote: (l) => ({
       stage: l.stage ?? null,
       status: l.status ?? null,

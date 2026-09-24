@@ -26,6 +26,8 @@ import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/error.js';
 import { parseBody } from '../lib/validate.js';
 import { config } from '../config.js';
+import { prisma } from '../db.js';
+import { can, canSomewhere } from '../lib/permissions.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -33,7 +35,19 @@ router.use(requireAuth);
 const analyzeSchema = z.object({
   b64: z.string().min(1, 'No PDF data provided'),
   filename: z.string().optional().default('portfolio.pdf'),
+  clientId: z.string().optional(),
 });
+
+// Running an analysis is the matrix's Portfolio Review → Create, checked
+// against the client the review is for (so Assigned means "a client you're
+// the RM of"). An older browser tab that doesn't send the client is let
+// through if any of the user's roles holds the right at all.
+async function mayRunReview(user, clientId) {
+  if (!clientId) return canSomewhere(user, 'portfolioReview', 'create');
+  const client = await prisma.client.findUnique({ where: { id: clientId } });
+  return !!client && can(user, 'portfolioReview', 'create', client);
+}
+const NO_REVIEW_RIGHT = 'You don\'t have permission to run a Portfolio Review for this client.';
 
 const SYSTEM = `You are an expert Indian mutual fund portfolio analyst for an MFD (Mutual Fund Distributor).
 Read the portfolio PDF and return ONLY a single valid JSON object. No markdown, no code fences, no explanation.
@@ -302,7 +316,8 @@ function sweepJobs() {
 // POST /api/portfolio-review/jobs — start analyzing a portfolio statement PDF
 // (base64). Answers at once with { jobId }; poll GET /jobs/:jobId for the result.
 router.post('/jobs', asyncHandler(async (req, res) => {
-  const { b64, filename } = parseBody(analyzeSchema, req.body);
+  const { b64, filename, clientId } = parseBody(analyzeSchema, req.body);
+  if (!(await mayRunReview(req.user, clientId))) return res.status(403).json({ error: NO_REVIEW_RIGHT });
   if (!config.geminiApiKey) return res.status(500).json({ error: MISSING_KEY_ERROR });
 
   sweepJobs();
@@ -339,7 +354,8 @@ router.get('/jobs/:jobId', (req, res) => {
 // upload a portfolio statement PDF (base64), get back the portfolio JSON.
 // Kept for app bundles cached before the switch to /jobs.
 router.post('/analyze', asyncHandler(async (req, res) => {
-  const { b64, filename } = parseBody(analyzeSchema, req.body);
+  const { b64, filename, clientId } = parseBody(analyzeSchema, req.body);
+  if (!(await mayRunReview(req.user, clientId))) return res.status(403).json({ error: NO_REVIEW_RIGHT });
   if (!config.geminiApiKey) return res.status(500).json({ error: MISSING_KEY_ERROR });
 
   try {

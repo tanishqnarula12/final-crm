@@ -11,7 +11,7 @@ import { Avatar, Card, btnPrimary, btnSecondary, btnGhost, inputCls, CoolSelect 
 import { MANAGER_ROLES } from '../utils/team';
 import { teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
-import { canEditClient, canDeleteClient, can } from '../utils/permissions';
+import { canEditClient, canDeleteClient, can, momRecord } from '../utils/permissions';
 import { loadTasks, fetchClosedTasksForClient } from '../utils/tasks';
 import { loadProspects, CATEGORY_THEME, ALL_STAGE_THEME, fmtAmountINR } from '../utils/prospects';
 import { loadMeetings, MEETING_STATUS_THEME, MODE_THEME, fmtMeetingWhen, meetingDateTime } from '../utils/meetings';
@@ -32,11 +32,13 @@ export default function ClientProfileView({
   onScheduleMeeting, onOpenMeeting, meetingsChangeCounter, onNavigateToMeetings,
   highlightApplicant,
 }) {
-  // RBAC: personal-details edit is Operations-Manager/Admin only; delete is
-  // Admin only (soft). Server enforces the same rules.
+  // RBAC: Clients → Edit Personal Details / Delete, checked against THIS
+  // client so an Assigned scope (e.g. the client's own RM) resolves. The
+  // server enforces the same rules.
   const me = getCurrentUser();
-  const mayEditClient = !isViewer && canEditClient(me);
-  const mayDeleteClient = canDeleteClient(me);
+  const mayEditClient = !isViewer && canEditClient(me, client);
+  const mayDeleteClient = canDeleteClient(me, client);
+  const mayUploadDocs = !isViewer && can('documents', 'upload', client);
   const details = client.clientDetails || {};
   const {
     mobile = '',
@@ -725,7 +727,7 @@ export default function ClientProfileView({
                 View All
               </button>
             )}
-            {!isViewer && onScheduleMeeting && (
+            {!isViewer && onScheduleMeeting && can('meetings', 'create') && (
               <button
                 onClick={() => onScheduleMeeting(client)}
                 className={btnPrimary + ' py-1.5 px-3 text-[11px] flex items-center gap-1'}
@@ -870,7 +872,7 @@ export default function ClientProfileView({
               </p>
             </div>
           </div>
-          {!isViewer && (
+          {mayUploadDocs && (
             <button
               onClick={() => { resetUploadForm(); setIsUploadModalOpen(true); }}
               className={btnSecondary + ' py-1.5 px-3 text-[11px] flex items-center gap-1'}
@@ -936,7 +938,9 @@ export default function ClientProfileView({
           </div>
         </div>
         <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
-          <NotesFeed client={client} details={details} isViewer={isViewer} />
+          {/* Notes are saved as part of the client's details, so they follow
+              Clients → Edit Personal Details, the right the server checks. */}
+          <NotesFeed client={client} details={details} isViewer={!mayEditClient} />
         </div>
       </Card>
 
@@ -1328,7 +1332,8 @@ function AttachmentsBox({ staticItems = [], dynamicItems = [], onPreview, onDele
       {dynamicItems.map((doc) => {
         const meta = docMeta[doc.type] || { icon: FileText, style: 'bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-400' };
         const Icon = meta.icon;
-        const isDeletable = doc.type === 'mom';
+        // A MOM document is the MOM record itself — deleting it is MOM → Delete.
+        const isDeletable = doc.type === 'mom' && can('mom', 'delete', momRecord(doc.mom, client));
         return (
           <div
             key={doc.id}

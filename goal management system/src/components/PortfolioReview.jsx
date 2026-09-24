@@ -22,6 +22,7 @@ import React, { useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
 import { api } from '../services/api';
 import { saveGeneratedDocument, wrapStandaloneHtml, snapshotElementHtml } from '../utils/documents';
+import { can } from '../utils/permissions';
 
 // ---------------------------------------------------------------------------
 // Styles — copied verbatim from the standalone tool's <style> block.
@@ -1852,12 +1853,15 @@ export default function PortfolioReview({ client }) {
     // ever gets near the limit.
     async function callGeminiAPI(b64, filename) {
       let jobId;
+      // The client this review is for — the server checks Portfolio Review →
+      // Create against it (so Assigned means "a client you're the RM of").
+      const clientId = client?.id;
       try {
-        ({ jobId } = await api.post('/portfolio-review/jobs', { b64, filename }));
+        ({ jobId } = await api.post('/portfolio-review/jobs', { b64, filename, clientId }));
       } catch (err) {
         // 404 = an API server that predates /jobs (e.g. mid-deploy, before
         // the backend has rolled out): fall back to the single-request route.
-        if (err.status === 404) return api.post('/portfolio-review/analyze', { b64, filename });
+        if (err.status === 404) return api.post('/portfolio-review/analyze', { b64, filename, clientId });
         throw err;
       }
       const startedAt = Date.now();
@@ -2936,6 +2940,13 @@ export default function PortfolioReview({ client }) {
     qs('unwanted-input').addEventListener('keydown', e => { if (e.key === 'Enter') addUnwanted(); });
     qs('add-unwanted-btn').addEventListener('click', addUnwanted);
     qs('save-profile-btn').addEventListener('click', handleSaveToProfile);
+    // Saving to the profile is a Portfolio Review (Create or Edit) for this
+    // client plus a document upload — hide the button from anyone the matrix
+    // wouldn't let save it.
+    if (!((can('portfolioReview', 'create', client) || can('portfolioReview', 'edit', client))
+        && can('documents', 'upload', client))) {
+      qs('save-profile-btn').style.display = 'none';
+    }
 
     // Bridge for the one inline "onclick" handler generated via innerHTML
     // (renderUnwantedTags' per-tag remove button) — inline handlers in

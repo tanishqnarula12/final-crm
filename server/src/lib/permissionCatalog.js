@@ -36,7 +36,7 @@ export const MODULES = [
   { key: 'assetAllocation', label: 'Asset Allocation', actions: ['view', 'edit'] },
   { key: 'investmentProposal', label: 'Investment Proposal', actions: ['create', 'view', 'edit'] },
   { key: 'insuranceProposal', label: 'Insurance Proposal', actions: ['create', 'view', 'edit'] },
-  { key: 'mom', label: 'MOM', actions: ['create', 'view', 'edit'] },
+  { key: 'mom', label: 'MOM', actions: ['create', 'view', 'edit', 'delete'] },
   { key: 'portfolioReview', label: 'Portfolio Review', actions: ['create', 'view', 'edit'] },
   { key: 'policyReview', label: 'Policy Review', actions: ['view', 'edit'] },
   // `changeStage` is the FORWARD move; `changeStageBack` is the separate right
@@ -96,8 +96,10 @@ export const ACTION_LABELS = {
 //   global  — no record at all (a singleton setting, not owned by anyone).
 //             ASSIGNED has nothing to resolve against and always denies,
 //             same as NONE — a role only gets in via ALL.
+//   mom     — whoever wrote the MOM, or the RM of the client / lead it
+//             belongs to (see isMomOwner() in permissions.js).
 export const OWNERSHIP = {
-  leads: 'self', clients: 'self', tasks: 'task', cobr: 'task', queries: 'task', mom: 'self', meetings: 'meeting',
+  leads: 'self', clients: 'self', tasks: 'task', cobr: 'task', queries: 'task', mom: 'mom', meetings: 'meeting',
   renewals: 'task', claims: 'task', fixedDeposits: 'task', otherInsurancePolicies: 'task',
   goals: 'client', assetAllocation: 'client', investmentProposal: 'client', insuranceProposal: 'client',
   portfolioReview: 'client', policyReview: 'client', investmentProspects: 'prospect', insuranceProspects: 'prospect',
@@ -126,7 +128,7 @@ const DEF = {
   assetAllocation: { view: { _: A }, edit: { _: N, PORTFOLIO_MANAGER: A, RM: S, INTERNAL_MANAGER: A } },
   investmentProposal: { create: { _: N, PORTFOLIO_MANAGER: A, RM: S, INTERNAL_MANAGER: A }, view: { _: A }, edit: { _: N, PORTFOLIO_MANAGER: A, RM: S, INTERNAL_MANAGER: A } },
   insuranceProposal: { create: { _: N, INSURANCE_MANAGER: A, INTERNAL_MANAGER: A }, view: { _: A }, edit: { _: N, INSURANCE_MANAGER: A, INTERNAL_MANAGER: A } },
-  mom: { create: { _: N, PORTFOLIO_MANAGER: A, RM: S, INTERNAL_MANAGER: A }, view: { _: A }, edit: { _: N, PORTFOLIO_MANAGER: S, RM: S, INTERNAL_MANAGER: A } },
+  mom: { create: { _: N, PORTFOLIO_MANAGER: A, RM: S, INTERNAL_MANAGER: A }, view: { _: A }, edit: { _: N, PORTFOLIO_MANAGER: S, RM: S, INTERNAL_MANAGER: A }, delete: { _: N } },
   portfolioReview: { create: { _: N, PORTFOLIO_MANAGER: A, RM: S, INTERNAL_MANAGER: A }, view: { _: A }, edit: { _: N, PORTFOLIO_MANAGER: A, RM: S, INTERNAL_MANAGER: A } },
   policyReview: { view: { _: A }, edit: { _: N, INSURANCE_MANAGER: A, INTERNAL_MANAGER: A } },
   // Tasks are private to the two people on them: the assigner (departmentOwner)
@@ -144,15 +146,17 @@ const DEF = {
   // customizes this row).
   cobr: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, changeStage: { _: S, INTERNAL_MANAGER: A }, changeStageBack: { _: N, INTERNAL_MANAGER: A }, editLog: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
   // Renewals / Claims / Fixed Deposits / Other Insurance Policies — each its
-  // own admin-configurable column, defaults mirroring COBR's exactly. The
-  // assigner/assignee split itself (only the assigner edits details, only the
-  // assigner+assignee change stage) is a fixed overlay rule enforced in
-  // permissions.js, not something these default scopes control — a role
-  // matrix-configured to ALL still can't bypass that two-party rule (COBR's
-  // ALL-bypass only applies to Internal Manager's oversight exception).
-  renewals: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, changeStage: { _: S, INTERNAL_MANAGER: A }, editLog: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
-  claims: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, changeStage: { _: S, INTERNAL_MANAGER: A }, editLog: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
-  fixedDeposits: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, changeStage: { _: S, INTERNAL_MANAGER: A }, editLog: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
+  // own admin-configurable column. The assigner/assignee split (only the
+  // assigner edits details, only the assigner+assignee change stage) is the
+  // overlay in permissions.js and applies to ASSIGNED; ALL opens every record,
+  // same as on every other module. Renewals/Claims/Fixed Deposits (and
+  // Queries below) were meant to stay strictly between the two people on
+  // them, so Internal Manager defaults to ASSIGNED there — it can still see
+  // them all (view ALL), but only acts on the ones it's on unless an admin
+  // sets All.
+  renewals: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S }, changeStage: { _: S }, editLog: { _: S }, delete: { _: N } },
+  claims: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S }, changeStage: { _: S }, editLog: { _: S }, delete: { _: N } },
+  fixedDeposits: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S }, changeStage: { _: S }, editLog: { _: S }, delete: { _: N } },
   otherInsurancePolicies: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, changeStage: { _: S, INTERNAL_MANAGER: A }, editLog: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
   // Prospects have no separate "create" step in the original spec — a prospect
   // is created as a side effect of building the proposal that spawns it. We
@@ -166,8 +170,9 @@ const DEF = {
   meetings: { create: { _: A }, view: { _: A }, edit: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
   // Queries are private to the two people on them: whoever raised it
   // (departmentOwner) and whoever it's raised to (assignedTo) — same overlay
-  // as Tasks (see permissions.js), same defaults.
-  queries: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, changeStage: { _: S, INTERNAL_MANAGER: A }, editLog: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
+  // as Tasks (see permissions.js). Internal Manager may see them all but, by
+  // default, only acts on its own (see the Renewals note above).
+  queries: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S }, changeStage: { _: S }, editLog: { _: S }, delete: { _: N } },
   // Leave: everyone may request their own (create) and sees/edits only their
   // own request (view/editDetails are ASSIGNED for every role — ownership via
   // `creator` resolves that to "only mine", no role gets someone else's by

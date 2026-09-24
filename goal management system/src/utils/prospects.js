@@ -78,10 +78,16 @@ export const addProspects = (newOnes) => {
   cache = [...newOnes, ...cache];
   window.dispatchEvent(new Event('crm:prospects-updated'));
   api.post('/prospects', { prospects: newOnes })
-    .then(({ prospects: created } = {}) => {
+    .then(({ prospects: created, rejectedIds } = {}) => {
       const createdById = new Map((Array.isArray(created) ? created : []).map((p) => [p.id, p]));
-      cache = cache.map((p) => createdById.get(p.id) || p);
+      // Prospects the server refused never got saved — drop them now and say
+      // so, instead of showing them until the next refresh quietly removes them.
+      const rejected = new Set(Array.isArray(rejectedIds) ? rejectedIds : []);
+      cache = cache.filter((p) => !rejected.has(p.id)).map((p) => createdById.get(p.id) || p);
       window.dispatchEvent(new Event('crm:prospects-updated'));
+      if (rejected.size) {
+        alert(`${rejected.size === 1 ? 'A prospect was' : `${rejected.size} prospects were`} not created — you don't have permission to create this kind of prospect for this client.`);
+      }
     })
     .catch((err) => {
       console.error('addProspects failed:', err);

@@ -10,7 +10,7 @@ import {
 import { Card, Avatar, Field, inputCls, selectCls, btnPrimary, btnSecondary, btnGhost, CoolSelect, MultiSelect } from './UI';
 import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
-import { canAssignLead, canCreateLead, canDeleteLead, canEditLead, isAdmin } from '../utils/permissions';
+import { canAssignLead, canConvertLead, canCreateLead, canDeleteLead, canEditLead, isAdmin } from '../utils/permissions';
 import {
   loadLeads, intakeLead, updateLead, addNote, addFollowUp, completeFollowUp, deleteLead,
   assignLead, winInitialCall, revertLeadStage,
@@ -540,6 +540,9 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
   // timeline/details read-only, with none of these controls rendered at all
   // — not just disabled, so there's nothing to click in the first place.
   const canOperate = canEditLead(me, lead);
+  // Converting (creating the client + marking the lead Converted) is the
+  // matrix's own Leads → Convert row, checked on the server as well.
+  const canConvert = canConvertLead(me, lead);
 
   const setStatus = (status, reason) => {
     updateLead(lead.id, { status, ...(reason ? { lostReason: reason } : {}) }, meName);
@@ -804,10 +807,16 @@ function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvert
                 >
                   <CheckCircle2 size={13} /> MoM Created
                 </button>
-                <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Ready to convert — this opens the New Client form prefilled with the lead's details.</span>
-                <button onClick={handleConvert} className="ml-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wider bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl shadow-lg shadow-emerald-500/15 transition-all cursor-pointer">
-                  <CheckCircle2 size={13} /> Convert to Client
-                </button>
+                {canConvert ? (
+                  <>
+                    <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Ready to convert — this opens the New Client form prefilled with the lead's details.</span>
+                    <button onClick={handleConvert} className="ml-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wider bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl shadow-lg shadow-emerald-500/15 transition-all cursor-pointer">
+                      <CheckCircle2 size={13} /> Convert to Client
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Ready to convert — you don't have the Convert right on this lead.</span>
+                )}
               </div>
             )}
           </div>

@@ -570,6 +570,16 @@ export default function App() {
   // an MOM-view client, or a proposal-view client is open, we're "inside" a single client's profile — swap the main tab
   // bar for a per-client sub-nav.
   const profileClientId = selectedClientId || assetClientId || momClientId || clientProfileId || proposalClientId || reviewClientId;
+  // Which of the client's tabs this user may open — each is its module's
+  // View row in the permission matrix, checked against this client.
+  const profileClientRecord = clients.find((c) => c.id === profileClientId) || null;
+  const clientTabAllowed = {
+    goals: canDo('goals', 'view', profileClientRecord),
+    assets: canDo('assetAllocation', 'view', profileClientRecord),
+    proposals: canDo('investmentProposal', 'view', profileClientRecord) || canDo('insuranceProposal', 'view', profileClientRecord),
+    mom: canDo('mom', 'view', profileClientRecord),
+    review: canDo('policyReview', 'view', profileClientRecord) || canDo('portfolioReview', 'view', profileClientRecord),
+  };
   const inClientProfile = Boolean(profileClientId);
 
   const goToGoalMapping = (clientId) => {
@@ -1919,7 +1929,7 @@ export default function App() {
                 <User size={14} />
                 Client Profile
               </button>
-              <button
+              {clientTabAllowed.goals && <button
                 onClick={() => goToGoalMapping(profileClientId)}
                 className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                   selectedClientId
@@ -1929,8 +1939,8 @@ export default function App() {
               >
                 <Target size={14} />
                 Goal Mapping
-              </button>
-              <button
+              </button>}
+              {clientTabAllowed.assets && <button
                 onClick={() => goToAssetMapping(profileClientId)}
                 className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                   assetClientId
@@ -1940,8 +1950,8 @@ export default function App() {
               >
                 <Wallet size={14} />
                 Asset Allocation Mapping
-              </button>
-              <button
+              </button>}
+              {clientTabAllowed.proposals && <button
                 onClick={() => goToProposal(profileClientId)}
                 className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                   proposalClientId
@@ -1951,8 +1961,8 @@ export default function App() {
               >
                 <FileText size={14} />
                 Proposals
-              </button>
-              <button
+              </button>}
+              {clientTabAllowed.mom && <button
                 onClick={() => goToMomMapping(profileClientId)}
                 className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                   momClientId
@@ -1962,8 +1972,8 @@ export default function App() {
               >
                 <FileText size={14} />
                 Draft MOM
-              </button>
-              <button
+              </button>}
+              {clientTabAllowed.review && <button
                 onClick={() => goToReview(profileClientId)}
                 className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                   reviewClientId
@@ -1973,7 +1983,7 @@ export default function App() {
               >
                 <FileText size={14} />
                 Review
-              </button>
+              </button>}
             </div>
           </div>
         )}
@@ -2006,6 +2016,12 @@ export default function App() {
               onSaveAssumptions={(text) => handleSaveAssumptions(selectedClientId, text)}
               onEditClient={() => { setEditingClientId(selectedClientId); setShowAddClient(true); }}
               isViewer={isViewer}
+              // Each button follows its own matrix row for THIS client — the
+              // same rights the server checks when it's saved.
+              mayEditClient={canDo('clients', 'editPersonal', selectedClient)}
+              mayAddGoal={canDo('goals', 'create', selectedClient)}
+              mayDeleteGoal={canDo('goals', 'delete', selectedClient)}
+              mayEditNotes={canDo('goals', 'edit', selectedClient)}
             />
           </div>
         )}
@@ -2027,7 +2043,7 @@ export default function App() {
                 // the two never coexist and get double-counted.
                 handleUpdateGoal(selectedClientId, selectedGoalId, { contributions, actuals: [], history });
               }}
-              isViewer={isViewer}
+              isViewer={isViewer || !canDo('goals', 'edit', selectedClient)}
             />
           </div>
         )}

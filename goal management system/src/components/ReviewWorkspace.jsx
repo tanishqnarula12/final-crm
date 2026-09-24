@@ -1,15 +1,30 @@
 import React from 'react';
+import { ShieldAlert } from 'lucide-react';
 import PolicyReview from './PolicyReview';
 import PortfolioReview from './PortfolioReview';
+import { Card } from './UI';
+import { can } from '../utils/permissions';
 
 // Tab switcher for the client "Review" workspace — Policy Review (existing)
 // first, Portfolio Review (new) second. Mirrors ProposalWorkspace.jsx's tab
-// pattern exactly.
+// pattern exactly. Each tab shows only if the matrix's View row for it allows
+// this client.
 export default function ReviewWorkspace({ client, subTab, setSubTab }) {
   const tabs = [
-    { id: 'policy', label: 'Policy Review' },
-    { id: 'portfolio', label: 'Portfolio Review' },
-  ];
+    { id: 'policy', label: 'Policy Review', allowed: can('policyReview', 'view', client) },
+    { id: 'portfolio', label: 'Portfolio Review', allowed: can('portfolioReview', 'view', client) },
+  ].filter((t) => t.allowed);
+
+  if (tabs.length === 0) {
+    return (
+      <Card className="p-8 text-center max-w-md mx-auto">
+        <ShieldAlert size={28} className="mx-auto text-slate-300 dark:text-slate-700 mb-3" />
+        <p className="text-sm font-bold text-slate-600 dark:text-slate-300">You don't have access to reviews for this client.</p>
+        <p className="text-xs text-slate-400 mt-1">Ask an Admin to grant Policy Review or Portfolio Review rights in the Permission Matrix.</p>
+      </Card>
+    );
+  }
+
   const activeTab = tabs.some((t) => t.id === subTab) ? subTab : tabs[0].id;
 
   return (

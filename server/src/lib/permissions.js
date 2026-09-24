@@ -111,11 +111,30 @@ function isMeetingParticipant(record, user) {
   return Array.isArray(attendees) && attendees.some((a) => (a || '').trim().toLowerCase() === myName);
 }
 
+// A MOM belongs to a client OR (before conversion) a lead. "Assigned" means
+// the RM of that client/lead, or whoever wrote the MOM. Checked in both
+// shapes can() gets: a stored MOM row with its parent attached as `.client` /
+// `.lead` (routes/moms.js), or — at create time — the parent client/lead
+// itself. It used to be plain 'self' ownership, which on a MOM row reduced to
+// "creator only", so a client's own RM set to Assigned could never edit a MOM
+// a colleague had drafted for their client.
+function isMomOwner(record, uid) {
+  return record.createdBy === uid
+    || isClientRm(record, uid)
+    || record.ownerId === uid
+    || record?.lead?.assignedTo === uid
+    || record?.lead?.ownerId === uid;
+}
+
+// A lead nobody has been assigned to yet (no RM). See the view rule in can().
+const isUnassignedLead = (record) => !record.ownerId && !record.assignedTo;
+
 function ownsRecord(module, record, user) {
   if (!record) return false;
   const uid = user.id;
   const kind = OWNERSHIP[module] || 'self';
   if (kind === 'creator') return record.createdBy === uid;
+  if (kind === 'mom') return isMomOwner(record, uid);
   // task = the people on it: assigner (departmentOwner), assignee (assignedTo)
   // and any sub-people. Nobody else "owns" (sees) it.
   if (kind === 'task') return record.departmentOwner === uid || record.assignedTo === uid || taskSubPersons(record).includes(uid);
@@ -139,7 +158,12 @@ function ownsRecord(module, record, user) {
 function isRmOf(module, record, uid) {
   if (!record) return false;
   const kind = OWNERSHIP[module] || 'self';
-  if (kind === 'client') return isClientRm(record, uid);
+  // A prospect's RM is its relationshipManager (copied from the client) —
+  // it has no assignedTo/ownerId of its own, so the 'self' fallback below
+  // never recognised the prospect's RM as its RM.
+  if (kind === 'client' || kind === 'prospect') return isClientRm(record, uid);
+  if (kind === 'mom') return isClientRm(record, uid) || record.ownerId === uid
+    || record?.lead?.assignedTo === uid || record?.lead?.ownerId === uid;
   if (kind === 'task') return false; // RM isn't a task concept
   // self (leads): see ownsRecord() above — ownerId is the legacy/authoritative
   // "who's the RM" field; assignedTo can lag behind it on older leads.
@@ -218,7 +242,20 @@ export function can(user, module, action, record = null, ctx = {}) {
     }
   }
 
-  const roles = rolesFor(user, module, record);
+  // A lead nobody has been assigned to yet sits in the assignment queue.
+  // Whoever may Assign RM on it must be able to see it — otherwise, with
+  // Leads → View set to Assigned, the people meant to hand leads out could
+  // never see the leads waiting for an RM.
+  if (module === 'leads' && action === 'view' && record && isUnassignedLead(record)
+      && can(user, 'leads', 'assignRm', record)) {
+    return true;
+  }
+
+  // ctx.noContextualRm — for a record that's being CREATED from what the
+  // browser sent: naming yourself its RM must not hand you the RM column's
+  // rights (otherwise anyone could create a client just by picking themselves
+  // as its Relationship Manager). Only roles the user actually holds count.
+  const roles = ctx.noContextualRm ? [...new Set(user.roles || [])] : rolesFor(user, module, record);
   const scope = maxScope(roles, module, action);
   if (scope === 'NONE') return false;
 
@@ -229,19 +266,15 @@ export function can(user, module, action, record = null, ctx = {}) {
   // COBR-workspace registers (Renewals/Claims/Fixed Deposits/Other Insurance
   // Policies) have the identical two-party shape, just their own stage
   // vocabularies (see STAGE_ORDER below, where applicable).
-  // Modules where the two-party rule is a HARD requirement — no ALL-bypass,
-  // not even for an oversight role like Internal Manager: "only Assigned By
-  // edits, only Assigned By/Assigned To change stage, no other user" was
-  // stated with no carve-out. Tasks/COBR keep the ALL-bypass (their
-  // deliberate "close to Admin" oversight exception); Queries already worked
-  // this way for confidentiality. otherInsurancePolicies was moved OUT of
-  // this list — an Insurance Manager granted ALL on it via the Permission
-  // Matrix (e.g. Preksha) must actually get unrestricted access, matching
-  // what the matrix UI already tells the admin ALL means; it was silently
-  // capping her to assigner/assignee-only regardless of the matrix cell.
-  const STRICT_TWO_PARTY = ['queries', 'renewals', 'claims', 'fixedDeposits'];
+  // The overlay only narrows an ASSIGNED scope. ALL means every record, on
+  // every one of these modules — exactly what the matrix editor tells the
+  // admin. Queries/Renewals/Claims/Fixed Deposits used to ignore ALL and cap
+  // everyone to the two parties, so e.g. an Insurance Manager granted All on
+  // Renewals still couldn't touch a renewal she wasn't on. Their Internal
+  // Manager defaults are Assigned (see permissionCatalog.js), which keeps the
+  // original "only the two people on it" rule unless the admin opens it up.
   if (TASK_SHAPED.includes(module) && ['editDetails', 'changeStage', 'editLog'].includes(action) && record) {
-    if (scope === 'ALL' && !STRICT_TWO_PARTY.includes(module)) return true;
+    if (scope === 'ALL') return true;
     const isAssigner = record.departmentOwner === user.id;
     const isAssignee = record.assignedTo === user.id;
     const isSubPerson = taskSubPersons(record).includes(user.id);
@@ -301,10 +334,21 @@ export function isBackwardStage(module, from, to) {
 }
 
 // ---- convenience wrappers (used by routes / syncModule) --------------------
-const EDIT_ACTION = { tasks: 'editDetails', clients: 'editPersonal', investmentProspects: 'editDetails', insuranceProspects: 'editDetails' };
-const STAGE_ACTION = { tasks: 'changeStage', investmentProspects: 'changeStage', insuranceProspects: 'changeStage' };
+const EDIT_ACTION = { clients: 'editPersonal', investmentProspects: 'editDetails', insuranceProspects: 'editDetails' };
+const STAGE_ACTION = { investmentProspects: 'changeStage', insuranceProspects: 'changeStage' };
+for (const m of TASK_SHAPED) { EDIT_ACTION[m] = 'editDetails'; STAGE_ACTION[m] = 'changeStage'; }
 export const editActionFor = (m) => EDIT_ACTION[m] || 'edit';
 export const stageActionFor = (m) => STAGE_ACTION[m] || 'edit';
+
+// Does one of this user's own roles grant the right on at least SOME record
+// (any scope above NONE)? For requests that aren't tied to one record, e.g. a
+// Portfolio Review analysis sent by an older browser tab that doesn't say
+// which client it's for.
+export function canSomewhere(user, module, action) {
+  if (!user) return false;
+  if (isAdmin(user)) return true;
+  return maxScope(user.roles || [], module, action) !== 'NONE';
+}
 
 // `record` is optional — for a 'client'-kind module, pass the incoming payload
 // (or its parent client) so a contextual-RM ASSIGNED scope can be resolved at

@@ -60,6 +60,25 @@ const prospectSchema = z.object({ id: z.string().min(1) }).passthrough();
 const bulkSchema = z.object({ prospects: z.array(prospectSchema) });
 
 const prospectModuleFor = (r) => (r?.proposalCategory === 'insurance' ? 'insuranceProspects' : 'investmentProspects');
+const proposalModuleFor = (r) => (r?.proposalCategory === 'insurance' ? 'insuranceProposal' : 'investmentProposal');
+
+// A prospect is created BY building a proposal ("Create Prospect" on the
+// Proposals page), so whoever may create that proposal for its client may
+// create the prospect it produces — as well as anyone granted the prospect
+// module's own Create. It used to need the prospect's Create only, so e.g. an
+// RM granted Insurance Proposal → Create built the proposal, clicked Create
+// Prospect, and the prospect silently vanished on the next refresh. The
+// proposal right is checked against the real client (groupLeaderId), exactly
+// as the Proposals page does, not against what the browser sent.
+async function mayCreateProspect(user, rec) {
+  // Against the incoming payload only the user's own roles count — naming
+  // yourself the prospect's RM mustn't grant the RM column (the client's real
+  // RM is covered by the proposal check below).
+  if (can(user, prospectModuleFor(rec), 'create', rec, { noContextualRm: true })) return true;
+  if (!rec.groupLeaderId) return false;
+  const client = await prisma.client.findUnique({ where: { id: String(rec.groupLeaderId) } });
+  return !!client && !client.deletedAt && can(user, proposalModuleFor(rec), 'create', client);
+}
 
 // Same promote() the bulk route below passes to syncBulk — the payload
 // fields duplicated onto real (indexed/queryable) columns.
@@ -115,8 +134,7 @@ router.post('/', asyncHandler(async (req, res) => {
 
   for (const rec of prospects) {
     const mod = prospectModuleFor(rec);
-    // Mirrors syncModule.js CREATE branch: canCreate(actor, mod, rec).
-    if (!canCreate(req.user, mod, rec)) { rejectedIds.push(rec.id); continue; }
+    if (!(await mayCreateProspect(req.user, rec))) { rejectedIds.push(rec.id); continue; }
 
     // Idempotency: a client-generated id that already exists (e.g. a retried
     // request after a dropped response) is treated as already-created rather

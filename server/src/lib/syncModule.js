@@ -34,6 +34,7 @@
 // change in the same save.
 import {
   can, canCreate, canEdit, canDelete, canChangeStage, canChangeStageBack, isAdmin, isBackwardStage, isPreQualifiedOwner,
+  editActionFor,
 } from './permissions.js';
 import { logActivity, diffFields } from './activityLog.js';
 
@@ -67,12 +68,13 @@ const NOISE_KEYS = new Set([
 // Who may set/change the assignment field, per module policy.
 //   'admin'  — Admin only (modules with no assignment row in the matrix).
 //   'anyone' — whoever may create/edit the record.
-//   'editor' — the record's assigner (departmentOwner), or — for the
-//              two-party modules — anyone the matrix lets edit its details
-//              (e.g. Internal Manager's ALL oversight scope on Tasks/COBR).
-//              Before, only the assigner could reassign, so an Internal
-//              Manager editing a task's assignee saw it silently snap back
-//              despite holding ALL on Edit Details.
+//   'editor' — the record's assigner / creator (departmentOwner or
+//              createdBy), or anyone the matrix lets edit it on EVERY record
+//              (an All scope — e.g. Internal Manager's oversight on Tasks).
+//              Before, only departmentOwner counted: an Internal Manager
+//              editing a task's assignee saw it silently snap back, and since
+//              Meetings never stamp departmentOwner, even a meeting's own
+//              creator couldn't change its host.
 //   'matrix' — the matrix's own Assign RM cell for this module (Leads). Before,
 //              Leads used 'admin' here, so a role the admin had granted
 //              Assign RM saw the button (the UI honours the matrix) but every
@@ -83,8 +85,10 @@ function mayAssign(mode, actor, existing, mod, rec) {
   if (mode === 'anyone') return true;
   if (mode === 'editor') {
     if (!existing) return true;
-    if (existing.departmentOwner === actor.id) return true;
-    return TASK_SHAPED_MODULES.has(mod) && can(actor, mod, 'editDetails', existing);
+    if (existing.departmentOwner === actor.id || existing.createdBy === actor.id) return true;
+    // No record passed → only an All scope passes (Assigned has nothing to
+    // resolve against), i.e. "may edit every record in this module".
+    return can(actor, mod, editActionFor(mod));
   }
   if (mode === 'matrix') return can(actor, mod, 'assignRm', existing || rec);
   return false; // 'admin' (or unknown) → admin only
@@ -120,6 +124,8 @@ const fieldChanged = (before, after, key) => JSON.stringify(before?.[key] ?? nul
  *   assignStage,       // { from, to } — the stage move an assignment makes
  *                       // (Leads: Waiting for Assignment → Qualified), allowed
  *                       // as part of a granted assignment
+ *   stageRights,       // { [stage]: action } — moving INTO that stage also
+ *                       // needs this matrix action (Leads: Converted → convert)
  * }
  * @returns { list, stats }
  */
@@ -127,7 +133,7 @@ export async function syncBulk(prisma, spec) {
   const {
     module, modelKey, incoming, actor, promote,
     stageField = null, assignOnCreate = 'admin', assignOnEdit = 'admin', deptOwnerIsActor = false,
-    assignFields = [], assignCompanions = [], assignStage = null,
+    assignFields = [], assignCompanions = [], assignStage = null, stageRights = {},
   } = spec;
   const assignFieldSet = new Set(assignFields);
   const assignCompanionSet = new Set(assignCompanions);
@@ -289,6 +295,7 @@ export async function syncBulk(prisma, spec) {
           ? isPreQualifiedOwner(actor, existing)
           : canChangeStage(actor, mod, existing, from, to)
           && (!isBackwardStage(mod, from, to) || canChangeStageBack(actor, mod, existing))
+          && (!stageRights[to] || can(actor, mod, stageRights[to], existing))
       );
       allowed = detailAllowed || stageAllowed;
       if (!allowed && assignAllowed) allowed = true;

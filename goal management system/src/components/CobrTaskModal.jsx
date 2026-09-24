@@ -14,7 +14,7 @@ import { COBR_STAGES, cobrTotals, clearRejectedEntries } from '../utils/cobr';
 import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
 import { fmtINR } from '../utils/calc';
-import { canDo } from '../utils/permissions';
+import { canDo, allowedStageOptions } from '../utils/permissions';
 
 // `interactive` = the working view (opened from the Tasks module / dashboard /
 // profile task lists): the Mark Done/Rejected checklist is live and detail
@@ -41,6 +41,10 @@ export default function CobrTaskModal({ task, interactive = true, allowReopen = 
   const detailsEditable = interactive && canDo('cobr', 'editDetails', task);
   const showMark = interactive && canDo('cobr', 'editLog', task);
   const initialStage = task.stage || 'Open';
+  // Only the stages this user's COBR → Change Stage rights would actually
+  // save, plus the current one (and whatever the auto-advance picked).
+  const allowedStages = allowedStageOptions('cobr', task, initialStage, COBR_STAGES);
+  const stageOptions = allowedStages.includes(stage) ? allowedStages : [...allowedStages, stage];
   const isCompleted = stage === 'Completed';
   const wasCompleted = initialStage === 'Completed';
   const reopening = wasCompleted && stage !== 'Completed';
@@ -146,7 +150,7 @@ export default function CobrTaskModal({ task, interactive = true, allowReopen = 
             <Field label="Stage">
               {interactive && !wasCompleted ? (
                 <CoolSelect value={stage} onChange={(e) => handleStageChange(e.target.value)} className={selectCls}>
-                  {COBR_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  {stageOptions.map((s) => <option key={s} value={s}>{s}</option>)}
                 </CoolSelect>
               ) : (
                 <div className="w-full px-3.5 py-2.5 text-sm border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950 flex items-center gap-2">

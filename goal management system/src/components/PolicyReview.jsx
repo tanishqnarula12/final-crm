@@ -7,6 +7,7 @@ import { saveGeneratedDocument, wrapStandaloneHtml } from '../utils/documents';
 import { teamName } from '../services/team';
 import { buildPolicyReportHtml } from '../utils/policyReportHtml';
 import { exportPolicyReportPdf } from '../utils/pdf';
+import { can } from '../utils/permissions';
 
 const CHART_JS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
 const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxR_YWt7vbldI57ZxqX3WrnvZrp0gTLWPa8Fqo-YmMjRvo760WT_gd62njXd3q9e7n0/exec';
@@ -89,6 +90,9 @@ const lumpFV = (pv, rate, n) => {
 };
 
 export default function PolicyReview({ client, onBack }) {
+  // Saving the review to the client's documents is Policy Review → Edit (and
+  // Documents → Upload, which the server also checks on the save).
+  const maySaveReview = can('policyReview', 'edit', client) && can('documents', 'upload', client);
   const [chartJsLoaded, setChartJsLoaded] = useState(false);
   const chartInstsRef = useRef({});
 
@@ -811,7 +815,7 @@ export default function PolicyReview({ client, onBack }) {
         <div className="page-hero" style={{ justifyContent: 'flex-end' }}>
           <div className="flex gap-2">
             <button className="btn btn-outline" onClick={handleReset} type="button">🔄 Reset Form</button>
-            {results && <button className="btn btn-outline" onClick={handleSaveDocument} type="button" disabled={savingDoc}>{savingDoc ? '💾 Saving…' : '💾 Save Document'}</button>}
+            {results && maySaveReview && <button className="btn btn-outline" onClick={handleSaveDocument} type="button" disabled={savingDoc}>{savingDoc ? '💾 Saving…' : '💾 Save Document'}</button>}
             {results && <button className="btn btn-gold" onClick={handlePrint} type="button">🖨️ Export PDF / Print</button>}
           </div>
         </div>

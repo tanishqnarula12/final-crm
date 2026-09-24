@@ -54,7 +54,14 @@ const getGoalTheme = (name) => {
   };
 };
 
-export default function ClientDetail({ client, totals, onAddGoal, onSelectGoal, onDeleteGoal, onSaveAssumptions, onEditClient, isViewer }) {
+// The may* flags are the matrix rights for this client (App.jsx works them
+// out: Clients → Edit Personal Details, Goal Report → Create / Delete / Edit).
+// They default to allowed so callers without a real client (the Others →
+// Goal Planner demo) keep every button.
+export default function ClientDetail({
+  client, totals, onAddGoal, onSelectGoal, onDeleteGoal, onSaveAssumptions, onEditClient, isViewer,
+  mayEditClient = true, mayAddGoal = true, mayDeleteGoal = true, mayEditNotes = true,
+}) {
   const [exporting, setExporting] = useState(false);
 
   const handleExport = () => {
@@ -79,7 +86,7 @@ export default function ClientDetail({ client, totals, onAddGoal, onSelectGoal, 
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{client.name}</h2>
-                {!isViewer && (
+                {!isViewer && mayEditClient && (
                   <button
                     onClick={onEditClient}
                     title="Edit client details"
@@ -100,7 +107,7 @@ export default function ClientDetail({ client, totals, onAddGoal, onSelectGoal, 
             <button onClick={handleExport} disabled={exporting} className={btnSecondary + ' flex-1 md:flex-none'}>
               <Download size={14} className={exporting ? 'animate-bounce' : ''} /> {exporting ? 'Generating…' : 'Export PDF'}
             </button>
-            {!isViewer && (
+            {!isViewer && mayAddGoal && (
               <button onClick={onAddGoal} className={btnPrimary + ' flex-1 md:flex-none'}>
                 <Plus size={14} /> Add goal
               </button>
@@ -140,9 +147,11 @@ export default function ClientDetail({ client, totals, onAddGoal, onSelectGoal, 
           <Card className="p-12 text-center border-dashed border-2 border-slate-200 dark:border-slate-800 rounded-3xl">
             <Target className="mx-auto text-slate-400 dark:text-slate-600 mb-4" size={36} />
             <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-4">No goals configured yet for this client portfolio</p>
-            <button onClick={onAddGoal} className={btnSecondary}>
-              <Plus size={14} /> Create the first goal
-            </button>
+            {!isViewer && mayAddGoal && (
+              <button onClick={onAddGoal} className={btnSecondary}>
+                <Plus size={14} /> Create the first goal
+              </button>
+            )}
           </Card>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -180,7 +189,7 @@ export default function ClientDetail({ client, totals, onAddGoal, onSelectGoal, 
                         </p>
                       </div>
                     </div>
-                    {!isViewer && (
+                    {!isViewer && mayDeleteGoal && (
                       <button
                         onClick={(e) => { e.stopPropagation(); onDeleteGoal(g.id); }}
                         className="text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 p-2 rounded-xl hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100 cursor-pointer active:scale-95"
@@ -219,7 +228,7 @@ export default function ClientDetail({ client, totals, onAddGoal, onSelectGoal, 
         )}
 
         <div className="mt-6">
-          <AssumptionsSection client={client} onSave={onSaveAssumptions} isViewer={isViewer} />
+          <AssumptionsSection client={client} onSave={onSaveAssumptions} isViewer={isViewer || !mayEditNotes} />
         </div>
       </div>
     </div>
