@@ -356,27 +356,39 @@ export function detectReportingMonth(fileName, sheets, now = new Date()) {
  * parseNumber can read back correctly. With `raw: true` a percent-formatted
  * cell arrives as 0.1959 and would render as a wrong-looking number.
  */
-// Fixes a real, silent off-by-one-day bug on date columns (e.g. "Launch
-// Date") that only ever shows up on SOME rows of a real workbook, never in a
-// hand-typed test file — which is exactly what made it easy to ship.
+// Fixes two real problems with date columns (e.g. "Launch Date"), both only
+// visible on a real uploaded workbook — never in a hand-typed test file,
+// which is exactly what made them easy to ship unnoticed:
 //
-// With `cellDates: true`, SheetJS turns a date cell's Excel serial number
-// into a JS Date. A serial that is meant to be an exact whole number (e.g.
-// 41418.000000 for 24-May-2013) routinely arrives as something like
-// 41417.999999991 instead — a few milliseconds of ordinary floating-point
-// noise, invisible in Excel itself because Excel ROUNDS to the nearest day
-// when it applies a date format. SheetJS's own formatter does not round: it
-// reads that value as "just before midnight" and renders the day BEFORE the
-// real one. This noise is common in launch-date columns specifically because
-// they're so often built by a formula or pasted in from another system/
-// database export rather than typed by hand in Excel — which is also why it
-// reproduces on a real uploaded workbook but not on a clean synthetic one.
+// 1. SUB-DAY NOISE. With `cellDates: true`, SheetJS turns a date cell's Excel
+//    serial number into a JS Date. A serial meant to be an exact whole number
+//    (e.g. 41418.000000 for 24-May-2013) routinely arrives with a few hours
+//    of residue instead (real production data measured here: every single
+//    date in a "Launch Date" column off by ~5h30m — the same offset as IST,
+//    from whatever tool built the source workbook baking in a timezone
+//    conversion). This is invisible in Excel itself, which rounds to the
+//    nearest day when it applies a date format — SheetJS's own formatter
+//    does not always round the same way, so a naive re-format after reading
+//    the value can land on the wrong side of midnight.
 //
-// Fixed by rounding every parsed date cell back to a clean boundary — the
-// nearest day for a plain date format (the "Launch Date" case), or the
-// nearest second when the format actually carries a time component, so a
-// genuine date+time value isn't silently flattened to midnight.
+// 2. INCONSISTENT FORMAT. Even where the day is correct, each sheet in a
+//    workbook can carry a DIFFERENT date format — "1/1/95" on one tab,
+//    "17-09-2004" on the next — because whoever built each tab typed or
+//    pasted it separately. Both are the exactly-uploaded VALUE, faithfully
+//    reproduced, but "1/1/95" (M/D/Y) reads as flatly wrong to anyone
+//    expecting D/M/Y (the convention the source workbook itself uses
+//    elsewhere), and the inconsistency between sheets looks like a parsing
+//    bug even when every date is accurate.
+//
+// Fixed by, for every parsed date cell: rounding it back to a clean boundary
+// (nearest day for a plain date format, nearest second if the format
+// actually carries a time component, so a genuine date+time value isn't
+// silently flattened to midnight) and, for a plain date, always rendering it
+// in one consistent, unambiguous DD-MM-YYYY form — never whatever per-cell
+// format the source sheet happened to use. This changes how a date DISPLAYS,
+// never which calendar day it is.
 const TIME_FORMAT_RE = /[hHsS]|AM\/PM|A\/P/;
+const CANONICAL_DATE_FORMAT = 'dd-mm-yyyy';
 
 function fixDateCellRounding(ws) {
   for (const addr of Object.keys(ws)) {
@@ -386,10 +398,13 @@ function fixDateCellRounding(ws) {
     const hasTime = TIME_FORMAT_RE.test(String(cell.z || ''));
     const unitMs = hasTime ? 1000 : 86400000; // nearest second vs. nearest day
     const roundedMs = Math.round(cell.v.getTime() / unitMs) * unitMs;
-    if (roundedMs !== cell.v.getTime()) {
-      cell.v = new Date(roundedMs);
-      delete cell.w; // stale cached text (computed from the un-rounded value) — force a fresh format
-    }
+    let changed = false;
+    if (roundedMs !== cell.v.getTime()) { cell.v = new Date(roundedMs); changed = true; }
+    // Only normalise the FORMAT for plain dates — a cell that genuinely
+    // carries a time component keeps its own format, so that time isn't
+    // silently dropped from the display.
+    if (!hasTime && cell.z !== CANONICAL_DATE_FORMAT) { cell.z = CANONICAL_DATE_FORMAT; changed = true; }
+    if (changed) delete cell.w; // stale cached text (computed from the old value/format) — force a fresh one
   }
 }
 
