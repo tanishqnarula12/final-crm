@@ -1483,7 +1483,7 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
                 </div>
               </div>
               <div className="mt-3">
-                <ProspectTable table={active.table} onChange={handleTableChange} hideCols={redemptionHideCols} />
+                <ProspectTable table={active.table} onChange={handleTableChange} hideCols={redemptionHideCols} locked={proposalLocked} />
               </div>
 
               {/* Consider Other Code? — only for SIP / Lumpsum investment proposals */}
@@ -2336,7 +2336,7 @@ function fmtAmt(v) {
 // `hideCols` — column indices to omit entirely (header, every row, and the
 // total row) — used for a Date column that's been pulled out into a single
 // shared field above the table instead of repeated per row.
-function ProspectTable({ table, onChange, hideCols = [] }) {
+function ProspectTable({ table, onChange, hideCols = [], locked = false }) {
   const cols = table?.cols || [];
   const rows = table?.rows || [];
   const totalRow = table?.totalRow || null;
@@ -2375,27 +2375,37 @@ function ProspectTable({ table, onChange, hideCols = [] }) {
                       // disabled-widget rendering (a washed-out grey box the accent
                       // color can't override), which read as "confusing" since
                       // checked/unchecked became hard to tell apart. A span isn't a
-                      // form control, so no fieldset can mute it: All Units keeps
-                      // reading unambiguously blue-when-true whether the row is
-                      // editable or just being viewed.
-                      <span
-                        role={onChange ? 'checkbox' : undefined}
-                        aria-checked={onChange ? !!cell : undefined}
-                        tabIndex={onChange ? 0 : undefined}
-                        onClick={onChange ? () => onChange(ri, ci, !cell) : undefined}
-                        onKeyDown={onChange ? (e) => {
-                          if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); onChange(ri, ci, !cell); }
-                        } : undefined}
-                        className={`inline-flex w-4 h-4 rounded border items-center justify-center transition-colors ${
-                          onChange ? 'cursor-pointer hover:border-blue-400 dark:hover:border-blue-500' : 'cursor-default'
-                        } ${
-                          cell
-                            ? 'bg-blue-600 border-blue-600 text-white'
-                            : 'bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700'
-                        }`}
-                      >
-                        {cell && <Check size={11} strokeWidth={3} />}
-                      </span>
+                      // form control though, so <fieldset disabled> can't mute its
+                      // click handler the way it does a real input — it stayed
+                      // clickable even while the row was supposed to be locked. The
+                      // `locked` prop (passed down from the same proposalLocked flag
+                      // that drives the fieldset) is the explicit substitute: it
+                      // keeps the chip reading unambiguously blue-when-true whether
+                      // the row is editable or just being viewed, but only lets you
+                      // actually toggle it when it's genuinely editable.
+                      (() => {
+                        const interactive = !!onChange && !locked;
+                        return (
+                          <span
+                            role={interactive ? 'checkbox' : undefined}
+                            aria-checked={interactive ? !!cell : undefined}
+                            tabIndex={interactive ? 0 : undefined}
+                            onClick={interactive ? () => onChange(ri, ci, !cell) : undefined}
+                            onKeyDown={interactive ? (e) => {
+                              if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); onChange(ri, ci, !cell); }
+                            } : undefined}
+                            className={`inline-flex w-4 h-4 rounded border items-center justify-center transition-colors ${
+                              interactive ? 'cursor-pointer hover:border-blue-400 dark:hover:border-blue-500' : 'cursor-default'
+                            } ${
+                              cell
+                                ? 'bg-blue-600 border-blue-600 text-white'
+                                : 'bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700'
+                            }`}
+                          >
+                            {cell && <Check size={11} strokeWidth={3} />}
+                          </span>
+                        );
+                      })()
                     ) : onChange ? (
                       isCategoryCol ? (
                         <CategoryCell

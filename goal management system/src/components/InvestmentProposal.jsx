@@ -1078,7 +1078,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
             <div style='flex:1;padding:12px 18px;background:#1a4a9c;border-radius:8px;color:#fff;'>
               <div style='font-size:10px;letter-spacing:1.5px;text-transform:uppercase;opacity:0.8;margin-bottom:6px;font-weight:700;'>Debt Tax Liability</div>
               ${calc.hasDebtST ? `<span style='display:inline-block;margin-bottom:6px;padding:3px 10px;background:rgba(255,255,255,0.92);color:#1a4a9c;font-size:10px;font-weight:700;border-radius:999px;letter-spacing:0.3px;'>As Per Tax Slab</span>` : ''}
-              ${calc.hasDebtLT ? `<div style='font-size:19px;font-weight:800;margin-bottom:6px;'>₹ ${Math.round(calc.debtLTTax).toLocaleString('en-IN')}</div>` : ''}
+              ${Math.round(calc.debtLTTax) > 0 ? `<div style='font-size:19px;font-weight:800;margin-bottom:6px;'>₹ ${Math.round(calc.debtLTTax).toLocaleString('en-IN')}</div>` : ''}
               <div style='font-size:12px;opacity:0.9;line-height:1.5;'>
                 Short Term: ${calc.hasDebtST ? 'As Per Tax Slab, will be added to your income' : '₹ 0'}<br>
                 Long Term: ₹ ${Math.round(calc.debtLTTax).toLocaleString('en-IN')}
