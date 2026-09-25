@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Users, UserPlus, ListChecks, FolderOpen, UserCheck, LayoutDashboard, Video, TrendingUp, MoreHorizontal, Calculator, FileSpreadsheet, HelpCircle, Trophy, Target, PieChart } from 'lucide-react';
 import logoImg from '../assets/logo.png';
+import { canTopSchemes } from '../utils/permissions';
 
 const NAV = [
   { id: 'dashboard', label: 'Dash', icon: LayoutDashboard },
@@ -138,7 +139,8 @@ export default function Sidebar({ view, setView, onNavDoubleClick, badges = {}, 
 
           {/* Glass card */}
           <div className="bg-white/90 dark:bg-slate-900/95 backdrop-blur-2xl border border-slate-200/70 dark:border-slate-700/60 shadow-2xl shadow-slate-900/20 dark:shadow-slate-950/70 rounded-2xl p-2 flex flex-row gap-1.5 animate-scale-up">
-            {OTHERS_TOOLS.map(({ id: tid, label: tlabel, icon: TIcon, gradient }) => {
+            {/* Top Schemes follows the matrix's Top Performing Schemes → View. */}
+            {OTHERS_TOOLS.filter((t) => t.id !== 'top_schemes' || canTopSchemes('view')).map(({ id: tid, label: tlabel, icon: TIcon, gradient }) => {
               const isActive = view === 'others' && othersSubTab === tid;
               return (
                 <button

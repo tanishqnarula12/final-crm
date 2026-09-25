@@ -27,7 +27,7 @@ import UploadWizard from './schemePerf/UploadWizard';
 import { RESULT, RESULT_LABEL, monthLabel, pct, signedPct } from '../utils/schemePerf';
 import { dataUrlToBlobUrl } from '../utils/documents';
 import { teamName } from '../services/team';
-import { getCurrentUser } from '../utils/auth';
+import { canTopSchemes } from '../utils/permissions';
 import {
   listMonths, getUpload, getCategory, listSchemes, getOriginalFile,
   getSchemeHistory, searchSchemeNames, deleteUpload,
@@ -72,7 +72,8 @@ export default function TopPerformingSchemes() {
   const [error, setError] = useState('');
   const [wizardOpen, setWizardOpen] = useState(false);
 
-  const me = getCurrentUser();
+  // Permission matrix → Top Performing Schemes → Upload.
+  const mayUpload = canTopSchemes('upload');
 
   // ---- month list ---------------------------------------------------------
   const refreshMonths = useCallback(async (preferUploadId) => {
@@ -185,9 +186,11 @@ export default function TopPerformingSchemes() {
               ))}
             </select>
           </div>
-          <button onClick={() => setWizardOpen(true)} className={btnPrimary + ' text-xs'}>
-            <Upload size={14} /> Upload Monthly Excel
-          </button>
+          {mayUpload && (
+            <button onClick={() => setWizardOpen(true)} className={btnPrimary + ' text-xs'}>
+              <Upload size={14} /> Upload Monthly Excel
+            </button>
+          )}
         </div>
       </div>
 
@@ -235,7 +238,7 @@ export default function TopPerformingSchemes() {
       )}
 
       {!loading && !months.length && (
-        <EmptyState onUpload={() => setWizardOpen(true)} />
+        <EmptyState onUpload={mayUpload ? () => setWizardOpen(true) : null} />
       )}
 
       {upload && tab === 'upload' && (
@@ -244,7 +247,7 @@ export default function TopPerformingSchemes() {
           version={selectedVersion}
           onOpenOriginal={openOriginal}
           onDelete={handleDelete}
-          canDelete={!!me && (upload.uploadedBy === me.id || (me.roles || []).some((r) => ['ADMIN', 'INTERNAL_MANAGER'].includes(r)))}
+          canDelete={canTopSchemes('delete', upload)}
         />
       )}
 
@@ -284,9 +287,11 @@ function EmptyState({ onUpload }) {
         Upload this month's scheme performance workbook. Every worksheet is read automatically as its own
         category, the raw data is kept exactly as uploaded, and schemes are screened on Median vs Average Median.
       </p>
-      <button onClick={onUpload} className={btnPrimary + ' text-xs mt-5'}>
-        <Upload size={14} /> Upload Monthly Excel
-      </button>
+      {onUpload && (
+        <button onClick={onUpload} className={btnPrimary + ' text-xs mt-5'}>
+          <Upload size={14} /> Upload Monthly Excel
+        </button>
+      )}
     </Card>
   );
 }

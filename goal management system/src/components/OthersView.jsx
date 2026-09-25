@@ -3,6 +3,7 @@ import { Wrench, AlertCircle } from 'lucide-react';
 import { Card, inputCls, Field } from './UI';
 import TopPerformingSchemes from './TopPerformingSchemes';
 import PlanningSandbox from './PlanningSandbox';
+import { canTopSchemes } from '../utils/permissions';
 
 // Sub-tab is controlled by the sidebar flyout → App.jsx → here via `subTab` prop.
 export default function OthersView({ subTab = 'other_tools' }) {
@@ -55,7 +56,14 @@ export default function OthersView({ subTab = 'other_tools' }) {
       {/* ====================================================================
           TOP PERFORMING SCHEMES TAB
           ==================================================================== */}
-      {activeSubTab === 'top_schemes' && <TopPerformingSchemes />}
+      {activeSubTab === 'top_schemes' && (canTopSchemes('view') ? <TopPerformingSchemes /> : (
+        // The sidebar already hides it without View; this covers a tab left
+        // open when an admin takes the right away.
+        <Card className="p-10 text-center">
+          <p className="text-sm font-bold text-slate-700 dark:text-slate-300">You don't have access to Top Performing Schemes.</p>
+          <p className="text-xs text-slate-400 mt-1">Ask an Admin to grant it in the Permission Matrix.</p>
+        </Card>
+      ))}
 
       {/* ====================================================================
           GOAL PLANNER / ASSET ALLOCATION — client-free demo copies of the

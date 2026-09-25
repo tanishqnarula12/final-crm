@@ -5,11 +5,11 @@
 // sheet-by-sheet as a category with its raw rows plus the system-generated
 // screening verdicts.
 //
-// Access follows the notice-board precedent rather than the permission matrix:
-// any signed-in user may upload and read, since this is reference data the
-// whole team works from. Only removal is restricted (the uploader, or
-// Admin/Internal Manager for moderation) — and removal is a soft delete, so a
-// month's history can always be recovered.
+// Access follows the permission matrix's Top Performing Schemes row: View for
+// every read, Upload to add a month's workbook, Delete to remove one ("Assigned"
+// = workbooks you uploaded yourself). Defaults keep the original rules —
+// everyone views and uploads; the uploader, Internal Manager or Admin removes —
+// and removal is a soft delete, so a month's history can always be recovered.
 //
 // The endpoints are deliberately split by weight: month/summary reads stay
 // small, while the heavy payloads (a category's raw rows, the original .xlsx)
@@ -20,12 +20,21 @@ import { prisma } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/error.js';
 import { parseBody } from '../lib/validate.js';
+import { can } from '../lib/permissions.js';
 
 const router = Router();
 router.use(requireAuth);
 
-const MANAGER_ROLES = ['ADMIN', 'INTERNAL_MANAGER'];
-const isManager = (user) => (user.roles || []).some((r) => MANAGER_ROLES.includes(r));
+// Every endpoint here reads the module except upload and delete, which carry
+// their own matrix rows (checked in their handlers).
+router.use((req, res, next) => {
+  if (can(req.user, 'topSchemes', 'view')) return next();
+  res.status(403).json({ error: 'You don\'t have permission to view Top Performing Schemes.' });
+});
+
+// A workbook's uploader "owns" it — the 'creator' ownership the matrix's
+// Assigned scope resolves against.
+const asRecord = (upload) => ({ createdBy: upload.uploadedBy });
 
 export const RESULT = {
   TOP: 'TOP_PERFORMING',
@@ -283,6 +292,9 @@ router.get('/scheme-names', asyncHandler(async (req, res) => {
 // superseded rows, their raw data and their original file all remain.
 // ---------------------------------------------------------------------------
 router.post('/uploads', asyncHandler(async (req, res) => {
+  if (!can(req.user, 'topSchemes', 'upload')) {
+    return res.status(403).json({ error: 'You don\'t have permission to upload scheme performance workbooks.' });
+  }
   const body = parseBody(uploadSchema, req.body);
 
   const prior = await prisma.schemePerfUpload.findFirst({
@@ -364,7 +376,8 @@ router.post('/uploads', asyncHandler(async (req, res) => {
 }));
 
 // ---------------------------------------------------------------------------
-// DELETE /uploads/:id — soft delete (uploader, or Admin/Internal Manager).
+// DELETE /uploads/:id — soft delete, per the matrix's Delete row (Assigned =
+// the uploader; defaults: the uploader, Internal Manager or Admin).
 // If the removed version was the current one, the next newest version for that
 // month is promoted so the month keeps showing its most recent surviving data.
 // ---------------------------------------------------------------------------
@@ -372,8 +385,8 @@ router.delete('/uploads/:id', asyncHandler(async (req, res) => {
   const upload = await prisma.schemePerfUpload.findUnique({ where: { id: req.params.id } });
   if (!upload || upload.deletedAt) return res.status(404).json({ error: 'That monthly upload was not found.' });
 
-  if (upload.uploadedBy !== req.user.id && !isManager(req.user)) {
-    return res.status(403).json({ error: 'Only the person who uploaded this file, or an admin, can remove it.' });
+  if (!can(req.user, 'topSchemes', 'delete', asRecord(upload))) {
+    return res.status(403).json({ error: 'You don\'t have permission to remove this uploaded workbook.' });
   }
 
   await prisma.$transaction(async (tx) => {

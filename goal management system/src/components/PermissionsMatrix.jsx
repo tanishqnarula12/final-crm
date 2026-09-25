@@ -40,6 +40,7 @@ const MODULE_NOTES = {
   mom: 'Create saves a new MOM, Edit saves changes to an existing one, Delete removes one. Anyone who can View can still open and print a MOM.',
   documents: 'Upload covers adding and renaming files. Delete removes uploaded files (MOM documents follow MOM → Delete).',
   meetings: 'Edit covers rescheduling, marking done and cancelling.',
+  topSchemes: 'View shows Others → Top Schemes (needed to reach Upload too). Upload adds a month\'s workbook. Delete removes an uploaded workbook — "Assigned" means only ones this person uploaded. View and Upload aren\'t tied to one file, so for them only "All" grants access.',
 };
 
 export default function PermissionsMatrix() {

@@ -65,6 +65,11 @@ export const MODULES = [
   // 'global' ownership kind below), so every action here is only ever ALL or
   // NONE in practice.
   { key: 'managedPortfolio', label: 'Managed Portfolio', actions: ['editAum', 'editSip', 'editInsurance'] },
+  // Others → Top Performing Schemes. View and Upload aren't tied to one file,
+  // so only ALL grants them; Delete is per uploaded workbook, where ASSIGNED
+  // means "files this person uploaded" (see the 'creator' ownership below —
+  // routes/schemePerformance.js passes the upload's uploader as createdBy).
+  { key: 'topSchemes', label: 'Top Performing Schemes', actions: ['view', 'upload', 'delete'] },
 ];
 
 export const ACTION_LABELS = {
@@ -103,7 +108,7 @@ export const OWNERSHIP = {
   renewals: 'task', claims: 'task', fixedDeposits: 'task', otherInsurancePolicies: 'task',
   goals: 'client', assetAllocation: 'client', investmentProposal: 'client', insuranceProposal: 'client',
   portfolioReview: 'client', policyReview: 'client', investmentProspects: 'prospect', insuranceProspects: 'prospect',
-  documents: 'client', leave: 'creator', managedPortfolio: 'global',
+  documents: 'client', leave: 'creator', managedPortfolio: 'global', topSchemes: 'creator',
 };
 
 // Compact default scopes. `_` is the fallback for any role not listed.
@@ -184,6 +189,10 @@ const DEF = {
   // bypasses the matrix). An admin can widen a role to ALL here later; ALL
   // is the only scope that means anything for a global, non-record setting.
   managedPortfolio: { editAum: { _: N }, editSip: { _: N }, editInsurance: { _: N } },
+  // Mirrors the module's rules from before it joined the matrix: everyone
+  // views and uploads; a workbook is removed by whoever uploaded it, or by
+  // Internal Manager (and Admin) for any of them.
+  topSchemes: { view: { _: A }, upload: { _: A }, delete: { _: S, INTERNAL_MANAGER: A } },
 };
 
 export function defaultScope(role, module, action) {

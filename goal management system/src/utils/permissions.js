@@ -3,7 +3,7 @@
 // existing component call-sites don't change; the `me` argument is ignored (the
 // engine reads the current user internally). The server remains the hard gate.
 
-import { can, canMoveToStage, canSomewhere } from '../services/permissions';
+import { can, canMoveToStage, canSomewhere, getMatrix } from '../services/permissions';
 import { getCurrentUser } from './auth';
 
 export { can, canMoveToStage, canSomewhere };
@@ -85,6 +85,22 @@ export const canEditLeave = (_me, leaveRequest) => can('leave', 'editDetails', l
 // respond's scope is only ever NONE or ALL (never ASSIGNED — see permissionCatalog.js),
 // so no record/ownership check is needed here.
 export const canRespondToLeave = () => can('leave', 'respond');
+
+// ---- Top Performing Schemes ----------------------------------------------
+// action: 'view' | 'upload' | 'delete'. Delete takes the uploaded workbook —
+// "Assigned" means one this person uploaded (the 'creator' ownership).
+// Until the API serves this module's matrix row (it joined the matrix later,
+// and the API can deploy a little after the frontend), keep the rules it had
+// before: everyone views and uploads; the uploader, Internal Manager or Admin
+// removes.
+export const canTopSchemes = (action, upload) => {
+  if (!getMatrix()?.topSchemes) {
+    if (action !== 'delete') return true;
+    const me = getCurrentUser();
+    return !!me && (upload?.uploadedBy === me.id || (me.roles || []).some((r) => ['ADMIN', 'INTERNAL_MANAGER'].includes(r)));
+  }
+  return can('topSchemes', action, upload ? { createdBy: upload.uploadedBy } : null);
+};
 
 // Generic fallback for any module/action.
 export const canDo = (module, action, record) => can(module, action, record);
