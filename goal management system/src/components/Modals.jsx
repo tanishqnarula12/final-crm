@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X, CheckCircle2, Upload, AlertCircle, FileSpreadsheet, ChevronDown, ChevronUp, UserCog, Download, Link2, Wallet } from 'lucide-react';
+import { X, CheckCircle2, Upload, AlertCircle, FileSpreadsheet, ChevronDown, ChevronUp, UserCog, Download, Link2, Wallet, Plus } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Field, inputCls, selectCls, btnPrimary, btnSecondary, btnGhost, CoolSelect } from './UI';
 import {
@@ -798,7 +798,10 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
   );
 }
 
-export function GoalFormModal({ initial, assetAllocation, clientGoals, onClose, onSave }) {
+// `onAddAssets` is passed only by the Others → Goal Planner demo: with it, a
+// demo that has no assets yet still shows Map Asset, with a button to enter
+// them on the spot. A real client's goal form never gets it and is unchanged.
+export function GoalFormModal({ initial, assetAllocation, clientGoals, onClose, onSave, onAddAssets }) {
   const isEdit = !!initial;
   const initialIsPreset = initial ? GOAL_PRESETS.includes(initial.name) && initial.name !== 'Others' : true;
   const [nameChoice, setNameChoice] = useState(initial ? (initialIsPreset ? initial.name : 'Others') : '');
@@ -1102,6 +1105,23 @@ export function GoalFormModal({ initial, assetAllocation, clientGoals, onClose, 
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Map Asset, demo only — no assets entered yet. Ticks the mapping
+            open first, so once the assets are saved the list above appears
+            ready to fill. */}
+        {!hasAssets && onAddAssets && (
+          <div className="md:col-span-2 flex flex-wrap items-center gap-x-2.5 gap-y-2">
+            <span className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-800 dark:text-slate-200">
+              <Link2 size={14} className="text-blue-600 dark:text-blue-400" /> Map Asset
+            </span>
+            <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
+              No assets entered in this demo yet
+            </span>
+            <button type="button" onClick={() => { setMapOpen(true); onAddAssets(); }} className={btnSecondary + ' ml-auto'}>
+              <Plus size={14} /> Add assets
+            </button>
           </div>
         )}
       </div>

@@ -13,7 +13,9 @@
 // bookkeeping, so the change logs and every number behave identically.
 //
 // Both tools share ONE demo client, so assets entered under Asset Allocation
-// can be mapped to goals in the Goal Planner exactly as for a real client. It
+// can be mapped to goals in the Goal Planner exactly as for a real client
+// (the one demo-only addition: GoalFormModal's onAddAssets, so Map Asset is
+// offered even before any assets are entered). It
 // autosaves on every change to this browser's localStorage (kept per signed-in
 // user, so two people sharing a machine don't see each other's demo) — a
 // reload, switching modules or closing the browser mid-meeting loses nothing.
@@ -144,6 +146,11 @@ export default function PlanningSandbox({ mode }) {
             <p className="text-xs text-amber-800/80 dark:text-amber-300/70 mt-0.5">
               For showing the calculations in a meeting. Autosaved on this device as you go; never saved to any client or lead. Refresh clears it for the next demo.
             </p>
+            <p className="text-xs text-amber-800/80 dark:text-amber-300/70 mt-0.5">
+              {mode === 'assets'
+                ? 'Goal Planner uses these same assets: map them to goals there with Add goal → Map Asset.'
+                : 'Map Asset (in Add goal) uses the assets entered here or under Others → Asset Allocation.'}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -204,6 +211,9 @@ export default function PlanningSandbox({ mode }) {
           initial={editingGoalId ? (client.goals || []).find((g) => g.id === editingGoalId) : null}
           assetAllocation={client.assetAllocation}
           clientGoals={client.goals || []}
+          // No assets in the demo yet → Map Asset offers to add them here;
+          // the allocation form opens on top and the goal form stays as typed.
+          onAddAssets={() => setShowAllocModal(true)}
           onClose={() => { setShowGoalForm(false); setEditingGoalId(null); }}
           onSave={(g) => {
             if (editingGoalId) {
