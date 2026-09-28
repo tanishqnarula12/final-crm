@@ -220,7 +220,8 @@ export default function ClientProfileView({
 
       // The upload has landed — show it straight away instead of waiting on a
       // full app reload (that wait is what left this dialog frozen).
-      if (window.patchClientLocal) window.patchClientLocal(client.id, { clientDetails: nextDetails });
+      // Only the documents change — notes keep the latest copy on screen.
+      if (window.patchClientLocal) window.patchClientLocal(client.id, (c) => ({ clientDetails: { ...c.clientDetails, ...nextDetails, notes: c.clientDetails?.notes } }));
       else if (window.refreshAppData) window.refreshAppData();
 
       setUploadState('done');

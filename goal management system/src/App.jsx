@@ -2260,7 +2260,11 @@ export default function App() {
           onClose={() => { setShowAddClient(false); setEditingClientId(null); setConvertingLead(null); }}
           onSave={async (name, pan, age, clientDetails) => {
             if (editingClientId) {
-              await handleUpdateClient(editingClientId, { name, pan, age: Number(age) || 0, clientDetails });
+              // The form doesn't edit documents or notes; leaving them out
+              // keeps what's stored — the copy the form opened with could
+              // undo an upload or note made while it was open.
+              const { attachments: _docs, notes: _notes, ...details } = clientDetails;
+              await handleUpdateClient(editingClientId, { name, pan, age: Number(age) || 0, clientDetails: details });
             } else if (convertingLead) {
               // Lead → Client: create the client, link it back to the lead, mark
               // the lead Converted, then open the new client's profile.

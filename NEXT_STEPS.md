@@ -9,7 +9,8 @@ Do the items in the order of section 5, one at a time. Each gets tested and depl
 |---|---|---|---|
 | 28 Sep, 15:19 | §2 Sessions stay signed in while used + sign-in box when a session ends | `c981013` | ✅ Live |
 | 28 Sep, 15:32 | §4-B Permission matrix re-check sends "unchanged" (58 bytes) instead of 23 KB | `49ce31b` | ✅ Live |
-| 28 Sep | §4-H step 1 (server): a client save that leaves `notes` out keeps the stored notes | see git log | ✅ Pushed |
+| 28 Sep, 15:38 | §4-H step 1 (server): a client save that leaves `notes` out keeps the stored notes | `46fcf65` | ✅ Live |
+| 28 Sep | §4-H step 2 (app): client saves stop sending notes; Edit Client form stops sending documents | see git log | ✅ Pushed |
 
 ---
 
@@ -225,7 +226,8 @@ possible, and backups get smaller.
 | E | **Fewer database round trips on hot paths.** For example, a client save does read + update + include + logs one after another. | The API likely runs in Singapore (Render has no India region) and the DB is in Mumbai: about 50–60 ms per query, 5–8 queries per save. Longer term, host the API in Mumbai. | Medium |
 | F | **Housekeeping.** Retention or cleanup for `activity_logs` and `notifications` (about 6,000 rows each and growing), paging in their screens, and an index check. | Keeps queries and backups fast as data grows. | Small–medium |
 | G | **Advisor profile loads.** Check `hydrateAdvisorProfile` / the `advisor_profiles.data` size. It is loaded on every full reload (75,000 calls so far). | Less repeated work. | Small |
-| H | **The Edit Client form can undo a note added meanwhile.** The form (`ClientFormModal` in `Modals.jsx`) sends back the notes it loaded when it opened, and `PATCH /clients/:id` saves the whole `clientDetails`. So a note a colleague adds while the form is open is lost when the form is saved. Fix: leave notes out of that save and let only the notes routes (added 28 Sep 2026) change them. | Prevents silently lost notes. | Small |
+| H | ✅ **Done 28 Sep (`46fcf65` server, then the app).** The server keeps the stored notes when a client save leaves `notes` out, and `updateClient()` (`services/db.js`) no longer sends them, so only the notes routes change notes. The Edit Client form also stops sending documents, so an upload made while it's open is kept (for admins it used to count as a delete). Read-only prod check: the form sends back every other field real clients use. Tests: 11 server checks, plus 13 browser checks each as Admin and as Insurance Manager, with a colleague adding a note and a document while the form or a rename is open. The notes/save-button regression tests pass (15/15). **Still open:** document rename/delete/upload send the screen's whole document list; if an *admin* does that while a colleague's brand-new upload hasn't reached their screen yet (up to 12 s), it is treated as a delete. The per-document routes in §3 remove this. | — | — |
+| H (original) | **The Edit Client form can undo a note added meanwhile.** The form (`ClientFormModal` in `Modals.jsx`) sends back the notes it loaded when it opened, and `PATCH /clients/:id` saves the whole `clientDetails`. So a note a colleague adds while the form is open is lost when the form is saved. Fix: leave notes out of that save and let only the notes routes (added 28 Sep 2026) change them. | Prevents silently lost notes. | Small |
 
 ---
 

@@ -40,14 +40,23 @@ export async function addClient(client) {
 
 // Returns the client as the server stored it (documents slim), so callers can
 // update just that client on screen instead of reloading every client.
-export async function updateClient(clientId, updates) {
+//
+// Notes are left out: they change only through the notes routes below, and
+// the server keeps the stored notes when a save doesn't send them. Sending
+// this screen's copy back (every caller passes the whole clientDetails) used
+// to undo a note someone else added meanwhile. `withNotes` is for the notes
+// fallback against a server that predates those routes.
+export async function updateClient(clientId, updates, { withNotes = false } = {}) {
   const patch = {};
   if (updates.name !== undefined) patch.name = updates.name;
   if (updates.pan !== undefined) patch.pan = updates.pan;
   if (updates.age !== undefined) patch.age = updates.age;
   if (updates.assumptions !== undefined) patch.assumptions = updates.assumptions;
   if (updates.assetAllocation !== undefined) patch.assetAllocation = updates.assetAllocation;
-  if (updates.clientDetails !== undefined) patch.clientDetails = updates.clientDetails;
+  if (updates.clientDetails !== undefined) {
+    const { notes, ...rest } = updates.clientDetails || {};
+    patch.clientDetails = withNotes ? { ...rest, notes } : rest;
+  }
   const done = clientsSync.beginWrite();
   try {
     const { client } = await api.patch(`/clients/${clientId}?slim=1`, patch);
@@ -81,7 +90,7 @@ async function changeNotes(clientId, call, fallbackDetails) {
     res = await guarded(call);
   } catch (err) {
     if (!isMissingRoute(err)) throw err;
-    const saved = await updateClient(clientId, { clientDetails: fallbackDetails });
+    const saved = await updateClient(clientId, { clientDetails: fallbackDetails }, { withNotes: true });
     applySavedClient(saved);
     return saved?.clientDetails?.notes ?? fallbackDetails.notes;
   }

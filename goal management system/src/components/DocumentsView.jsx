@@ -260,7 +260,8 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
 
       // The upload has landed — show it in the list straight away rather than
       // waiting on a full app reload (which is what froze this dialog).
-      if (window.patchClientLocal) window.patchClientLocal(selectedGroupLeaderId, { clientDetails: nextDetails });
+      // Only the documents change — notes keep the latest copy on screen.
+      if (window.patchClientLocal) window.patchClientLocal(selectedGroupLeaderId, (c) => ({ clientDetails: { ...c.clientDetails, ...nextDetails, notes: c.clientDetails?.notes } }));
       else if (window.refreshAppData) window.refreshAppData();
 
       setUploadState('done');
