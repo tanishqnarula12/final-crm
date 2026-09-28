@@ -6,7 +6,8 @@ import {
 import { addMom, addLeadMom, updateMom, deleteMom } from '../services/db';
 import { saveGeneratedDocument, wrapStandaloneHtml, printHtmlDocument } from '../utils/documents';
 import { buildMomHtml } from '../utils/momHtml';
-import { CoolSelect } from './UI';
+import { CoolSelect, SaveLabel } from './UI';
+import { useSaveAction } from '../utils/useSaveAction';
 import { uid } from '../utils/calc';
 import { getCurrentUser } from '../utils/auth';
 import { loadTasks, saveTasks } from '../utils/tasks';
@@ -939,18 +940,15 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
     }
   };
 
-  const [savingDoc, setSavingDoc] = useState(false);
-  const handleSaveDocument = async () => {
-    setSavingDoc(true);
-    try {
+  // Save Document → Saving… → Saved; repeat clicks are ignored while it runs
+  // (useSaveAction), so the MOM can't be saved twice by a double click.
+  const docSave = useSaveAction({ savedMs: 1500 });
+  const handleSaveDocument = () => {
+    docSave.run(async () => {
       const html = wrapStandaloneHtml(getMomHtml(), `Minutes of Meeting — ${client.name}`);
       const name = await saveGeneratedDocument(client, { kind: 'mom', label: 'Minutes of Meeting', html });
       showToastMsg(`✅ Saved to Documents as ${name}`);
-    } catch (err) {
-      alert(err.message || 'Could not save document.');
-    } finally {
-      setSavingDoc(false);
-    }
+    }).catch((err) => alert(err.message || 'Could not save document.'));
   };
 
   const formatDateLabel = (d) => {
@@ -1992,10 +1990,10 @@ export default function MomWorkspace({ client, onBack, subjectType = 'client', i
               {subjectType !== 'lead' && can('documents', 'upload', client) && (
                 <button
                   onClick={handleSaveDocument}
-                  disabled={savingDoc}
-                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 text-white border border-emerald-600 hover:bg-emerald-700 transition-all flex items-center gap-1 cursor-pointer disabled:opacity-60"
+                  aria-busy={docSave.busy}
+                  className={'px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 text-white border border-emerald-600 hover:bg-emerald-700 transition-all flex items-center gap-1 cursor-pointer' + (docSave.busy ? ' pointer-events-none' : '')}
                 >
-                  <Save size={13} /> {savingDoc ? 'Saving…' : 'Save Document'}
+                  <SaveLabel state={docSave.state} idle="Save Document" icon={Save} iconSize={13} />
                 </button>
               )}
               <button

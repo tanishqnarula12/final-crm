@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, CoolSelect } from './UI';
+import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, CoolSelect, SaveLabel } from './UI';
+import { useSaveAction } from '../utils/useSaveAction';
 import { Plus, Trash2, Shield, Heart, Briefcase, FileText, Printer, ArrowLeft, CheckCircle2, AlertCircle, Save, Plane, Ship, Car } from 'lucide-react';
 import { LOGO_DATA_URI } from '../assets/logoBase64';
 import { RELATIONS } from '../utils/team';
@@ -985,36 +986,39 @@ export default function InsuranceProposal({ client, isViewer }) {
   };
 
   const previewDocRef = useRef(null);
-  const [savingDoc, setSavingDoc] = useState(false);
-  const handleSaveDocument = async () => {
+  // Save Document → Saving… → Saved; repeat clicks are ignored while it runs
+  // (useSaveAction), so a proposal can't be saved twice by a double click.
+  const docSave = useSaveAction({ savedMs: 1500 });
+  const handleSaveDocument = () => {
     if (!client?.id) {
       setProspectToast('⚠️ This proposal is not linked to a saved client, so it cannot be saved.');
       setTimeout(() => setProspectToast(''), 4000);
       return;
     }
     if (!previewDocRef.current) return;
-    setSavingDoc(true);
-    try {
-      const html = wrapStandaloneHtml(
-        previewDocRef.current.outerHTML,
-        `Insurance Proposal — ${client.name}`,
-        INSURANCE_PRINT_STYLES
-      );
-      const name = await saveGeneratedDocument(client, {
-        kind: 'insurance',
-        label: 'Insurance Proposal',
-        html,
-        // Named for what it actually is: the proposer it was drawn for, the
-        // insurance types it covers, and the day it was saved.
-        name: `${proposer || client.name} – ${getProposalTypesLabel()} Insurance Proposal ${fmtFileDate()}`,
-      });
-      setProspectToast(`✅ Saved to Documents as ${name}`);
-    } catch (err) {
-      setProspectToast(`⚠️ ${err.message || 'Could not save document.'}`);
-    } finally {
-      setSavingDoc(false);
-      setTimeout(() => setProspectToast(''), 4000);
-    }
+    docSave.run(async () => {
+      try {
+        const html = wrapStandaloneHtml(
+          previewDocRef.current.outerHTML,
+          `Insurance Proposal — ${client.name}`,
+          INSURANCE_PRINT_STYLES
+        );
+        const name = await saveGeneratedDocument(client, {
+          kind: 'insurance',
+          label: 'Insurance Proposal',
+          html,
+          // Named for what it actually is: the proposer it was drawn for, the
+          // insurance types it covers, and the day it was saved.
+          name: `${proposer || client.name} – ${getProposalTypesLabel()} Insurance Proposal ${fmtFileDate()}`,
+        });
+        setProspectToast(`✅ Saved to Documents as ${name}`);
+      } catch (err) {
+        setProspectToast(`⚠️ ${err.message || 'Could not save document.'}`);
+        throw err;
+      } finally {
+        setTimeout(() => setProspectToast(''), 4000);
+      }
+    }).catch(() => { /* shown in the toast above */ });
   };
 
   return (
@@ -2322,8 +2326,8 @@ export default function InsuranceProposal({ client, isViewer }) {
                   Sync failed
                 </span>
               )}
-              <button onClick={handleSaveDocument} disabled={savingDoc} className={btnSecondary + ' py-2 px-4 !text-emerald-700 dark:!text-emerald-400 !border-emerald-200 dark:!border-emerald-900/50 disabled:opacity-60'}>
-                <Save size={15} /> {savingDoc ? 'Saving…' : 'Save Document'}
+              <button onClick={handleSaveDocument} aria-busy={docSave.busy} className={btnSecondary + ' py-2 px-4 !text-emerald-700 dark:!text-emerald-400 !border-emerald-200 dark:!border-emerald-900/50' + (docSave.busy ? ' pointer-events-none' : '')}>
+                <SaveLabel state={docSave.state} idle="Save Document" icon={Save} iconSize={15} />
               </button>
               <button onClick={openCreateProspect} className={btnSecondary + ' py-2 px-4'}>
                 <Briefcase size={15} /> Create Prospect

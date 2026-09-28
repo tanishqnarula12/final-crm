@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, X, Search, Check, Filter } from 'lucide-react';
+import { ChevronDown, X, Search, Check, Filter, Loader2 } from 'lucide-react';
 import { avatarColor, initials } from '../utils/calc';
 import { teamPhoto } from '../services/team';
 
@@ -87,6 +87,22 @@ export const selectCls = inputCls + ' bg-white dark:bg-slate-950 cursor-pointer 
 export const btnPrimary = 'inline-flex items-center justify-center gap-1.5 px-4.5 py-2.5 text-xs font-bold uppercase tracking-wider bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl shadow-lg shadow-blue-500/15 hover:shadow-blue-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer';
 export const btnSecondary = 'inline-flex items-center justify-center gap-1.5 px-4.5 py-2.5 text-xs font-bold uppercase tracking-wider bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-800 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer';
 export const btnGhost = 'inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer';
+
+// Extra classes for a primary button showing SaveLabel: no clicks or hover
+// while saving / saved (useSaveAction ignores them anyway), green once saved.
+export const saveBtnState = (state) => (
+  state === 'saving' ? ' pointer-events-none'
+    : state === 'saved' ? ' pointer-events-none !from-emerald-500 !to-emerald-600 !shadow-emerald-500/20'
+      : ''
+);
+
+// Button content for a save that waits on the server (see utils/useSaveAction):
+// the idle label + icon, then a spinner with "Saving…", then a tick with "Saved".
+export function SaveLabel({ state, idle, icon: Icon = null, iconSize = 12, saving = 'Saving…', saved = 'Saved' }) {
+  if (state === 'saving') return <><Loader2 size={iconSize} className="animate-spin" /> {saving}</>;
+  if (state === 'saved') return <><Check size={iconSize} /> {saved}</>;
+  return <>{Icon && <Icon size={iconSize} />} {idle}</>;
+}
 
 // Recursive helper to extract text content from React children
 function getLabelText(children) {

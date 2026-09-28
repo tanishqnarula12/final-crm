@@ -3,6 +3,7 @@ import {
   ArrowLeft, Printer, AlertCircle, CheckCircle2, Save
 } from 'lucide-react';
 import { CoolSelect } from './UI';
+import { useSaveAction } from '../utils/useSaveAction';
 import { saveGeneratedDocument, wrapStandaloneHtml } from '../utils/documents';
 import { teamName } from '../services/team';
 import { buildPolicyReportHtml } from '../utils/policyReportHtml';
@@ -765,9 +766,11 @@ export default function PolicyReview({ client, onBack }) {
   };
 
   // Save the dedicated report template's HTML as a document in the client's Documents.
-  const [savingDoc, setSavingDoc] = useState(false);
+  // Save Document → Saving… → Saved; repeat clicks are ignored while it runs
+  // (useSaveAction), so the report can't be saved twice by a double click.
+  const docSave = useSaveAction({ savedMs: 1500 });
   const [docMsg, setDocMsg] = useState('');
-  const handleSaveDocument = async () => {
+  const handleSaveDocument = () => {
     if (!results || results.length === 0) {
       alert('Please analyze a policy first, then save.');
       return;
@@ -777,25 +780,26 @@ export default function PolicyReview({ client, onBack }) {
       setTimeout(() => setDocMsg(''), 4000);
       return;
     }
-    setSavingDoc(true);
-    try {
-      const inner = buildPolicyReportHtml(buildReportData());
-      const html = wrapStandaloneHtml(
-        inner,
-        `Policy Review — ${clientName || client.name}`,
-      );
-      const name = await saveGeneratedDocument(client, {
-        kind: 'policy',
-        label: 'Policy Review Report',
-        html,
-      });
-      setDocMsg(`✅ Saved to Documents as ${name}`);
-    } catch (err) {
-      setDocMsg(`⚠️ ${err.message || 'Could not save document.'}`);
-    } finally {
-      setSavingDoc(false);
-      setTimeout(() => setDocMsg(''), 4000);
-    }
+    docSave.run(async () => {
+      try {
+        const inner = buildPolicyReportHtml(buildReportData());
+        const html = wrapStandaloneHtml(
+          inner,
+          `Policy Review — ${clientName || client.name}`,
+        );
+        const name = await saveGeneratedDocument(client, {
+          kind: 'policy',
+          label: 'Policy Review Report',
+          html,
+        });
+        setDocMsg(`✅ Saved to Documents as ${name}`);
+      } catch (err) {
+        setDocMsg(`⚠️ ${err.message || 'Could not save document.'}`);
+        throw err;
+      } finally {
+        setTimeout(() => setDocMsg(''), 4000);
+      }
+    }).catch(() => { /* shown in docMsg above */ });
   };
 
   return (
@@ -815,7 +819,7 @@ export default function PolicyReview({ client, onBack }) {
         <div className="page-hero" style={{ justifyContent: 'flex-end' }}>
           <div className="flex gap-2">
             <button className="btn btn-outline" onClick={handleReset} type="button">🔄 Reset Form</button>
-            {results && maySaveReview && <button className="btn btn-outline" onClick={handleSaveDocument} type="button" disabled={savingDoc}>{savingDoc ? '💾 Saving…' : '💾 Save Document'}</button>}
+            {results && maySaveReview && <button className="btn btn-outline" onClick={handleSaveDocument} type="button" aria-busy={docSave.busy} style={docSave.busy ? { pointerEvents: 'none' } : undefined}>{docSave.state === 'saving' ? '⏳ Saving…' : docSave.state === 'saved' ? '✅ Saved' : '💾 Save Document'}</button>}
             {results && <button className="btn btn-gold" onClick={handlePrint} type="button">🖨️ Export PDF / Print</button>}
           </div>
         </div>

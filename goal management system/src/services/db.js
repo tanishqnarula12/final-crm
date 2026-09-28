@@ -66,6 +66,41 @@ export function applySavedClient(saved) {
   window.patchClientLocal(saved.id, fields);
 }
 
+// Notes — each add / edit / delete changes only clientDetails.notes on the
+// server (routes/clients.js "Notes"), so a note saves just as fast for a
+// client with many documents, and two people adding notes at once can't
+// overwrite each other. `fallbackDetails` is the whole clientDetails with the
+// change applied: it is sent the old way only when the server doesn't have
+// the notes routes yet (a 404 for the route itself). Resolves to the notes
+// as stored, after updating this client on screen.
+const isMissingRoute = (err) => err?.status === 404 && /^Not found:/.test(err?.message || '');
+
+async function changeNotes(clientId, call, fallbackDetails) {
+  let res;
+  try {
+    res = await guarded(call);
+  } catch (err) {
+    if (!isMissingRoute(err)) throw err;
+    const saved = await updateClient(clientId, { clientDetails: fallbackDetails });
+    applySavedClient(saved);
+    return saved?.clientDetails?.notes ?? fallbackDetails.notes;
+  }
+  window.patchClientLocal?.(clientId, (c) => ({
+    clientDetails: { ...c.clientDetails, notes: res.notes },
+    updatedAt: res.updatedAt,
+  }));
+  return res.notes;
+}
+
+export const addClientNote = (clientId, note, fallbackDetails) =>
+  changeNotes(clientId, () => api.post(`/clients/${clientId}/notes`, { note }), fallbackDetails);
+
+export const updateClientNote = (clientId, noteId, text, fallbackDetails) =>
+  changeNotes(clientId, () => api.patch(`/clients/${clientId}/notes/${encodeURIComponent(noteId)}`, { text }), fallbackDetails);
+
+export const deleteClientNote = (clientId, noteId, fallbackDetails) =>
+  changeNotes(clientId, () => api.del(`/clients/${clientId}/notes/${encodeURIComponent(noteId)}`), fallbackDetails);
+
 export async function deleteClient(clientId) {
   const done = clientsSync.beginWrite();
   try {

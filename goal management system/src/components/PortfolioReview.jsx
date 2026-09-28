@@ -3019,6 +3019,10 @@ export default function PortfolioReview({ client }) {
           html,
         });
         showDocMsg(`✅ Saved to Documents as ${name}`);
+        // Save → Saving… → Saved, like every other save button; still locked
+        // while "Saved" shows, so a quick second click can't save it again.
+        btnLabel.textContent = 'Saved ✓';
+        await new Promise((resolve) => setTimeout(resolve, 1500));
       } catch (err) {
         showDocMsg(`⚠️ ${err.message || 'Could not save document.'}`);
       } finally {

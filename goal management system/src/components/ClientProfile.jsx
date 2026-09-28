@@ -7,7 +7,7 @@ import {
   ListChecks, Plus, Trash2, Check, X, MessageSquare, Send, Wallet, FileBarChart, Printer, Eye, Target, Shield, Upload, FolderOpen,
   Video, Globe, Building, ArrowLeftRight, ChevronRight
 } from 'lucide-react';
-import { Avatar, Card, btnPrimary, btnSecondary, btnGhost, inputCls, CoolSelect } from './UI';
+import { Avatar, Card, btnPrimary, btnSecondary, btnGhost, inputCls, CoolSelect, SaveLabel, saveBtnState } from './UI';
 import { MANAGER_ROLES } from '../utils/team';
 import { teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
@@ -15,8 +15,9 @@ import { canEditClient, canDeleteClient, can, momRecord } from '../utils/permiss
 import { loadTasks, fetchClosedTasksForClient } from '../utils/tasks';
 import { loadProspects, CATEGORY_THEME, ALL_STAGE_THEME, fmtAmountINR } from '../utils/prospects';
 import { loadMeetings, MEETING_STATUS_THEME, MODE_THEME, fmtMeetingWhen, meetingDateTime } from '../utils/meetings';
-import { updateClient, deleteMom, applySavedClient } from '../services/db';
+import { updateClient, deleteMom, applySavedClient, addClientNote, updateClientNote, deleteClientNote } from '../services/db';
 import { useAttachmentFile } from '../services/clientFiles';
+import { useSaveAction } from '../utils/useSaveAction';
 import ClientActivityLog from './ClientActivityLog';
 import { uid, calcGoal, fmtINR, fmtFull, fmtSip, goalEmoji, monthLabel, fmtDate } from '../utils/calc';
 import { DOCUMENT_TYPE_GROUPS } from '../utils/documentTypes';
@@ -233,33 +234,34 @@ export default function ClientProfileView({
     }
   };
 
-  const handleEditDocSubmit = async (e) => {
+  // Rename: Save → Saving… → Saved, repeat clicks ignored (useSaveAction).
+  const renameSave = useSaveAction();
+  const handleEditDocSubmit = (e) => {
     e.preventDefault();
     const newTitle = editDocTitle.trim();
     const newApplicant = editDocApplicant.trim();
     if (!newTitle) { alert("Title cannot be empty."); return; }
 
-    try {
-      const currentAttachments = details.attachments || [];
-      const updated = currentAttachments.map(item => {
-        if (!item || typeof item !== 'object') return item;
-        if (item.id !== editingDoc.id) return item;
-        return { ...item, name: `${newTitle}_${newApplicant}`, category: newTitle, applicantName: newApplicant };
-      });
-
-      applySavedClient(await updateClient(client.id, {
-        clientDetails: { ...details, attachments: updated }
-      }));
-      setEditingDoc(null);
-    } catch (err) {
-      alert("Error updating document: " + err.message);
-    }
+    const currentAttachments = details.attachments || [];
+    const updated = currentAttachments.map(item => {
+      if (!item || typeof item !== 'object') return item;
+      if (item.id !== editingDoc.id) return item;
+      return { ...item, name: `${newTitle}_${newApplicant}`, category: newTitle, applicantName: newApplicant };
+    });
+    renameSave.run(
+      async () => applySavedClient(await updateClient(client.id, { clientDetails: { ...details, attachments: updated } })),
+      () => setEditingDoc(null),
+    ).catch((err) => alert("Error updating document: " + err.message));
   };
 
+  // A second click while a delete is still going through is ignored.
+  const deletingDocRef = React.useRef(false);
   const handleDeleteDoc = async (e, doc) => {
     e.stopPropagation();
     e.preventDefault();
+    if (deletingDocRef.current) return;
     if (!window.confirm(`Are you sure you want to delete "${doc.title}"?`)) return;
+    deletingDocRef.current = true;
 
     try {
       if (doc.type === 'custom') {
@@ -286,6 +288,8 @@ export default function ClientProfileView({
       alert("Document deleted successfully!");
     } catch (err) {
       alert("Error deleting document: " + err.message);
+    } finally {
+      deletingDocRef.current = false;
     }
   };
 
@@ -1055,10 +1059,11 @@ export default function ClientProfileView({
                 </button>
                 <button
                   type="submit"
-                  disabled={uploadState !== 'idle' || !resolvedDocTitle || !selectedFileDataUrl}
-                  className={btnPrimary + ' py-2 px-5 disabled:opacity-50 disabled:cursor-not-allowed'}
+                  disabled={uploadState === 'idle' && (!resolvedDocTitle || !selectedFileDataUrl)}
+                  aria-busy={uploadState !== 'idle'}
+                  className={btnPrimary + ' py-2 px-5 disabled:opacity-50 disabled:cursor-not-allowed' + saveBtnState(uploadState === 'uploading' ? 'saving' : uploadState === 'done' ? 'saved' : 'idle')}
                 >
-                  {uploadState === 'uploading' ? 'Uploading…' : uploadState === 'done' ? 'Uploaded' : 'Upload File'}
+                  <SaveLabel state={uploadState === 'uploading' ? 'saving' : uploadState === 'done' ? 'saved' : 'idle'} idle="Upload File" saving="Uploading…" saved="Uploaded" />
                 </button>
               </div>
             </form>
@@ -1101,8 +1106,10 @@ export default function ClientProfileView({
                 </CoolSelect>
               </div>
               <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <button type="button" onClick={() => setEditingDoc(null)} className={btnGhost + ' py-2 px-4'}>Cancel</button>
-                <button type="submit" disabled={!editDocTitle.trim()} className={btnPrimary + ' py-2 px-5 disabled:opacity-50 disabled:cursor-not-allowed'}>Save Changes</button>
+                <button type="button" onClick={() => setEditingDoc(null)} disabled={renameSave.busy} className={btnGhost + ' py-2 px-4 disabled:opacity-50 disabled:cursor-not-allowed'}>Cancel</button>
+                <button type="submit" disabled={!editDocTitle.trim()} aria-busy={renameSave.busy} className={btnPrimary + ' py-2 px-5 disabled:opacity-50 disabled:cursor-not-allowed' + saveBtnState(renameSave.state)}>
+                  <SaveLabel state={renameSave.state} idle="Save Changes" />
+                </button>
               </div>
             </form>
           </div>
@@ -1445,49 +1452,56 @@ function NotesFeed({ client, details, isViewer }) {
     return [];
   }, [details.notes, client.updatedAt]);
 
-  // Only this client is updated on screen afterwards — this used to wait for
-  // every client (with every document file) and nine other modules to reload.
-  const saveNotes = async (updated) => {
-    try {
-      applySavedClient(await updateClient(client.id, {
-        clientDetails: {
-          ...details,
-          notes: updated
-        }
-      }));
-    } catch (err) {
-      alert('Error saving notes: ' + err.message);
-    }
-  };
+  // Each note change is saved on its own — only the notes go to the server,
+  // never the client's documents (see addClientNote in services/db.js).
+  // `withNotes` is the whole-details fallback for a server without that route.
+  // The buttons go Save → Saving… → Saved and ignore repeat clicks meanwhile:
+  // a second click on "Save Note" used to add the same note twice. On an
+  // error the editor stays open with the text still in it.
+  const addSave = useSaveAction();
+  const editSave = useSaveAction();
+  const [deletingId, setDeletingId] = React.useState(null);
+  const deletingRef = React.useRef(false);
+  const withNotes = (notes) => ({ ...details, notes });
 
-  const handleAdd = async () => {
-    if (!newNoteText.trim()) return;
+  const handleAdd = () => {
+    const text = newNoteText.trim();
+    if (!text) return;
     const newNote = {
       id: uid(),
-      text: newNoteText.trim(),
+      text,
       createdAt: new Date().toISOString(),
       author: getCurrentUser()?.name || 'System'
     };
-    const updated = [newNote, ...notesList];
-    await saveNotes(updated);
-    setNewNoteText('');
-    setIsAdding(false);
+    addSave.run(
+      () => addClientNote(client.id, newNote, withNotes([newNote, ...notesList])),
+      () => { setNewNoteText(''); setIsAdding(false); },
+    ).catch((err) => alert('Error saving note: ' + err.message));
   };
 
-  const handleUpdate = async (id) => {
-    if (!editingNoteText.trim()) return;
-    const updated = notesList.map(n => 
-      n.id === id ? { ...n, text: editingNoteText.trim(), updatedAt: new Date().toISOString() } : n
-    );
-    await saveNotes(updated);
-    setEditingNoteId(null);
-    setEditingNoteText('');
+  const handleUpdate = (id) => {
+    const text = editingNoteText.trim();
+    if (!text) return;
+    const edited = notesList.map(n => (n.id === id ? { ...n, text, updatedAt: new Date().toISOString() } : n));
+    editSave.run(
+      () => updateClientNote(client.id, id, text, withNotes(edited)),
+      () => { setEditingNoteId(null); setEditingNoteText(''); },
+    ).catch((err) => alert('Error saving note: ' + err.message));
   };
 
   const handleDelete = async (id) => {
+    if (deletingRef.current) return;
     if (!window.confirm('Are you sure you want to delete this note?')) return;
-    const updated = notesList.filter(n => n.id !== id);
-    await saveNotes(updated);
+    deletingRef.current = true;
+    setDeletingId(id);
+    try {
+      await deleteClientNote(client.id, id, withNotes(notesList.filter(n => n.id !== id)));
+    } catch (err) {
+      alert('Error deleting note: ' + err.message);
+    } finally {
+      deletingRef.current = false;
+      setDeletingId(null);
+    }
   };
 
   const startEdit = (note) => {
@@ -1520,22 +1534,25 @@ function NotesFeed({ client, details, isViewer }) {
             rows={3}
             value={newNoteText}
             onChange={(e) => setNewNoteText(e.target.value)}
+            readOnly={addSave.busy}
             placeholder="Type your notes here... (e.g. Discussed new asset allocation strategy, client requested term insurance review)"
             className={inputCls + ' text-xs resize-y'}
           />
           <div className="flex justify-end gap-2">
             <button
               onClick={() => { setIsAdding(false); setNewNoteText(''); }}
-              className={btnGhost + ' py-1 px-2.5 text-[10px]'}
+              disabled={addSave.busy}
+              className={btnGhost + ' py-1 px-2.5 text-[10px] disabled:opacity-50 disabled:cursor-not-allowed'}
             >
               Cancel
             </button>
             <button
               onClick={handleAdd}
               disabled={!newNoteText.trim()}
-              className={btnPrimary + ' py-1 px-3 text-[10px]'}
+              aria-busy={addSave.busy}
+              className={btnPrimary + ' py-1 px-3 text-[10px]' + saveBtnState(addSave.state)}
             >
-              <Send size={10} /> Save Note
+              <SaveLabel state={addSave.state} idle="Save Note" icon={Send} iconSize={10} />
             </button>
           </div>
         </div>
@@ -1562,26 +1579,29 @@ function NotesFeed({ client, details, isViewer }) {
                       rows={3}
                       value={editingNoteText}
                       onChange={(e) => setEditingNoteText(e.target.value)}
+                      readOnly={editSave.busy}
                       className={inputCls + ' text-xs resize-y'}
                     />
                     <div className="flex justify-end gap-1.5">
                       <button
                         onClick={() => setEditingNoteId(null)}
-                        className={btnGhost + ' py-1 px-2 text-[10px]'}
+                        disabled={editSave.busy}
+                        className={btnGhost + ' py-1 px-2 text-[10px] disabled:opacity-50 disabled:cursor-not-allowed'}
                       >
                         Cancel
                       </button>
                       <button
                         onClick={() => handleUpdate(note.id)}
                         disabled={!editingNoteText.trim()}
-                        className={btnPrimary + ' py-1 px-2.5 text-[10px]'}
+                        aria-busy={editSave.busy}
+                        className={btnPrimary + ' py-1 px-2.5 text-[10px]' + saveBtnState(editSave.state)}
                       >
-                        <Check size={11} /> Save
+                        <SaveLabel state={editSave.state} idle="Save" icon={Check} iconSize={11} />
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <div className="p-3.5 bg-slate-50/60 dark:bg-slate-955/20 hover:bg-white dark:hover:bg-slate-900/60 border border-slate-200/50 dark:border-slate-800/60 hover:border-slate-300 dark:hover:border-slate-700/80 rounded-xl transition-all duration-300 shadow-xs hover:shadow-md">
+                  <div className={`p-3.5 bg-slate-50/60 dark:bg-slate-955/20 hover:bg-white dark:hover:bg-slate-900/60 border border-slate-200/50 dark:border-slate-800/60 hover:border-slate-300 dark:hover:border-slate-700/80 rounded-xl transition-all duration-300 shadow-xs hover:shadow-md${deletingId === note.id ? ' opacity-50' : ''}`}>
                     <div className="flex items-start justify-between gap-4 mb-2">
                       <div className="flex items-center gap-2">
                         <Avatar name={note.author || 'System'} size="sm" />
@@ -1601,18 +1621,22 @@ function NotesFeed({ client, details, isViewer }) {
                           </span>
                         </div>
                       </div>
-                      {!isViewer && (
+                      {deletingId === note.id ? (
+                        <span className="text-[10px] font-bold text-rose-500 dark:text-rose-400">Deleting…</span>
+                      ) : !isViewer && (
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => startEdit(note)}
-                            className="p-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                            disabled={!!deletingId}
+                            className="p-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                             title="Edit note"
                           >
                             <Pencil size={11} />
                           </button>
                           <button
                             onClick={() => handleDelete(note.id)}
-                            className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-455 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-955/20 transition-all"
+                            disabled={!!deletingId}
+                            className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-455 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-955/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                             title="Delete note"
                           >
                             <Trash2 size={11} />

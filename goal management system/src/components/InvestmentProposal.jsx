@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import SCHEMES from '../utils/schemes.json';
-import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, CoolSelect, selectCls } from './UI';
+import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, CoolSelect, selectCls, SaveLabel } from './UI';
+import { useSaveAction } from '../utils/useSaveAction';
 import { Plus, Trash2, ArrowLeft, CheckCircle2, ChevronRight, Printer, Lightbulb, Briefcase, Save } from 'lucide-react';
 import { LOGO_DATA_URI } from '../assets/logoBase64';
 import { addProspects } from '../utils/prospects';
@@ -786,41 +787,44 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     setTimeout(() => setProspectToast(''), 4000);
   };
 
-  const [savingDoc, setSavingDoc] = useState(false);
-  const handleSaveDocument = async () => {
+  // Save Document → Saving… → Saved; repeat clicks are ignored while it runs
+  // (useSaveAction), so a proposal can't be saved twice by a double click.
+  const docSave = useSaveAction({ savedMs: 1500 });
+  const handleSaveDocument = () => {
     if (!client?.id) {
       setProspectToast('⚠️ This proposal is not linked to a saved client, so it cannot be saved.');
       setTimeout(() => setProspectToast(''), 4000);
       return;
     }
-    setSavingDoc(true);
-    try {
-      const docLabel = isOtherCode ? 'Other Code Proposal' : 'Investment Proposal';
-      // Pass the proposal's own print rules through — without this, a saved
-      // document printed later from the Documents tab lost the repeating
-      // header/footer and page-break behaviour entirely (this HTML is all a
-      // print dialog ever sees at that point; the live in-app styles don't
-      // apply there).
-      const html = wrapStandaloneHtml(
-        `<div class="inv-proposal-doc">${previewHtml}</div>`,
-        `${docLabel} — ${client.name}`,
-        INVESTMENT_PRINT_STYLES
-      );
-      const name = await saveGeneratedDocument(client, {
-        kind: isOtherCode ? 'othercode' : 'investment',
-        label: docLabel,
-        html,
-        // Named for what it actually is: the applicant it was drawn for, the
-        // proposal types it covers, and the day it was saved.
-        name: `${clientName || client.name} – ${selTypes.map((id) => TYPES.find((t) => t.id === id)?.label || id).join(', ')} ${fmtFileDate()}`,
-      });
-      setProspectToast(`✅ Saved to Documents as ${name}`);
-    } catch (err) {
-      setProspectToast(`⚠️ ${err.message || 'Could not save document.'}`);
-    } finally {
-      setSavingDoc(false);
-      setTimeout(() => setProspectToast(''), 4000);
-    }
+    docSave.run(async () => {
+      try {
+        const docLabel = isOtherCode ? 'Other Code Proposal' : 'Investment Proposal';
+        // Pass the proposal's own print rules through — without this, a saved
+        // document printed later from the Documents tab lost the repeating
+        // header/footer and page-break behaviour entirely (this HTML is all a
+        // print dialog ever sees at that point; the live in-app styles don't
+        // apply there).
+        const html = wrapStandaloneHtml(
+          `<div class="inv-proposal-doc">${previewHtml}</div>`,
+          `${docLabel} — ${client.name}`,
+          INVESTMENT_PRINT_STYLES
+        );
+        const name = await saveGeneratedDocument(client, {
+          kind: isOtherCode ? 'othercode' : 'investment',
+          label: docLabel,
+          html,
+          // Named for what it actually is: the applicant it was drawn for, the
+          // proposal types it covers, and the day it was saved.
+          name: `${clientName || client.name} – ${selTypes.map((id) => TYPES.find((t) => t.id === id)?.label || id).join(', ')} ${fmtFileDate()}`,
+        });
+        setProspectToast(`✅ Saved to Documents as ${name}`);
+      } catch (err) {
+        setProspectToast(`⚠️ ${err.message || 'Could not save document.'}`);
+        throw err;
+      } finally {
+        setTimeout(() => setProspectToast(''), 4000);
+      }
+    }).catch(() => { /* shown in the toast above */ });
   };
 
   const getIntroText = (type) => {
@@ -1286,8 +1290,8 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
             <ArrowLeft size={16} /> Edit Form
           </button>
           <div className="flex items-center gap-3">
-            <button onClick={handleSaveDocument} disabled={savingDoc} className={btnSecondary + ' py-2 px-4 !text-emerald-700 dark:!text-emerald-400 !border-emerald-200 dark:!border-emerald-900/50 disabled:opacity-60'}>
-              <Save size={15} /> {savingDoc ? 'Saving…' : 'Save Document'}
+            <button onClick={handleSaveDocument} aria-busy={docSave.busy} className={btnSecondary + ' py-2 px-4 !text-emerald-700 dark:!text-emerald-400 !border-emerald-200 dark:!border-emerald-900/50' + (docSave.busy ? ' pointer-events-none' : '')}>
+              <SaveLabel state={docSave.state} idle="Save Document" icon={Save} iconSize={15} />
             </button>
             <button onClick={openCreateProspect} className={btnSecondary + ' py-2 px-4'}>
               <Briefcase size={15} /> Create Prospect

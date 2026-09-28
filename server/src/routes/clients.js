@@ -347,6 +347,126 @@ router.patch('/:id', asyncHandler(async (req, res) => {
   res.json({ client: shape(req, client), ...(refusals.length ? { refused: refusals } : {}) });
 }));
 
+// ---------------------------------------------------------------------------
+// Notes — POST /:id/notes, PATCH /:id/notes/:noteId, DELETE /:id/notes/:noteId
+//
+// Notes live in clientDetails.notes, next to the client's document files.
+// Saving one through PATCH /:id above means reading and rewriting the whole
+// clientDetails — several MB for a client with many documents — so a note
+// save was slow exactly where people keep the most history. These routes
+// change only the notes array, inside Postgres, so a note costs the same
+// whatever the client holds, and two people adding notes at the same moment
+// can no longer overwrite each other (the old path saved the browser's whole
+// copy of the list). Same right as before — notes count as personal details
+// (Clients → Edit Personal Details) — and the same activity-log entry.
+// ---------------------------------------------------------------------------
+const noteSchema = z.object({
+  id: z.string().min(1).max(100),
+  text: z.string().trim().min(1).max(20000),
+  createdAt: z.string().max(40).optional(),
+  author: z.string().max(200).optional(),
+});
+const noteTextSchema = z.object({ text: z.string().trim().min(1).max(20000) });
+
+// The client without its documents: all the permission check and the log need.
+async function loadClientForNotes(id) {
+  const [row] = await prisma.$queryRaw`SELECT id, "assignedTo", "createdBy", "deletedAt", "updatedAt",
+    ("clientDetails" - 'attachments') AS "clientDetails" FROM clients WHERE id = ${id}`;
+  return row && !row.deletedAt ? row : null;
+}
+
+// Stored notes as an array. None were stored as plain text in production (Sep
+// 2026), but an older client could still carry one — it becomes the first
+// entry, exactly as the Notes panel has always shown it.
+const notesArrayOf = (row, user) => {
+  const n = row.clientDetails?.notes;
+  if (Array.isArray(n)) return n;
+  if (typeof n === 'string' && n.trim()) {
+    return [{ id: 'legacy-1', text: n, createdAt: new Date(row.updatedAt).toISOString(), author: user.name || 'System' }];
+  }
+  return [];
+};
+
+// Runs one notes change: permission check, the UPDATE (which must return the
+// new notes, or nothing when the note to change no longer exists), the same
+// UPDATE log entry PATCH /:id writes for a notes edit.
+async function changeNotes(req, res, update) {
+  const existing = await loadClientForNotes(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Client not found' });
+  if (!canEdit(req.user, 'clients', existing)) {
+    return forbidden(res, 'You don\'t have permission to edit this client\'s personal details.');
+  }
+  const before = notesArrayOf(existing, req.user);
+  const now = new Date().toISOString();
+  const [row] = await update({ existing, before, now });
+  if (!row) return res.status(404).json({ error: 'That note no longer exists — it may have been deleted.' });
+  await logActivity(prisma, {
+    module: 'clients', recordId: existing.id, action: 'UPDATE',
+    oldValue: { notes: before }, newValue: { notes: row.notes }, performedBy: req.user.id,
+  });
+  res.json({ notes: row.notes, updatedAt: row.updatedAt });
+}
+
+// A plain-text legacy note can't be edited in place by SQL — rewrite the list.
+const setNotes = (id, notes, now) => prisma.$queryRaw`UPDATE clients
+  SET "clientDetails" = jsonb_set("clientDetails", '{notes}', ${JSON.stringify(notes)}::jsonb), "updatedAt" = ${now}::timestamp
+  WHERE id = ${id} AND "deletedAt" IS NULL
+  RETURNING "clientDetails"->'notes' AS notes, "updatedAt"`;
+const hasLegacyText = (existing) => typeof existing.clientDetails?.notes === 'string' && existing.clientDetails.notes.trim();
+
+router.post('/:id/notes', asyncHandler(async (req, res) => {
+  const { note } = parseBody(z.object({ note: noteSchema }), req.body);
+  const entry = { id: note.id, text: note.text, createdAt: note.createdAt || new Date().toISOString(), author: note.author || req.user.name || 'System' };
+  await changeNotes(req, res, ({ existing, before, now }) => {
+    if (hasLegacyText(existing)) return setNotes(existing.id, [entry, ...before], now);
+    // Newest first, prepended to whatever is stored right now.
+    return prisma.$queryRaw`UPDATE clients
+      SET "clientDetails" = jsonb_set("clientDetails", '{notes}', jsonb_build_array(${JSON.stringify(entry)}::jsonb)
+            || CASE WHEN jsonb_typeof("clientDetails"->'notes') = 'array' THEN "clientDetails"->'notes' ELSE '[]'::jsonb END),
+          "updatedAt" = ${now}::timestamp
+      WHERE id = ${existing.id} AND "deletedAt" IS NULL
+      RETURNING "clientDetails"->'notes' AS notes, "updatedAt"`;
+  });
+}));
+
+router.patch('/:id/notes/:noteId', asyncHandler(async (req, res) => {
+  const { text } = parseBody(noteTextSchema, req.body);
+  const { noteId } = req.params;
+  await changeNotes(req, res, ({ existing, before, now }) => {
+    if (hasLegacyText(existing)) {
+      if (!before.some((n) => n.id === noteId)) return [];
+      return setNotes(existing.id, before.map((n) => (n.id === noteId ? { ...n, text, updatedAt: now } : n)), now);
+    }
+    return prisma.$queryRaw`UPDATE clients
+      SET "clientDetails" = jsonb_set("clientDetails", '{notes}', (
+            SELECT jsonb_agg(CASE WHEN n->>'id' = ${noteId} THEN n || jsonb_build_object('text', ${text}::text, 'updatedAt', ${now}::text) ELSE n END ORDER BY t.ord)
+            FROM jsonb_array_elements("clientDetails"->'notes') WITH ORDINALITY AS t(n, ord))),
+          "updatedAt" = ${now}::timestamp
+      WHERE id = ${existing.id} AND "deletedAt" IS NULL AND jsonb_typeof("clientDetails"->'notes') = 'array'
+        AND EXISTS (SELECT 1 FROM jsonb_array_elements("clientDetails"->'notes') n WHERE n->>'id' = ${noteId})
+      RETURNING "clientDetails"->'notes' AS notes, "updatedAt"`;
+  });
+}));
+
+router.delete('/:id/notes/:noteId', asyncHandler(async (req, res) => {
+  const { noteId } = req.params;
+  await changeNotes(req, res, ({ existing, before, now }) => {
+    if (hasLegacyText(existing)) {
+      if (!before.some((n) => n.id === noteId)) return [];
+      return setNotes(existing.id, before.filter((n) => n.id !== noteId), now);
+    }
+    return prisma.$queryRaw`UPDATE clients
+      SET "clientDetails" = jsonb_set("clientDetails", '{notes}', (
+            SELECT coalesce(jsonb_agg(n ORDER BY t.ord), '[]'::jsonb)
+            FROM jsonb_array_elements("clientDetails"->'notes') WITH ORDINALITY AS t(n, ord)
+            WHERE n->>'id' IS DISTINCT FROM ${noteId})),
+          "updatedAt" = ${now}::timestamp
+      WHERE id = ${existing.id} AND "deletedAt" IS NULL AND jsonb_typeof("clientDetails"->'notes') = 'array'
+        AND EXISTS (SELECT 1 FROM jsonb_array_elements("clientDetails"->'notes') n WHERE n->>'id' = ${noteId})
+      RETURNING "clientDetails"->'notes' AS notes, "updatedAt"`;
+  });
+}));
+
 // GET /api/clients/:id/activity — this client's audit trail (personal-detail
 // edits, document uploads/renames/deletes, manager reassignments). Any
 // authenticated user may view it — Clients aren't view-scoped in this app

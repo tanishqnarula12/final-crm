@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   FolderOpen, FileText, Target, Shield, Search, X, Printer, Eye, CalendarDays, Wallet, FileBarChart, Upload, Paperclip, Trash2, CheckCircle2
 } from 'lucide-react';
-import { Card, Avatar, btnPrimary, btnSecondary, btnGhost, inputCls, CoolSelect } from './UI';
+import { Card, Avatar, btnPrimary, btnSecondary, btnGhost, inputCls, CoolSelect, SaveLabel, saveBtnState } from './UI';
 import { calcGoal, fmtINR, fmtFull, fmtSip, goalEmoji, monthLabel, fmtDate } from '../utils/calc';
 import { hasAllocation, allocationTotals, filledItems } from '../utils/assets';
 import { updateClient, deleteMom, applySavedClient } from '../services/db';
@@ -280,10 +280,14 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
     }
   };
 
+  // A second click while a delete is still going through is ignored.
+  const deletingDocRef = useRef(false);
   const handleDeleteDoc = async (e, doc) => {
     e.stopPropagation();
     e.preventDefault();
+    if (deletingDocRef.current) return;
     if (!window.confirm(`Are you sure you want to delete "${doc.title}"?`)) return;
+    deletingDocRef.current = true;
 
     try {
       if (doc.deletable === false) return;
@@ -313,6 +317,8 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
       alert("Document deleted successfully!");
     } catch (err) {
       alert("Error deleting document: " + err.message);
+    } finally {
+      deletingDocRef.current = false;
     }
   };
 
@@ -575,10 +581,10 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
                 </button>
                 <button
                   type="submit"
-                  disabled={uploadState !== 'idle'}
-                  className={btnPrimary + ' py-2 px-5' + (uploadState !== 'idle' ? ' opacity-70 cursor-not-allowed' : '')}
+                  aria-busy={uploadState !== 'idle'}
+                  className={btnPrimary + ' py-2 px-5' + saveBtnState(uploadState === 'uploading' ? 'saving' : uploadState === 'done' ? 'saved' : 'idle')}
                 >
-                  {uploadState === 'uploading' ? 'Uploading…' : uploadState === 'done' ? 'Uploaded' : 'Upload File'}
+                  <SaveLabel state={uploadState === 'uploading' ? 'saving' : uploadState === 'done' ? 'saved' : 'idle'} idle="Upload File" saving="Uploading…" saved="Uploaded" />
                 </button>
               </div>
             </form>
