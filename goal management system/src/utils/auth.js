@@ -71,11 +71,33 @@ export async function login(email, password) {
   return user;
 }
 
+// Keep an open, in-use app signed in: the server re-issues the session cookie
+// once it's 12 h old (routes/auth.js /renew). Returns false only when the
+// session has already ended (the 401 also raises crm:session-expired).
+let renewing = null;
+let loggingOut = false;
+export function renewSession() {
+  if (loggingOut || !currentUser) return Promise.resolve(true);
+  if (!renewing) {
+    renewing = api.post('/auth/renew')
+      .then(() => true)
+      .catch((err) => !(err instanceof ApiError && err.status === 401))
+      .finally(() => { renewing = null; });
+  }
+  return renewing;
+}
+
 export async function logout() {
+  // Let a renewal that's already on its way land first — otherwise its fresh
+  // cookie could arrive after the logout cleared it.
+  loggingOut = true;
   try {
+    await renewing;
     await api.post('/auth/logout');
   } catch {
     /* ignore — clear locally regardless */
+  } finally {
+    loggingOut = false;
   }
   writeCache(null);
 }

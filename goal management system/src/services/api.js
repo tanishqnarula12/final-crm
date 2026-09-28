@@ -26,6 +26,10 @@ export class ApiError extends Error {
   }
 }
 
+// Calls whose 401 is an answer, not a lost session (wrong password, or the
+// startup check finding nobody signed in).
+const SESSION_CALLS = /^\/auth\/(login|logout|me|change-password)\b/;
+
 async function request(method, path, body) {
   let res;
   try {
@@ -54,9 +58,17 @@ async function request(method, path, body) {
   }
 
   if (!res.ok) {
+    // A 401 outside the sign-in calls means the session ended while the app
+    // was open (it expired, or someone logged out in another tab). Say so in
+    // plain words, and let App show a sign-in box over the current screen so
+    // nothing half-filled is lost (see SessionExpiredModal).
+    const sessionEnded = res.status === 401 && !SESSION_CALLS.test(path);
+    if (sessionEnded) window.dispatchEvent(new CustomEvent('crm:session-expired'));
     const message = res.status === 413
       ? 'This upload is too large for the server to accept. Try a smaller file.'
-      : data?.error || `Request failed (${res.status})`;
+      : sessionEnded
+        ? 'Your session has ended. Please sign in again, then try once more.'
+        : data?.error || `Request failed (${res.status})`;
     throw new ApiError(message, res.status, data?.details);
   }
   return data;

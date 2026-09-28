@@ -36,11 +36,12 @@ import ActivityLogView from './components/ActivityLogView';
 import PermissionsMatrix from './components/PermissionsMatrix';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import ChatView from './components/chat/ChatView';
-import { connectChat, disconnectChat, onChatEvent, fetchConversations as fetchChatConversations, fetchChatUsers } from './services/chat';
+import { connectChat, disconnectChat, getChatSocket, onChatEvent, fetchConversations as fetchChatConversations, fetchChatUsers } from './services/chat';
 import ChatHoverPreview from './components/ChatHoverPreview';
 import { normalizeAllocation, buildAllocationEdits } from './utils/assets';
 import Login from './components/Login';
-import { isAuthenticated, isViewerRole, isAdminRole, refreshSession, logout as apiLogout, getCurrentUser } from './utils/auth';
+import { isAuthenticated, isViewerRole, isAdminRole, refreshSession, renewSession, logout as apiLogout, getCurrentUser } from './utils/auth';
+import SessionExpiredModal from './components/SessionExpiredModal';
 import MomWorkspace from './components/MomWorkspace';
 import ProposalWorkspace from './components/ProposalWorkspace';
 import Sidebar from './components/Sidebar';
@@ -123,14 +124,20 @@ export default function App() {
     setActiveDropdown(prev => (prev === type ? null : type));
   };
 
+  // True when the session ended while the app was open — a sign-in box then
+  // covers the current screen (see SessionExpiredModal / services/api.js).
+  const [sessionExpired, setSessionExpired] = useState(false);
+
   const handleLogin = (user) => {
     setIsViewer(false);
     setIsAdmin((user.roles || []).includes('ADMIN'));
+    setSessionExpired(false);
     setAuthed(true);
   };
 
   const handleLogout = async () => {
     await unsubscribeFromPush(); // before the session cookie is cleared, so the request authenticates
+    setSessionExpired(false);
     apiLogout();
     disconnectChat();
     setChatUnread(0);
@@ -525,6 +532,56 @@ export default function App() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Session ended while the app is open → sign-in box over the current screen
+  // (any request's 401 raises crm:session-expired, see services/api.js). And
+  // keep an in-use session alive: renew about hourly, and when the tab comes
+  // back into view (at most every 10 minutes).
+  useEffect(() => {
+    if (!authed) return undefined;
+    const onExpired = () => setSessionExpired(true);
+    let lastRenew = Date.now();
+    const renew = () => {
+      if (document.visibilityState === 'hidden') return;
+      lastRenew = Date.now();
+      renewSession();
+    };
+    const id = setInterval(renew, 60 * 60 * 1000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastRenew > 10 * 60 * 1000) renew();
+    };
+    // Signing in or out in another tab changes the shared cookie, and that
+    // tab's cached user (localStorage) with it.
+    const onStorage = (e) => {
+      if (e.key !== 'crm:authUser') return;
+      let other = null;
+      try { other = e.newValue ? JSON.parse(e.newValue) : null; } catch { /* treat as signed out */ }
+      const mine = getCurrentUser();
+      if (!other) setSessionExpired(true);
+      else if (other.id === mine?.id) setSessionExpired(false);
+      else window.location.reload(); // another account signed in — this screen isn't theirs
+    };
+    window.addEventListener('crm:session-expired', onExpired);
+    window.addEventListener('storage', onStorage);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('crm:session-expired', onExpired);
+      window.removeEventListener('storage', onStorage);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [authed]);
+
+  const handleSessionRestored = (user) => {
+    setIsAdmin((user.roles || []).includes('ADMIN'));
+    setSessionExpired(false);
+    // The live socket was refused while signed out and doesn't retry on its
+    // own; reconnecting the same socket keeps every listener attached.
+    const socket = getChatSocket();
+    if (socket && !socket.connected) socket.connect();
+    hydrateNotifications();
+    loadData(); // cheap: only lists that changed meanwhile are downloaded
+  };
 
   const selectedClient = clients.find(c => c.id === selectedClientId);
   const selectedGoal = selectedClient?.goals?.find(g => g.id === selectedGoalId);
@@ -1402,6 +1459,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex bg-slate-50/40 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 antialiased font-sans">
+      {sessionExpired && getCurrentUser()?.email && (
+        <SessionExpiredModal
+          email={getCurrentUser().email}
+          onSignedIn={handleSessionRestored}
+          onSignOut={handleLogout}
+        />
+      )}
       {/* On-screen toast previews (business notifications + new-chat popups) */}
       <NotificationToaster
         view={view}

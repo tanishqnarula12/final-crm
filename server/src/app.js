@@ -50,13 +50,18 @@ export function createApp() {
     rev: (process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || undefined,
   }));
 
-  // Throttle auth attempts to blunt brute-force / credential stuffing.
+  // Throttle auth attempts to blunt brute-force / credential stuffing. Only
+  // password checks count: the session check on page load, logout and the
+  // hourly session renewal don't guess anything, and behind the proxy many
+  // teammates can share one address — so they mustn't use up the attempts
+  // someone needs to sign in.
   const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 30,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many attempts. Please try again later.' },
+    skip: (req) => !(req.method === 'POST' && ['/login', '/change-password'].includes(req.path.toLowerCase().replace(/\/+$/, ''))),
   });
 
   app.use('/api/auth', authLimiter, authRoutes);

@@ -20,6 +20,7 @@ export async function requireAuth(req, res, next) {
       return res.status(401).json({ error: 'Session invalid' });
     }
     req.user = user;
+    req.session = decoded; // token claims (iat/exp) — used by /auth/renew
     next();
   } catch {
     return res.status(401).json({ error: 'Session invalid or expired' });

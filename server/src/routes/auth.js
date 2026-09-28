@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import { verifyPassword, hashPassword } from '../lib/password.js';
-import { signToken, cookieOptions } from '../lib/jwt.js';
+import { signToken, cookieOptions, renewSessionIfOld } from '../lib/jwt.js';
 import { config } from '../config.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/error.js';
@@ -51,8 +51,16 @@ router.post('/logout', (req, res) => {
 // auth state on load and to gate the UI by role).
 router.get('/me', requireAuth, asyncHandler(async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  renewSessionIfOld(res, req.session);
   res.json({ user: publicUser(user) });
 }));
+
+// POST /api/auth/renew — keeps an open, in-use app signed in. The app calls it
+// about once an hour; the cookie is only re-issued once it's 12 h old (see
+// renewSessionIfOld). 401 here means the session already ended.
+router.post('/renew', requireAuth, (req, res) => {
+  res.json({ ok: true, renewed: renewSessionIfOld(res, req.session) });
+});
 
 // POST /api/auth/change-password — self-service password change. Any
 // authenticated account (including VIEWER) may change their own password,
