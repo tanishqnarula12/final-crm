@@ -52,6 +52,25 @@ export function diffFields(oldObj = {}, newObj = {}, keys = null) {
   return out;
 }
 
+// File contents never belong in the audit trail. A changed attachment list on
+// a Renewal/Claim/FD/Policy record used to be logged whole — base64 and all —
+// so 9 log rows held 8.8 MB of the 9.5 MB log (Sep 2026), and the Activity Log
+// screen downloaded them. A file (a long `data:` URL) is logged as a short
+// label; any other huge string (a generated document's HTML) likewise.
+const fmtSize = (chars) => (chars >= 1e6 ? `${(chars / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(chars / 1e3))} KB`);
+export function withoutFileData(v) {
+  if (typeof v === 'string') {
+    if (v.length > 100 && v.startsWith('data:')) return `[file · ${fmtSize(v.length)}]`;
+    if (v.length > 20000) return `[document · ${fmtSize(v.length)}]`;
+    return v;
+  }
+  if (Array.isArray(v)) return v.map(withoutFileData);
+  if (v && typeof v === 'object' && !(v instanceof Date)) {
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, withoutFileData(x)]));
+  }
+  return v;
+}
+
 // Append one audit row. Accepts either a Prisma client or a transaction client
 // as `db`, so it can participate in the same transaction as the write.
 export function logActivity(db, { module, recordId, action, oldValue = null, newValue = null, performedBy }) {
@@ -60,8 +79,8 @@ export function logActivity(db, { module, recordId, action, oldValue = null, new
       moduleName: module,
       recordId: String(recordId),
       action,
-      oldValue: oldValue ?? undefined,
-      newValue: newValue ?? undefined,
+      oldValue: oldValue == null ? undefined : withoutFileData(oldValue),
+      newValue: newValue == null ? undefined : withoutFileData(newValue),
       performedBy,
     },
   });
@@ -85,8 +104,9 @@ export async function listActivity(prisma, where, limit = 200) {
     module: r.moduleName,
     recordId: r.recordId,
     action: r.action,
-    oldValue: r.oldValue,
-    newValue: r.newValue,
+    // Older rows may still hold file contents — never send those on.
+    oldValue: withoutFileData(r.oldValue),
+    newValue: withoutFileData(r.newValue),
     performedBy: r.performedBy,
     performedByName: nameById.get(r.performedBy) || 'Unknown user',
     timestamp: r.timestamp,
