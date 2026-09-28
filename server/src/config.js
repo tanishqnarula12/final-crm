@@ -42,4 +42,13 @@ export const config = {
   },
   // Portfolio Review (AI PDF analysis) — server-side only, never sent to the browser.
   geminiApiKey: process.env.GEMINI_API_KEY || '',
+  // Supabase Storage for document files (lib/storage.js). Optional: without
+  // the URL + service-role key, files stay inline in the database as before.
+  // The key bypasses all Supabase security rules — server-side only, never
+  // sent to the browser, never committed.
+  storage: {
+    url: (process.env.SUPABASE_URL || '').trim().replace(/\/+$/, ''),
+    serviceKey: (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim(),
+    bucket: (process.env.SUPABASE_STORAGE_BUCKET || 'client-documents').trim(),
+  },
 };

@@ -14,7 +14,7 @@ import { goalCreateSchema, momCreateSchema } from '../lib/schemas.js';
 import { can, canCreate, canEdit, canDelete, canSomewhere } from '../lib/permissions.js';
 import { findPanConflict, panConflictMessage, normalizePan } from '../lib/panUniqueness.js';
 import { logActivity, diffFields, listActivity } from '../lib/activityLog.js';
-import { slimClient, loadSlimClients, pickFiles, restoreAttachmentFiles } from '../lib/clientFiles.js';
+import { slimClient, loadSlimClients, loadFiles, restoreAttachmentFiles, offloadAttachmentFiles, dropUntrustedRefs } from '../lib/clientFiles.js';
 import { checkUnchanged } from '../lib/listVersion.js';
 
 const router = Router();
@@ -162,7 +162,14 @@ router.get('/:id/files', asyncHandler(async (req, res) => {
   if (!can(req.user, 'clients', 'view', client)) return forbidden(res, 'You don\'t have access to this client.');
   const ids = typeof req.query.ids === 'string' && req.query.ids ? req.query.ids.split(',') : null;
   res.set('Cache-Control', 'no-store');
-  res.json({ files: pickFiles(client, ids) });
+  let files;
+  try {
+    files = await loadFiles(client, ids);
+  } catch (err) {
+    console.error(`[storage] could not load files for client ${client.id}:`, err.message);
+    return res.status(502).json({ error: 'This document could not be loaded right now. Please try again.' });
+  }
+  res.json({ files });
 }));
 
 // Who may create a client:
@@ -197,6 +204,10 @@ router.post('/', asyncHandler(async (req, res) => {
     const conflict = await findPanConflict(data.pan);
     if (conflict) return res.status(409).json({ error: panConflictMessage(conflict, data.pan) });
     data.pan = normalizePan(data.pan);
+  }
+  if (Array.isArray(data.clientDetails?.attachments)) {
+    const attachments = await offloadAttachmentFiles(data.id, dropUntrustedRefs(data.clientDetails.attachments));
+    data.clientDetails = { ...data.clientDetails, attachments };
   }
   const client = await prisma.client.create({
     data: { ...data, assignedTo, createdBy: req.user.id, departmentOwner: req.user.roles?.[0] || null },
@@ -339,6 +350,13 @@ router.patch('/:id', asyncHandler(async (req, res) => {
   // Manager picker changes clientDetails.relationshipManager (see POST above).
   if (data.assignedTo === undefined && data.clientDetails?.relationshipManager !== undefined) {
     data.assignedTo = data.clientDetails.relationshipManager || null;
+  }
+  // Newly saved files go to Storage; documents already on record are left as
+  // they are (the same objects come back from restore/authorize untouched).
+  if (Array.isArray(data.clientDetails?.attachments)) {
+    data.clientDetails.attachments = await offloadAttachmentFiles(
+      existing.id, data.clientDetails.attachments, new Set(existing.clientDetails?.attachments || []),
+    );
   }
   const client = await prisma.client.update({ where: { id: req.params.id }, data, include });
 

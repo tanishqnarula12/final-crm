@@ -14,7 +14,8 @@ Do the items in the order of section 5, one at a time. Each gets tested and depl
 | 28 Sep, 16:11 | §4-A step 1 (server): `?slim=1` task lists, `GET /tasks/:id/files`, files restored on save | `4537cf0` | ✅ Live |
 | 28 Sep, 16:35 | §4-A step 2 (app): tasks load slim (9.7 MB → 0.29 MB); files open on click | `41f4ae1` | ✅ Live (website) |
 | 28 Sep, 16:41 | §4-F part 1: activity logs never store or send file contents | `92222c4` | ✅ Live — storing part reversed, see next row |
-| 28 Sep | §4-F: logs stored **complete** again (owner: logs protect the system's integrity); the log *screens* still show a label instead of files. Plus a nightly clean-up of read notifications older than 60 days | see git log | ✅ Pushed |
+| 28 Sep, 17:22 | §4-F: logs stored **complete** again (owner: logs protect the system's integrity); the log *screens* still show a label instead of files. Plus a nightly clean-up of read notifications older than 60 days | `9dcc3a8`, `c17c20c` | ✅ Live |
+| 28 Sep | §3 step 1 (server): newly saved client document files go to Supabase Storage; existing files untouched | see git log | ✅ Pushed |
 
 **Checked after the last release (read-only, 28 Sep 16:37 UTC):** 241 tasks, 14 task files all present, no
 `fileStripped` marker stored anywhere, 159 live client documents (158 with a file, same as before), 122 notes on
@@ -26,7 +27,7 @@ Do the items in the order of section 5, one at a time. Each gets tested and depl
 |---|---|---|---|
 | 1 | **Ask Preksha to reload the CRM once** (and anyone with a tab open since before 28 Sep 15:19 UTC). | Session renewal only starts in a freshly loaded app. | The update banner offers it, or close and reopen the tab / installed app. If "not authorised" ever appears again, get a screenshot. |
 | 2 | **Watch Supabase egress** for the next 2–3 days. | Confirms the fixes: expect ~1–2 GB/day instead of ~32 GB/day. | Supabase → Usage → Egress, daily view. |
-| 3 | **Create the Storage bucket + Render keys** (unblocks §3). | Moves the ~60 MB of client files out of the database. | §3 "Setup": bucket `client-documents` (Public OFF); Render → API → Environment: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. Never paste the key into chat or git. Tell the developer when done. |
+| 3 | ✅ **Done 28 Sep:** bucket `client-documents` (private) + Render `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`. The key was shared in the chat for testing, so **rotate it** after §3 is finished (Supabase → Project Settings → API) and update Render. (Was: create the Storage bucket + Render keys, which unblocked §3.) | Moves the ~60 MB of client files out of the database. | §3 "Setup": bucket `client-documents` (Public OFF); Render → API → Environment: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. Never paste the key into chat or git. Tell the developer when done. |
 | 4 | ✅ **Decided 28 Sep** (§4-F). | — | (a) Activity logs: **keep everything** — they protect the system's integrity; no log row is ever edited or deleted. (b) Notifications: **yes, carefully** → nightly clean-up of *read* ones older than 60 days (built; unread never touched). |
 | 5 | *Optional:* **more database connections** (§4-D). | Only if the app ever feels slow when many people save at once. | Render → API → Environment → `DATABASE_URL`: add `connection_limit=8&pool_timeout=20` (use `&` if the URL already has a `?`). Today the pool is 3 on a 1-CPU server; the database allows 60 and uses ~9. Redeploy afterwards. |
 | 6 | *Optional:* clear the **Member since** date on the "Fintness Finserv" admin account. | Otherwise it gets a work-anniversary post on 16 Apr. | My Profile of that account → Member since. |
@@ -167,7 +168,43 @@ expired" confirms this cause.
 
 ---
 
-## 3. Move document files into Supabase Storage  *(priority 2, medium)*
+## 3. Move document files into Supabase Storage  *(step 1 live 28 Sep; step 2 waits for the owner's OK)*
+
+### Status (28 Sep)
+
+**Step 1, shipped: new files go to Storage.** Server-only (`server/src/lib/storage.js`, `lib/clientFiles.js`,
+`routes/clients.js`); the app didn't change.
+
+- **Saving.** When a client save (`POST`/`PATCH /api/clients`) carries a file that isn't on record yet — an upload,
+  a generated proposal/MOM, a document copied in — the server stores it in the private bucket as real bytes at
+  `clients/<clientId>/<documentId>/<dataUrl|html|data>`. The document keeps a small `storage` reference instead of
+  the base64. That covers every upload path in the app, because they all save through these two routes.
+- **Opening.** `GET /api/clients/:id/files` fetches the file and rebuilds the exact string the app used to store,
+  so previews, print and download are unchanged.
+- **Hidden from browsers.** Browsers never see the reference (the slim list hides it) and one sent in a request is
+  ignored, so nobody can point a document at someone else's file.
+- **Existing inline documents** are left exactly as they are until step 2.
+- **Deleting a document** removes it from the client, but **the file stays in Storage**, so nothing is ever lost.
+- **Safety.** If Storage can't be reached, the file is saved inline as before, so a save never fails because of
+  Storage. Without the Render keys the feature is simply off.
+- **Tested.** On a separate test bucket: 28 API checks (uploads, generated docs byte-identical including unicode,
+  legacy docs untouched, rename, delete, forged references, copies between clients, missing-file error, notes) and
+  fallback when Storage is broken or off. In the browser: open, upload, reopen after reload, Save Document and
+  rename. Read-only on production: all 857 client records round-trip byte-identical and the slim list is unchanged
+  for all 417 live clients.
+
+**Step 2 (needs your OK): copy the ~160 existing files.** A script is written first, then:
+
+1. Dry run (read-only list).
+2. Full backup.
+3. Per document: upload, download and compare, then replace the inline copy (guarded so a user's edit in between
+   is never overwritten).
+4. Re-check everything.
+
+**Step 3, later:** task attachments, chat images, query attachments, and optionally signed links so files download
+straight from Storage.
+
+### Original plan
 
 ### What Supabase Storage is
 
