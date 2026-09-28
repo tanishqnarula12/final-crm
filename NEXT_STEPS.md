@@ -13,7 +13,22 @@ Do the items in the order of section 5, one at a time. Each gets tested and depl
 | 28 Sep, ~15:50 | §4-H step 2 (app): client saves stop sending notes; Edit Client form stops sending documents | `7eec589` | ✅ Live (website only — Render doesn't redeploy for non-`server/` changes, so `/health` stays on `46fcf65`) |
 | 28 Sep, 16:11 | §4-A step 1 (server): `?slim=1` task lists, `GET /tasks/:id/files`, files restored on save | `4537cf0` | ✅ Live |
 | 28 Sep, 16:35 | §4-A step 2 (app): tasks load slim (9.7 MB → 0.29 MB); files open on click | `41f4ae1` | ✅ Live (website) |
-| 28 Sep | §4-F part 1: activity logs never store or send file contents | see git log | ✅ Pushed |
+| 28 Sep, 16:41 | §4-F part 1: activity logs never store or send file contents | `92222c4` | ✅ Live |
+
+**Checked after the last release (read-only, 28 Sep 16:37 UTC):** 241 tasks, 14 task files all present, no
+`fileStripped` marker stored anywhere, 159 live client documents (158 with a file, same as before), 122 notes on
+85 clients. Nobody had used the CRM since 15:19 UTC (evening in India), so tomorrow morning is the first real use.
+
+## Your tasks (owner)
+
+| # | What | Why | How |
+|---|---|---|---|
+| 1 | **Ask Preksha to reload the CRM once** (and anyone with a tab open since before 28 Sep 15:19 UTC). | Session renewal only starts in a freshly loaded app. | The update banner offers it, or close and reopen the tab / installed app. If "not authorised" ever appears again, get a screenshot. |
+| 2 | **Watch Supabase egress** for the next 2–3 days. | Confirms the fixes: expect ~1–2 GB/day instead of ~32 GB/day. | Supabase → Usage → Egress, daily view. |
+| 3 | **Create the Storage bucket + Render keys** (unblocks §3). | Moves the ~60 MB of client files out of the database. | §3 "Setup": bucket `client-documents` (Public OFF); Render → API → Environment: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. Never paste the key into chat or git. Tell the developer when done. |
+| 4 | **Decide on two data clean-ups** (§4-F). | They change stored data, so they need your OK. | (a) Replace the file contents inside 9 old activity-log rows with labels (~8.8 MB freed; files stay on their records). (b) Delete *read* notifications older than 90 days. |
+| 5 | *Optional:* **more database connections** (§4-D). | Only if the app ever feels slow when many people save at once. | Render → API → Environment → `DATABASE_URL`: add `connection_limit=8&pool_timeout=20` (use `&` if the URL already has a `?`). Today the pool is 3 on a 1-CPU server; the database allows 60 and uses ~9. Redeploy afterwards. |
+| 6 | *Optional:* clear the **Member since** date on the "Fintness Finserv" admin account. | Otherwise it gets a work-anniversary post on 16 Apr. | My Profile of that account → Member since. |
 
 ---
 
@@ -213,6 +228,10 @@ through a temporary **signed link**, which our server creates after checking the
   - chat images (`chat_messages`, 7.6 MB)
   - query attachments (`query_attachments`, 2.1 MB)
 
+**Also fixes** the last stale-copy risk from §4-H. Document rename, delete and upload still send the screen's whole
+document list. Per-document routes (upload one, delete one) mean an admin can never remove a colleague's upload that
+hasn't reached their screen yet.
+
 **Result.** The database shrinks from about 122 MB to about 50 MB. Documents open faster, uploads over 5 MB become
 possible, and backups get smaller.
 
@@ -225,12 +244,12 @@ possible, and backups get smaller.
 | A | ✅ **Done 28 Sep (`4537cf0` server, then the app).** The files sit in the Renewal / Claim / FD / Other-Policy registers (Task rows): `payload.attachments[]` 5.1 MB and `payload.stageHistory[].attachments[]` 4.3 MB (copies of the same files, never shown on screen). `?slim=1` lists drop them (`server/src/lib/taskFiles.js`); `GET /api/tasks/:id/files` serves one when clicked (register chips, and the client's Documents tab via `cobrWorkspaceDocuments` → `taskId`); saves put them back (`restoreTaskFiles`). Checks: 27 server + 4 access checks locally, all 241 production tasks round-trip byte-identical (read-only), 13 browser checks each as Admin and Insurance Manager, click-through of every section as 4 roles. **Found while testing, for §4-F:** when a register's attachments change, the activity log stores the *full files* in `oldValue`/`newValue`. | — | — |
 | A (original) | **Task attachments on demand.** Same approach as clients in `c17870d` (slim list + restore on save), or Storage (§3). | The task list is 9 MB (attachments 3.75 MB + stage-history attachments 3.82 MB). Any task change makes every open Tasks/Dashboard/Profile screen download it once. | Small–medium |
 | B | ✅ **Done 28 Sep.** "Changed since?" for the permission matrix. `GET /api/permissions?since=<version>` answers `{unchanged:true}` (58 bytes, no table read) until an admin saves the matrix or the server restarts (`permissionsVersion()`). The editor screen still always loads the full matrix. 16/16 tests. | Every open tab downloaded the full matrix (23 KB + a 567-row table read) every 30 s. | Small |
-| C | **Faster first load (code-splitting).** Load heavy screens only when opened: Portfolio Review, proposals, chat, Excel export, charts. | The main app file is 3.4 MB and 12 MB is cached for offline use, which is slow on phones. | Medium |
-| D | **More database connections.** Add `connection_limit` (for example 10) and `pool_timeout` to `DATABASE_URL` on Render. Test Supabase's pooler mode first. | On a 1-CPU server Prisma opens only 3 connections by default, so one slow request makes others wait. | Small (settings) |
+| C | ⏸ **Checked 28 Sep, deferred.** At startup the browser loads only `index-*.js`: 3.3 MB, ~930 KB gzipped. The 8.5 MB `lib-*.js` chunk is already loaded on demand, and its file name (content hash) stayed the same across every build on 28 Sep, so app updates don't re-download it. Splitting the main file further (`React.lazy` for Chat, Reports, Others, Portfolio Review, proposals, admin screens) touches every screen for a moderate gain on phones. Do it in a quiet week with a full click-through. | Startup speed on phones. Not a database or egress issue. | Medium |
+| D | **More database connections** — owner's setting, see "Your tasks" #5. Production (28 Sep): Postgres `max_connections` 60, ~9 in use of all kinds; the API connects through Supavisor. Only worth doing if saves feel slow when many people work at once. | On a 1-CPU server Prisma opens only 3 connections by default, so one slow request makes others wait. | Small (settings) |
 | E | **Fewer database round trips on hot paths.** For example, a client save does read + update + include + logs one after another. | The API likely runs in Singapore (Render has no India region) and the DB is in Mumbai: about 50–60 ms per query, 5–8 queries per save. Longer term, host the API in Mumbai. | Medium |
 | F | 🟡 **Part 1 done 28 Sep.** Production survey (read-only): `activity_logs` 6,090 rows / 11.4 MB, but **9 rows held 8.8 MB** — register attachment changes logged with the files inside. Now `logActivity` stores a label (`[file · 400 KB]`, name/type kept) and `listActivity` applies the same to old rows on the way out (`withoutFileData` in `server/src/lib/activityLog.js`), so the Activity Log screen never downloads files. `notifications` (5,734 rows) is fine: the bell only loads the latest 100 unread. **Needs your OK (changes stored data):** (a) a one-time cleanup that replaces the file contents inside those 9 old log rows with the same labels (frees ~8.8 MB; the files themselves stay on their records); (b) a retention rule, e.g. delete *read* notifications older than 90 days. Not needed yet: an index on `activity_logs.timestamp` (6k rows sorts instantly). | — | — |
 | F (original) | **Housekeeping.** Retention or cleanup for `activity_logs` and `notifications` (about 6,000 rows each and growing), paging in their screens, and an index check. | Keeps queries and backups fast as data grows. | Small–medium |
-| G | **Advisor profile loads.** Check `hydrateAdvisorProfile` / the `advisor_profiles.data` size. It is loaded on every full reload (75,000 calls so far). | Less repeated work. | Small |
+| G | **Checked 28 Sep, low priority now.** The 76,544 `advisor_profiles` reads come from `GET /api/team` and `GET /api/chat/users`. Each reads every profile's whole `data`, profile photos included (the table is 0.36 MB). Since `c17870d` these run only at sign-in, when adding or deleting a client, and when the chat screen opens, not after every save. That's now a few MB a day. If it's ever worth it: give `/team` the same "changed since?" version as the lists, or serve photos separately with caching. | Less repeated work. | Small |
 | H | ✅ **Done 28 Sep (`46fcf65` server, then the app).** The server keeps the stored notes when a client save leaves `notes` out, and `updateClient()` (`services/db.js`) no longer sends them, so only the notes routes change notes. The Edit Client form also stops sending documents, so an upload made while it's open is kept (for admins it used to count as a delete). Read-only prod check: the form sends back every other field real clients use. Tests: 11 server checks, plus 13 browser checks each as Admin and as Insurance Manager, with a colleague adding a note and a document while the form or a rename is open. The notes/save-button regression tests pass (15/15). **Still open:** document rename/delete/upload send the screen's whole document list; if an *admin* does that while a colleague's brand-new upload hasn't reached their screen yet (up to 12 s), it is treated as a delete. The per-document routes in §3 remove this. | — | — |
 | H (original) | **The Edit Client form can undo a note added meanwhile.** The form (`ClientFormModal` in `Modals.jsx`) sends back the notes it loaded when it opened, and `PATCH /clients/:id` saves the whole `clientDetails`. So a note a colleague adds while the form is open is lost when the form is saved. Fix: leave notes out of that save and let only the notes routes (added 28 Sep 2026) change them. | Prevents silently lost notes. | Small |
 
@@ -238,11 +257,23 @@ possible, and backups get smaller.
 
 ## 5. Suggested order
 
-1. **§2 Preksha's session fix.** Small, and it unblocks a user.
-2. **§4-B permission refresh and §4-A task attachments.** Small, with a big effect on egress.
-3. **§3 Supabase Storage.** Needs the bucket and the Render keys first.
-4. **§4-C faster first load, §4-D connections, §4-F housekeeping.**
-5. **§4-E** only if saves still feel slow after the above.
+1. ✅ **§2 Preksha's session fix.** Small, and it unblocks a user.
+2. ✅ **§4-B permission refresh and §4-A task attachments** (+ ✅ §4-H notes). Small, with a big effect on egress.
+3. ⏳ **§3 Supabase Storage.** Waiting on the owner: bucket + Render keys ("Your tasks" #3).
+4. 🟡 **§4-F** part 1 done, part 2 needs your OK · §4-D is your setting, optional · ⏸ §4-C checked and deferred (see §4).
+5. **§4-E** only if saves still feel slow after the above. Judge after a few days on the new code.
+
+**Conclusions from 28 Sep:**
+
+- **Data moved per screen.** Every list the app polls now answers "unchanged" (tens of bytes) unless something changed:
+  clients, tasks, prospects, leads, meetings, queries and the permission matrix. The two lists that carried files,
+  clients and tasks, now send no files at all. What's left to move is the files themselves (§3).
+- **Deploy pattern that worked.** When the app and server must agree, ship the server half first (compatible with
+  today's app), confirm `/health` shows it, then ship the app half. That was used for §4-H and §4-A.
+- **Render redeploys only for `server/` changes.** A website-only push leaves `/health` on the previous commit, which
+  is expected. Check the website by its bundle instead.
+- **Before touching stored data**, run a read-only round-trip check on production. It found no differences on any
+  of the 417 clients or 241 tasks.
 
 ---
 
