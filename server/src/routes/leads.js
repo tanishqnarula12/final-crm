@@ -16,6 +16,7 @@ import { logActivity } from '../lib/activityLog.js';
 import { momCreateSchema } from '../lib/schemas.js';
 import { can, canCreate, canEdit } from '../lib/permissions.js';
 import { findPanConflict, panConflictMessage, normalizePan } from '../lib/panUniqueness.js';
+import { checkUnchanged, loadRowsCached } from '../lib/listVersion.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -27,10 +28,13 @@ const bulkSchema = z.object({ leads: z.array(leadSchema) });
 // lead; Assigned → the leads they're the RM of or created, plus the
 // unassigned ones if they may Assign RM (see can()). This used to return
 // every lead to everyone, so View set to Assigned did nothing.
+// `?since=<version>` → `{ unchanged: true }` when nothing changed (lib/listVersion.js).
 router.get('/', asyncHandler(async (req, res) => {
-  const rows = await prisma.lead.findMany({ where: { deletedAt: null }, orderBy: { createdAt: 'desc' } });
+  const check = await checkUnchanged(req, res, prisma, ['leads']);
+  if (check.unchanged) return;
+  const rows = await loadRowsCached(prisma, 'lead', check.fingerprint);
   const visible = rows.filter((r) => can(req.user, 'leads', 'view', r));
-  res.json({ leads: visible.map((r) => r.payload) });
+  res.json({ leads: visible.map((r) => r.payload), version: check.version });
 }));
 
 // The Minutes of Meeting drafted against this lead (the "Create MoM" stage,

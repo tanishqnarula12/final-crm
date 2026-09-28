@@ -15,17 +15,21 @@
 // that ceiling entirely.
 
 import { api } from '../services/api';
+import { createListSync } from '../services/listSync';
 
 let cache = [];
+const sync = createListSync('/prospects', 'prospects');
 
 export const loadProspects = () => cache;
 
-// Fetches every prospect from the server and populates the cache. Call once
-// on login/app-load (App.jsx `loadData`) before any component reads prospects,
+// Fetches the prospects from the server (only if they changed since the last
+// fetch — see services/listSync) and populates the cache. Call once on
+// login/app-load (App.jsx `loadData`) before any component reads prospects,
 // or as a recovery step after a write fails (see the .catch()s below).
-export async function hydrateProspects() {
-  const { prospects } = await api.get('/prospects');
-  cache = Array.isArray(prospects) ? prospects : [];
+export async function hydrateProspects(opts) {
+  const prospects = await sync.fetch({ force: !!opts?.force });
+  if (!prospects) return cache;
+  cache = prospects;
   window.dispatchEvent(new Event('crm:prospects-updated'));
   return cache;
 }
@@ -35,8 +39,11 @@ export async function hydrateProspects() {
 // whatever the server actually applied — the server may only grant PART of
 // what was asked (e.g. a stage move an actor is allowed to make, saved
 // alongside a detail edit they aren't), so the response is the record's real
-// resulting state, not necessarily an echo of what was sent.
+// resulting state, not necessarily an echo of what was sent. The write guard
+// keeps a background refresh that was already in flight from briefly putting
+// the old stage back on screen.
 export async function saveProspect(prospect) {
+  const done = sync.beginWrite();
   cache = cache.map((p) => (p.id === prospect.id ? prospect : p));
   window.dispatchEvent(new Event('crm:prospects-updated'));
   try {
@@ -46,16 +53,20 @@ export async function saveProspect(prospect) {
     return saved;
   } catch (err) {
     console.error('saveProspect failed:', err);
-    hydrateProspects().catch(() => {});
+    done();
+    hydrateProspects({ force: true }).catch(() => {});
     alert(err?.message?.includes('permission')
       ? err.message
       : 'Could not save the prospect — the server rejected the request. Please try again.');
     throw err;
+  } finally {
+    done();
   }
 }
 
 // Removes ONE prospect (Admin only, enforced server-side).
 export async function deleteProspect(id) {
+  const done = sync.beginWrite();
   const before = cache;
   cache = cache.filter((p) => p.id !== id);
   window.dispatchEvent(new Event('crm:prospects-updated'));
@@ -67,6 +78,8 @@ export async function deleteProspect(id) {
     window.dispatchEvent(new Event('crm:prospects-updated'));
     alert('Could not delete the prospect — the server rejected the request. Please try again.');
     throw err;
+  } finally {
+    done();
   }
 }
 
@@ -75,9 +88,11 @@ export async function deleteProspect(id) {
 // always bounded by what's on screen, never by how many prospects already
 // exist). Returns the merged cache.
 export const addProspects = (newOnes) => {
+  const done = sync.beginWrite();
   cache = [...newOnes, ...cache];
   window.dispatchEvent(new Event('crm:prospects-updated'));
   api.post('/prospects', { prospects: newOnes })
+    .finally(done)
     .then(({ prospects: created, rejectedIds } = {}) => {
       const createdById = new Map((Array.isArray(created) ? created : []).map((p) => [p.id, p]));
       // Prospects the server refused never got saved — drop them now and say
@@ -91,7 +106,7 @@ export const addProspects = (newOnes) => {
     })
     .catch((err) => {
       console.error('addProspects failed:', err);
-      hydrateProspects().catch(() => {});
+      hydrateProspects({ force: true }).catch(() => {});
       alert('Could not save the new prospect — the server rejected the request. Please try again.');
     });
   return cache;

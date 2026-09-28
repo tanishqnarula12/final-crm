@@ -7,16 +7,20 @@
 // same "rewrite the whole list" semantic `localStorage.setItem` used to have.
 
 import { api } from '../services/api';
+import { createListSync } from '../services/listSync';
 
 let cache = [];
+const sync = createListSync('/tasks', 'tasks');
 
 export const loadTasks = () => cache;
 
-// Fetches every task from the server and populates the cache. Call once on
+// Fetches the tasks from the server (only if they changed since the last
+// fetch — see services/listSync) and populates the cache. Call once on
 // login/app-load (App.jsx `loadData`) before any component reads tasks.
-export async function hydrateTasks() {
-  const { tasks } = await api.get('/tasks');
-  cache = Array.isArray(tasks) ? tasks : [];
+export async function hydrateTasks(opts) {
+  const tasks = await sync.fetch({ force: !!opts?.force });
+  if (!tasks) return cache;
+  cache = tasks;
   window.dispatchEvent(new Event('crm:tasks-updated'));
   return cache;
 }
@@ -36,17 +40,52 @@ export async function fetchClosedTasksForClient(clientId) {
   }
 }
 
+// Merges the server's answer to a partial save into the cache: the touched
+// tasks as actually stored (a rejected edit comes back as the stored version,
+// so it reverts), minus any that are gone or no longer visible.
+const mergeSaved = (saved = [], removedIds = []) => {
+  const removed = new Set(removedIds);
+  const byId = new Map(saved.map((t) => [t.id, t]));
+  const next = cache.filter((t) => !removed.has(t.id)).map((t) => byId.get(t.id) || t);
+  const known = new Set(next.map((t) => t.id));
+  const added = saved.filter((t) => !known.has(t.id)); // e.g. a delete the server refused
+  cache = added.length ? [...added, ...next] : next;
+};
+
+// Callers hand over the whole updated list (the old "rewrite the list"
+// contract), but only what actually differs from the cache is sent: the
+// changed/new tasks and the ids of removed ones (PATCH /tasks). Sending the
+// full list meant every one-task edit uploaded and re-downloaded every task
+// with its attachments (~9 MB in Sep 2026). A server without PATCH (404)
+// gets the whole list via PUT, exactly as before.
 export const saveTasks = (tasks) => {
+  const before = cache;
+  const beforeById = new Map(before.map((t) => [t.id, t]));
+  const nextIds = new Set(tasks.map((t) => t.id));
+  const changed = tasks.filter((t) => beforeById.get(t.id) !== t);
+  const deletedIds = before.filter((t) => !nextIds.has(t.id)).map((t) => t.id);
+
   cache = tasks;
   window.dispatchEvent(new Event('crm:tasks-updated'));
+  if (!changed.length && !deletedIds.length) return;
+
+  const done = sync.beginWrite();
   // The server validates every change (RBAC) and returns the authoritative
-  // list; reconcile so any rejected edit reverts in the UI — and tell the user
-  // when that happens, so a blocked change doesn't just silently "not stick"
-  // with no explanation (e.g. an assignee trying to edit task details, or
-  // moving a stage backward).
-  api.put('/tasks', { tasks })
+  // version; reconcile so any rejected edit reverts in the UI — and tell the
+  // user when that happens, so a blocked change doesn't just silently "not
+  // stick" with no explanation (e.g. an assignee trying to edit task
+  // details, or moving a stage backward).
+  api.patch('/tasks', { tasks: changed, deletedIds })
+    .catch((err) => {
+      if (err?.status === 404 || err?.status === 405) return api.put('/tasks', { tasks });
+      throw err;
+    })
+    .finally(done)
     .then((res) => {
-      if (Array.isArray(res?.tasks)) {
+      if (Array.isArray(res?.removedIds)) {
+        mergeSaved(res.tasks, res.removedIds);
+        window.dispatchEvent(new Event('crm:tasks-updated'));
+      } else if (Array.isArray(res?.tasks)) {
         cache = res.tasks;
         window.dispatchEvent(new Event('crm:tasks-updated'));
       }
@@ -58,7 +97,7 @@ export const saveTasks = (tasks) => {
     })
     .catch((err) => {
       console.error('Failed to persist tasks:', err);
-      hydrateTasks().catch(() => {});
+      hydrateTasks({ force: true }).catch(() => {});
       window.dispatchEvent(new CustomEvent('crm:tasks-sync-warning', {
         detail: { message: 'Your change could not be saved. The list has been refreshed.' },
       }));

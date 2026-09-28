@@ -15,7 +15,8 @@ import { canEditClient, canDeleteClient, can, momRecord } from '../utils/permiss
 import { loadTasks, fetchClosedTasksForClient } from '../utils/tasks';
 import { loadProspects, CATEGORY_THEME, ALL_STAGE_THEME, fmtAmountINR } from '../utils/prospects';
 import { loadMeetings, MEETING_STATUS_THEME, MODE_THEME, fmtMeetingWhen, meetingDateTime } from '../utils/meetings';
-import { updateClient, deleteMom } from '../services/db';
+import { updateClient, deleteMom, applySavedClient } from '../services/db';
+import { useAttachmentFile } from '../services/clientFiles';
 import ClientActivityLog from './ClientActivityLog';
 import { uid, calcGoal, fmtINR, fmtFull, fmtSip, goalEmoji, monthLabel, fmtDate } from '../utils/calc';
 import { DOCUMENT_TYPE_GROUPS } from '../utils/documentTypes';
@@ -246,11 +247,9 @@ export default function ClientProfileView({
         return { ...item, name: `${newTitle}_${newApplicant}`, category: newTitle, applicantName: newApplicant };
       });
 
-      await updateClient(client.id, {
+      applySavedClient(await updateClient(client.id, {
         clientDetails: { ...details, attachments: updated }
-      });
-
-      if (window.refreshAppData) await window.refreshAppData();
+      }));
       setEditingDoc(null);
     } catch (err) {
       alert("Error updating document: " + err.message);
@@ -272,20 +271,17 @@ export default function ClientProfileView({
           return item.id !== doc.id && (item.fileName !== doc.attachment?.fileName || item.name !== doc.title);
         });
 
-        await updateClient(client.id, {
+        applySavedClient(await updateClient(client.id, {
           clientDetails: {
             ...details,
             attachments: filtered
           }
-        });
+        }));
       } else if (doc.type === 'mom') {
         await deleteMom(client.id, doc.mom.id);
+        window.patchClientLocal?.(client.id, { moms: (client.moms || []).filter((m) => m.id !== doc.mom.id) });
       } else {
         return;
-      }
-
-      if (window.refreshAppData) {
-        await window.refreshAppData();
       }
       alert("Document deleted successfully!");
     } catch (err) {
@@ -1449,17 +1445,16 @@ function NotesFeed({ client, details, isViewer }) {
     return [];
   }, [details.notes, client.updatedAt]);
 
+  // Only this client is updated on screen afterwards — this used to wait for
+  // every client (with every document file) and nine other modules to reload.
   const saveNotes = async (updated) => {
     try {
-      await updateClient(client.id, {
+      applySavedClient(await updateClient(client.id, {
         clientDetails: {
           ...details,
           notes: updated
         }
-      });
-      if (window.refreshAppData) {
-        await window.refreshAppData();
-      }
+      }));
     } catch (err) {
       alert('Error saving notes: ' + err.message);
     }
@@ -1935,7 +1930,13 @@ const TYPE_META = {
   portfolio: { label: 'Portfolio Review Report', icon: FileBarChart, badge: 'bg-rose-50 text-rose-700 ring-rose-200/60 dark:bg-rose-950/30 dark:text-rose-400 dark:ring-rose-900/40', chip: 'from-rose-500 to-pink-600' },
 };
 
-function DocPreviewModal({ doc, onClose }) {
+function DocPreviewModal({ doc: listedDoc, onClose }) {
+  // Client documents come without their file (services/clientFiles.js) —
+  // fetch this one's contents now that it's being opened.
+  const { file, loading: fileLoading, error: fileError } = useAttachmentFile(
+    listedDoc.client?.id, listedDoc.type === 'custom' ? listedDoc.attachment : null,
+  );
+  const doc = file && file !== listedDoc.attachment ? { ...listedDoc, attachment: file } : listedDoc;
   const meta = TYPE_META[doc.type];
 
   return createPortal(
@@ -1991,7 +1992,7 @@ function DocPreviewModal({ doc, onClose }) {
             <div className="text-lg font-bold text-slate-900">Team Fintness</div>
             <div className="text-[11px] uppercase tracking-wider text-slate-500">{meta.label}</div>
           </div>
-          {doc.type === 'custom' && <CustomDocPreview doc={doc} />}
+          {doc.type === 'custom' && <CustomDocPreview doc={doc} loading={fileLoading} error={fileError} />}
           {doc.type === 'mom' && (
             <div className="max-w-[800px] mx-auto" dangerouslySetInnerHTML={{ __html: buildMomHtml(doc.mom, doc.client) }} />
           )}
@@ -2006,8 +2007,31 @@ function DocPreviewModal({ doc, onClose }) {
   );
 }
 
-function CustomDocPreview({ doc }) {
+function CustomDocPreview({ doc, loading = false, error = '' }) {
   const file = doc.attachment;
+  const isImage = file?.fileType?.startsWith('image/');
+  const isPdf = file?.fileType === 'application/pdf';
+  const isHtml = file?.fileType === 'text/html' && !!file?.html;
+  // Rebuild from the patched (print-safe) HTML, not the stale file.dataUrl
+  // captured at save time — same fix as DocumentsView's CustomDocPreview.
+  const dataUrl = file ? (isHtml ? printSafeDataUrl(file.html) : (file.dataUrl || file.data)) : null;
+  // See DocumentsView's CustomDocPreview — a raw base64 data: URL silently
+  // fails to load in an <iframe> past ~2M characters (a multi-page/landscape
+  // PDF crosses that well under any sane upload-size limit); blob: URLs have
+  // no such ceiling.
+  const pdfBlobUrl = useBlobUrl(isPdf ? dataUrl : null);
+
+  if (loading || error) {
+    return (
+      <div className="text-center py-12 space-y-3">
+        <FolderOpen size={40} className={`mx-auto text-slate-400 ${loading ? 'animate-pulse' : ''}`} />
+        <p className="text-xs font-bold text-slate-600 dark:text-slate-300 font-sans">
+          {loading ? 'Loading document…' : `Could not load this document: ${error}`}
+        </p>
+      </div>
+    );
+  }
+
   if (!file || (!file.dataUrl && !file.data && !file.html)) {
     return (
       <div className="text-center py-12 space-y-4">
@@ -2019,18 +2043,6 @@ function CustomDocPreview({ doc }) {
       </div>
     );
   }
-
-  const isImage = file.fileType?.startsWith('image/');
-  const isPdf = file.fileType === 'application/pdf';
-  const isHtml = file.fileType === 'text/html' && !!file.html;
-  // Rebuild from the patched (print-safe) HTML, not the stale file.dataUrl
-  // captured at save time — same fix as DocumentsView's CustomDocPreview.
-  const dataUrl = isHtml ? printSafeDataUrl(file.html) : (file.dataUrl || file.data);
-  // See DocumentsView's CustomDocPreview — a raw base64 data: URL silently
-  // fails to load in an <iframe> past ~2M characters (a multi-page/landscape
-  // PDF crosses that well under any sane upload-size limit); blob: URLs have
-  // no such ceiling.
-  const pdfBlobUrl = useBlobUrl(isPdf ? dataUrl : null);
 
   return (
     <div className="space-y-6">

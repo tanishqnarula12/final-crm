@@ -12,21 +12,26 @@
 // immediately and persists the whole array to the server in the background.
 
 import { api } from '../services/api';
+import { createListSync } from '../services/listSync';
 
 let cache = [];
+const sync = createListSync('/meetings', 'meetings');
 
 export const loadMeetings = () => cache;
 
-// Fetches every meeting from the server and populates the cache. Call once on
+// Fetches the meetings from the server (only if they changed since the last
+// fetch — see services/listSync) and populates the cache. Call once on
 // login/app-load (App.jsx `loadData`) before any component reads meetings.
-export async function hydrateMeetings() {
-  const { meetings } = await api.get('/meetings');
-  cache = Array.isArray(meetings) ? meetings : [];
+export async function hydrateMeetings(opts) {
+  const meetings = await sync.fetch({ force: !!opts?.force });
+  if (!meetings) return cache;
+  cache = meetings;
   window.dispatchEvent(new Event('crm:meetings-updated'));
   return cache;
 }
 
 export const saveMeetings = (meetings) => {
+  const done = sync.beginWrite();
   cache = meetings;
   window.dispatchEvent(new Event('crm:meetings-updated'));
   // The server validates every change (RBAC — creator/host/attendee) and
@@ -37,6 +42,7 @@ export const saveMeetings = (meetings) => {
   // stuck) but silently reverted on the next refresh — exactly what made
   // rescheduling look broken, with zero explanation why.
   api.put('/meetings', { meetings })
+    .finally(done)
     .then((res) => {
       if (Array.isArray(res?.meetings)) {
         cache = res.meetings;
@@ -50,7 +56,7 @@ export const saveMeetings = (meetings) => {
     })
     .catch((err) => {
       console.error('Failed to persist meetings:', err);
-      hydrateMeetings().catch(() => {});
+      hydrateMeetings({ force: true }).catch(() => {});
       window.dispatchEvent(new CustomEvent('crm:meetings-sync-warning', {
         detail: { message: 'Your change could not be saved. The list has been refreshed.' },
       }));

@@ -6,16 +6,20 @@
 // background, reconciling with the server-authoritative list afterward.
 
 import { api } from '../services/api';
+import { createListSync } from '../services/listSync';
 
 let cache = [];
+const sync = createListSync('/queries', 'queries');
 
 export const loadQueries = () => cache;
 
-// Fetches every query from the server and populates the cache. Call once on
+// Fetches the queries from the server (only if they changed since the last
+// fetch — see services/listSync) and populates the cache. Call once on
 // login/app-load (App.jsx `loadData`) before any component reads queries.
-export async function hydrateQueries() {
-  const { queries } = await api.get('/queries');
-  cache = Array.isArray(queries) ? queries : [];
+export async function hydrateQueries(opts) {
+  const queries = await sync.fetch({ force: !!opts?.force });
+  if (!queries) return cache;
+  cache = queries;
   window.dispatchEvent(new Event('crm:queries-updated'));
   return cache;
 }
@@ -25,6 +29,7 @@ export async function hydrateQueries() {
 // else (attaching files to a brand-new query — see App.handleSaveQueryGlobal)
 // can await it. Callers that don't care simply ignore the return value.
 export const saveQueries = (queries) => {
+  const done = sync.beginWrite();
   cache = queries;
   window.dispatchEvent(new Event('crm:queries-updated'));
   // The server validates every change (RBAC) and returns the authoritative
@@ -32,6 +37,7 @@ export const saveQueries = (queries) => {
   // when that happens (e.g. someone other than the raiser trying to edit the
   // query's own text, or the recipient trying to move the stage backward).
   return api.put('/queries', { queries })
+    .finally(done)
     .then((res) => {
       if (Array.isArray(res?.queries)) {
         cache = res.queries;
@@ -45,7 +51,7 @@ export const saveQueries = (queries) => {
     })
     .catch((err) => {
       console.error('Failed to persist queries:', err);
-      hydrateQueries().catch(() => {});
+      hydrateQueries({ force: true }).catch(() => {});
       window.dispatchEvent(new CustomEvent('crm:queries-sync-warning', {
         detail: { message: 'Your change could not be saved. The list has been refreshed.' },
       }));

@@ -17,7 +17,8 @@ import { RELATIONS } from '../utils/team';
 import { teamName, loadTeam } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
 import { canDo, isAdmin, allowedStageOptions } from '../utils/permissions';
-import { updateClient } from '../services/db';
+import { updateClient, applySavedClient } from '../services/db';
+import { useClientWithFiles, slimForSave } from '../services/clientFiles';
 import { CountrySelect, StateSelect, CitySelect } from './LocationPicker';
 import { useBlobUrl } from '../utils/documents';
 import { triggerInsuranceProspectDownload } from '../utils/prospectDownload';
@@ -769,11 +770,15 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
   // Shared header fields (apply to every prospect being created)
   const [groupLeader, setGroupLeader] = useState(seed.groupLeader || '');
 
-  // The client this prospect belongs to (used to read/write Documents attachments)
-  const linkedClient = useMemo(
+  // The client this prospect belongs to (used to read/write Documents attachments).
+  // The client list carries documents without their files; an insurance
+  // prospect (the only kind with a documents section) loads this client's
+  // files so existing documents can be previewed and linked as before.
+  const hasInsuranceDocs = isEdit ? initial?.proposalCategory === 'insurance' : drafts.some(d => d.proposalCategory === 'insurance');
+  const linkedClient = useClientWithFiles(useMemo(
     () => clients.find(c => c.id === (seed.groupLeaderId || initial?.groupLeaderId)) || clients.find(c => c.name === groupLeader) || null,
     [clients, seed, initial, groupLeader]
-  );
+  ), hasInsuranceDocs);
 
   const [applicant, setApplicant] = useState(seed.applicant || '');
   const [pan, setPan] = useState(seed.pan || '');
@@ -1133,10 +1138,15 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
       return true;
     });
 
-    await updateClient(linkedClient.id, {
-      clientDetails: { ...linkedClient.clientDetails, attachments: [...newAttachments, ...rest] }
-    });
-    if (window.refreshAppData) await window.refreshAppData();
+    // Nothing added or removed (e.g. a plain stage change) → no client save at
+    // all; otherwise documents already on the client go back without their
+    // files (slimForSave — the server keeps the stored ones).
+    const nextAttachments = [...newAttachments, ...rest];
+    const existingSet = new Set(existingClientDocs);
+    if (nextAttachments.length === existingClientDocs.length && nextAttachments.every(a => existingSet.has(a))) return;
+    applySavedClient(await updateClient(linkedClient.id, {
+      clientDetails: { ...linkedClient.clientDetails, attachments: nextAttachments.map(slimForSave) }
+    }));
   };
 
   const handleConfirm = () => {

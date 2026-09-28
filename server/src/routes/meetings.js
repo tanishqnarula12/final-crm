@@ -12,6 +12,7 @@ import { parseBody } from '../lib/validate.js';
 import { syncBulk } from '../lib/syncModule.js';
 import { can } from '../lib/permissions.js';
 import { notifyFromEvents } from '../lib/notify.js';
+import { checkUnchanged, loadRowsCached } from '../lib/listVersion.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -22,10 +23,13 @@ const bulkSchema = z.object({ meetings: z.array(meetingSchema) });
 // Meetings are visible to everyone by default (matrix view = ALL) — this GET
 // intentionally does NOT filter by ownership, only by can(...,'view',...) per
 // row, so a custom matrix that scopes view down still works correctly.
+// `?since=<version>` → `{ unchanged: true }` when nothing changed (lib/listVersion.js).
 router.get('/', asyncHandler(async (req, res) => {
-  const rows = await prisma.meeting.findMany({ where: { deletedAt: null }, orderBy: { createdAt: 'desc' } });
+  const check = await checkUnchanged(req, res, prisma, ['meetings']);
+  if (check.unchanged) return;
+  const rows = await loadRowsCached(prisma, 'meeting', check.fingerprint);
   const visible = rows.filter((r) => can(req.user, 'meetings', 'view', r));
-  res.json({ meetings: visible.map((r) => r.payload) });
+  res.json({ meetings: visible.map((r) => r.payload), version: check.version });
 }));
 
 router.put('/', asyncHandler(async (req, res) => {

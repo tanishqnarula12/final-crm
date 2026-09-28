@@ -52,6 +52,7 @@ import {
 } from '../lib/permissions.js';
 import { logActivity, diffFields } from '../lib/activityLog.js';
 import { notifyFromEvents } from '../lib/notify.js';
+import { checkUnchanged, loadRowsCached } from '../lib/listVersion.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -112,10 +113,13 @@ const summarize = (payload = {}) => {
   return out;
 };
 
+// `?since=<version>` → `{ unchanged: true }` when nothing changed (lib/listVersion.js).
 router.get('/', asyncHandler(async (req, res) => {
-  const rows = await prisma.prospect.findMany({ where: { deletedAt: null }, orderBy: { createdAt: 'desc' } });
+  const check = await checkUnchanged(req, res, prisma, ['prospects']);
+  if (check.unchanged) return;
+  const rows = await loadRowsCached(prisma, 'prospect', check.fingerprint);
   const visible = rows.filter((r) => can(req.user, prospectModuleFor(r), 'view', r));
-  res.json({ prospects: visible.map((r) => r.payload) });
+  res.json({ prospects: visible.map((r) => r.payload), version: check.version });
 }));
 
 // ---------------------------------------------------------------------------

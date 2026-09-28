@@ -17,6 +17,7 @@ const RANK = { NONE: 0, ASSIGNED: 1, ALL: 2 };
 // role:module:action -> scope
 let cache = new Map();
 let loaded = false;
+let version = 0;
 
 export async function initPermissions() {
   const rows = await prisma.rolePermission.findMany();
@@ -24,10 +25,14 @@ export async function initPermissions() {
   for (const r of rows) next.set(`${r.role}:${r.module}:${r.action}`, r.scope);
   cache = next;
   loaded = true;
+  version++;
   return cache.size;
 }
 export const refreshPermissions = initPermissions;
 export const isMatrixLoaded = () => loaded;
+// Bumped on every (re)load, so a list's "unchanged since" check (lib/listVersion.js)
+// knows a matrix edit may have changed what a user is allowed to see.
+export const permissionsVersion = () => version;
 
 function cellScope(role, module, action) {
   const hit = cache.get(`${role}:${module}:${action}`);

@@ -5,25 +5,41 @@
 // happens *inside*: all reads/writes now go through the backend API
 // (server/), which owns the single Postgres database and enforces auth.
 import { api } from './api';
+import { createListSync } from './listSync';
 
-// GET all clients (each with nested goals + moms) — mirrors the previous
-// `select('*, goals(*), moms(*)')` shape exactly; the server's field names
-// already match these camelCase keys, so no remapping is needed here.
-export async function getClients() {
-  const { clients } = await api.get('/clients');
-  return clients;
+// Clients come "slim": each document in clientDetails.attachments carries its
+// details but not its file (`fileStripped: true`) — the files were ~99% of the
+// list's size (61 MB in Sep 2026). A file is fetched when someone opens or
+// links it; see services/clientFiles.js. Saving a slim copy back is safe: the
+// server re-joins every document with its stored file.
+const clientsSync = createListSync('/clients?slim=1', 'clients');
+
+// GET all clients (each with nested goals + moms). Resolves to null when
+// nothing changed since the last call (or a client save overlapped it) —
+// keep the list you have. `force` always fetches.
+export async function getClients({ force = false } = {}) {
+  return clientsSync.fetch({ force });
 }
 
+// Returns the created client as the server stored it.
 export async function addClient(client) {
-  await api.post('/clients', {
-    id: client.id,
-    name: client.name,
-    pan: client.pan,
-    age: client.age,
-    clientDetails: client.clientDetails || {},
-  });
+  const done = clientsSync.beginWrite();
+  try {
+    const { client: created } = await api.post('/clients?slim=1', {
+      id: client.id,
+      name: client.name,
+      pan: client.pan,
+      age: client.age,
+      clientDetails: client.clientDetails || {},
+    });
+    return created;
+  } finally {
+    done();
+  }
 }
 
+// Returns the client as the server stored it (documents slim), so callers can
+// update just that client on screen instead of reloading every client.
 export async function updateClient(clientId, updates) {
   const patch = {};
   if (updates.name !== undefined) patch.name = updates.name;
@@ -32,11 +48,31 @@ export async function updateClient(clientId, updates) {
   if (updates.assumptions !== undefined) patch.assumptions = updates.assumptions;
   if (updates.assetAllocation !== undefined) patch.assetAllocation = updates.assetAllocation;
   if (updates.clientDetails !== undefined) patch.clientDetails = updates.clientDetails;
-  await api.patch(`/clients/${clientId}`, patch);
+  const done = clientsSync.beginWrite();
+  try {
+    const { client } = await api.patch(`/clients/${clientId}?slim=1`, patch);
+    return client;
+  } finally {
+    done();
+  }
+}
+
+// Puts a just-saved client (as the server returned it) into the app's client
+// list. Only the client's own fields are taken — goals/MOMs keep what the list
+// has, since a save's echo includes soft-deleted ones the list leaves out.
+export function applySavedClient(saved) {
+  if (!saved?.id || !window.patchClientLocal) return;
+  const { goals: _goals, moms: _moms, ...fields } = saved;
+  window.patchClientLocal(saved.id, fields);
 }
 
 export async function deleteClient(clientId) {
-  await api.del(`/clients/${clientId}`);
+  const done = clientsSync.beginWrite();
+  try {
+    await api.del(`/clients/${clientId}`);
+  } finally {
+    done();
+  }
 }
 
 // This client's audit trail — personal-detail edits, document uploads/
@@ -50,22 +86,29 @@ export async function fetchClientActivity(clientId) {
 // Returns the server-created goal (with its real createdAt/etc.) so the
 // caller can merge it straight into local state instead of reloading
 // everything — see App.jsx's handleAddGoal.
+// Goals and MOMs ride inside the client list, so their writes hold off a
+// client-list refresh that overlapped them (see services/listSync).
+const guarded = async (fn) => {
+  const done = clientsSync.beginWrite();
+  try { return await fn(); } finally { done(); }
+};
+
 export async function addGoal(clientId, goal) {
-  const { goal: created } = await api.post(`/clients/${clientId}/goals`, goal);
+  const { goal: created } = await guarded(() => api.post(`/clients/${clientId}/goals`, goal));
   return created;
 }
 
 export async function updateGoal(clientId, goalId, updates) {
-  const { goal: updated } = await api.patch(`/goals/${goalId}`, updates);
+  const { goal: updated } = await guarded(() => api.patch(`/goals/${goalId}`, updates));
   return updated;
 }
 
 export async function deleteGoal(clientId, goalId) {
-  await api.del(`/goals/${goalId}`);
+  await guarded(() => api.del(`/goals/${goalId}`));
 }
 
 export async function addMom(clientId, mom) {
-  await api.post(`/clients/${clientId}/moms`, mom);
+  await guarded(() => api.post(`/clients/${clientId}/moms`, mom));
 }
 
 // Lead-side equivalents — MOM drafted against a lead before it's converted
@@ -84,13 +127,13 @@ export async function addLeadMom(leadId, mom) {
 // doesn't get orphaned under a lead that's no longer part of the active
 // pipeline — it shows up in the client's own Draft MOM tab afterward.
 export async function reparentLeadMoms(leadId, clientId) {
-  await api.post(`/leads/${leadId}/moms/reparent`, { clientId });
+  await guarded(() => api.post(`/leads/${leadId}/moms/reparent`, { clientId }));
 }
 
 export async function updateMom(clientId, momId, updates) {
-  await api.patch(`/moms/${momId}`, updates);
+  await guarded(() => api.patch(`/moms/${momId}`, updates));
 }
 
 export async function deleteMom(clientId, momId) {
-  await api.del(`/moms/${momId}`);
+  await guarded(() => api.del(`/moms/${momId}`));
 }

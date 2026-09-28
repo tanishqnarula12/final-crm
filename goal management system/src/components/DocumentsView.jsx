@@ -6,7 +6,8 @@ import {
 import { Card, Avatar, btnPrimary, btnSecondary, btnGhost, inputCls, CoolSelect } from './UI';
 import { calcGoal, fmtINR, fmtFull, fmtSip, goalEmoji, monthLabel, fmtDate } from '../utils/calc';
 import { hasAllocation, allocationTotals, filledItems } from '../utils/assets';
-import { updateClient, deleteMom } from '../services/db';
+import { updateClient, deleteMom, applySavedClient } from '../services/db';
+import { useAttachmentFile } from '../services/clientFiles';
 import { getCurrentUser } from '../utils/auth';
 import { can, momRecord } from '../utils/permissions';
 import { printHtmlDocument, printSafeDataUrl, wrapStandaloneHtml, useBlobUrl } from '../utils/documents';
@@ -297,20 +298,17 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
           return item.id !== doc.id && (item.fileName !== doc.attachment?.fileName || item.name !== doc.title);
         });
 
-        await updateClient(client.id, {
+        applySavedClient(await updateClient(client.id, {
           clientDetails: {
             ...details,
             attachments: filtered
           }
-        });
+        }));
       } else if (doc.type === 'mom') {
         await deleteMom(doc.client.id, doc.mom.id);
+        window.patchClientLocal?.(doc.client.id, { moms: (doc.client.moms || []).filter((m) => m.id !== doc.mom.id) });
       } else {
         return;
-      }
-
-      if (window.refreshAppData) {
-        await window.refreshAppData();
       }
       alert("Document deleted successfully!");
     } catch (err) {
@@ -597,7 +595,13 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
 // ---------------------------------------------------------------------------
 // Preview modal — renders the document content and supports print / Save PDF.
 // ---------------------------------------------------------------------------
-function DocPreviewModal({ doc, onClose }) {
+function DocPreviewModal({ doc: listedDoc, onClose }) {
+  // Client documents come without their file (services/clientFiles.js) —
+  // fetch this one's contents now that it's being opened.
+  const { file, loading: fileLoading, error: fileError } = useAttachmentFile(
+    listedDoc.client?.id, listedDoc.type === 'custom' ? listedDoc.attachment : null,
+  );
+  const doc = file && file !== listedDoc.attachment ? { ...listedDoc, attachment: file } : listedDoc;
   const meta = TYPE_META[doc.type];
 
   return createPortal(
@@ -653,7 +657,7 @@ function DocPreviewModal({ doc, onClose }) {
             <div className="text-lg font-bold text-slate-900">Team Fintness</div>
             <div className="text-[11px] uppercase tracking-wider text-slate-500">{meta.label}</div>
           </div>
-          {doc.type === 'custom' && <CustomDocPreview doc={doc} />}
+          {doc.type === 'custom' && <CustomDocPreview doc={doc} loading={fileLoading} error={fileError} />}
           {doc.type === 'mom' && (
             <div className="max-w-[800px] mx-auto" dangerouslySetInnerHTML={{ __html: buildMomHtml(doc.mom, doc.client) }} />
           )}
@@ -668,8 +672,33 @@ function DocPreviewModal({ doc, onClose }) {
   );
 }
 
-function CustomDocPreview({ doc }) {
+function CustomDocPreview({ doc, loading = false, error = '' }) {
   const file = doc.attachment;
+  const isImage = file?.fileType?.startsWith('image/');
+  const isPdf = file?.fileType === 'application/pdf';
+  const isHtml = file?.fileType === 'text/html' && !!file?.html;
+  // For HTML docs, rebuild the data URL from the patched (print-safe) HTML
+  // rather than file.dataUrl — that field was captured at save time and
+  // carries the same stale-CSS gap as file.html, so a downloaded copy would
+  // still print washed-out even after the in-app Print button was fixed.
+  const dataUrl = file ? (isHtml ? printSafeDataUrl(file.html) : (file.dataUrl || file.data)) : null;
+  // A raw base64 data: URL silently fails to load in an <iframe> once it's
+  // long enough (a multi-page/landscape PDF crosses that well under any
+  // sane upload-size limit) — see useBlobUrl for why. Only the PDF branch
+  // below actually needs this; image/html rendering is unaffected.
+  const pdfBlobUrl = useBlobUrl(isPdf ? dataUrl : null);
+
+  if (loading || error) {
+    return (
+      <div className="text-center py-12 space-y-3">
+        <FolderOpen size={40} className={`mx-auto text-slate-400 ${loading ? 'animate-pulse' : ''}`} />
+        <p className="text-xs font-bold text-slate-600 dark:text-slate-300">
+          {loading ? 'Loading document…' : `Could not load this document: ${error}`}
+        </p>
+      </div>
+    );
+  }
+
   if (!file || (!file.dataUrl && !file.data && !file.html)) {
     return (
       <div className="text-center py-12 space-y-4">
@@ -681,20 +710,6 @@ function CustomDocPreview({ doc }) {
       </div>
     );
   }
-
-  const isImage = file.fileType?.startsWith('image/');
-  const isPdf = file.fileType === 'application/pdf';
-  const isHtml = file.fileType === 'text/html' && !!file.html;
-  // For HTML docs, rebuild the data URL from the patched (print-safe) HTML
-  // rather than file.dataUrl — that field was captured at save time and
-  // carries the same stale-CSS gap as file.html, so a downloaded copy would
-  // still print washed-out even after the in-app Print button was fixed.
-  const dataUrl = isHtml ? printSafeDataUrl(file.html) : (file.dataUrl || file.data);
-  // A raw base64 data: URL silently fails to load in an <iframe> once it's
-  // long enough (a multi-page/landscape PDF crosses that well under any
-  // sane upload-size limit) — see useBlobUrl for why. Only the PDF branch
-  // below actually needs this; image/html rendering is unaffected.
-  const pdfBlobUrl = useBlobUrl(isPdf ? dataUrl : null);
 
   return (
     <div className="space-y-6">

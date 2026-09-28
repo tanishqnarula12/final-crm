@@ -14,6 +14,8 @@ import { goalCreateSchema, momCreateSchema } from '../lib/schemas.js';
 import { can, canCreate, canEdit, canDelete, canSomewhere } from '../lib/permissions.js';
 import { findPanConflict, panConflictMessage, normalizePan } from '../lib/panUniqueness.js';
 import { logActivity, diffFields, listActivity } from '../lib/activityLog.js';
+import { slimClient, loadSlimClients, pickFiles, restoreAttachmentFiles } from '../lib/clientFiles.js';
+import { checkUnchanged } from '../lib/listVersion.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -127,16 +129,40 @@ const clientUpdateSchema = z.object({
 
 const include = { goals: true, moms: true };
 const forbidden = (res, msg) => res.status(403).json({ error: msg });
+// Callers that ask for `?slim=1` get attachments without their file contents
+// (see lib/clientFiles.js); everyone else gets the full shape as before.
+const wantsSlim = (req) => req.query.slim === '1';
+const shape = (req, client) => (wantsSlim(req) ? slimClient(client) : client);
 
 // GET /api/clients — every non-deleted client (with nested goals + moms) the
 // matrix's Clients → View lets this user see.
+//   ?slim=1       attachments without file contents (lib/clientFiles.js)
+//   ?since=<v>    `{ unchanged: true }` when nothing changed (lib/listVersion.js)
 router.get('/', asyncHandler(async (req, res) => {
+  if (wantsSlim(req)) {
+    const check = await checkUnchanged(req, res, prisma, ['clients', 'goals', 'moms']);
+    if (check.unchanged) return;
+    const clients = await loadSlimClients(prisma, check.fingerprint);
+    return res.json({ clients: clients.filter((c) => can(req.user, 'clients', 'view', c)), version: check.version });
+  }
   const clients = await prisma.client.findMany({
     where: { deletedAt: null },
     include: { goals: { where: { deletedAt: null } }, moms: { where: { deletedAt: null } } },
     orderBy: { createdAt: 'asc' },
   });
   res.json({ clients: clients.filter((c) => can(req.user, 'clients', 'view', c)) });
+}));
+
+// GET /api/clients/:id/files[?ids=a,b] — the file contents a slim list leaves
+// out, for one client (optionally only some of its attachments). Same
+// visibility as the client itself — exactly what the full list exposed.
+router.get('/:id/files', asyncHandler(async (req, res) => {
+  const client = await prisma.client.findUnique({ where: { id: req.params.id } });
+  if (!client || client.deletedAt) return res.status(404).json({ error: 'Client not found' });
+  if (!can(req.user, 'clients', 'view', client)) return forbidden(res, 'You don\'t have access to this client.');
+  const ids = typeof req.query.ids === 'string' && req.query.ids ? req.query.ids.split(',') : null;
+  res.set('Cache-Control', 'no-store');
+  res.json({ files: pickFiles(client, ids) });
 }));
 
 // Who may create a client:
@@ -180,7 +206,7 @@ router.post('/', asyncHandler(async (req, res) => {
     module: 'clients', recordId: client.id, action: 'CREATE',
     newValue: { id: client.id, name: client.name, pan: client.pan }, performedBy: req.user.id,
   });
-  res.status(201).json({ client });
+  res.status(201).json({ client: shape(req, client) });
 }));
 
 // A client PATCH carries several unrelated things, each governed by its OWN
@@ -285,6 +311,13 @@ router.patch('/:id', asyncHandler(async (req, res) => {
   const existing = await prisma.client.findUnique({ where: { id: req.params.id } });
   if (!existing || existing.deletedAt) return res.status(404).json({ error: 'Client not found' });
   const requested = parseBody(clientUpdateSchema, req.body);
+  // A slim browser copy sends its attachments back without file contents —
+  // re-join them with what's stored before anything compares or saves them.
+  if (Array.isArray(requested.clientDetails?.attachments)) {
+    requested.clientDetails.attachments = await restoreAttachmentFiles(
+      prisma, req.user, existing.id, requested.clientDetails.attachments, existing.clientDetails?.attachments,
+    );
+  }
   const { data, refusals, applied } = authorizeClientPatch(req.user, existing, requested);
   if (refusals.length && applied === 0) {
     return forbidden(res, `You don't have permission to ${refusals.join(' or ')}.`);
@@ -311,7 +344,7 @@ router.patch('/:id', asyncHandler(async (req, res) => {
     });
   }
   await logDocumentChanges(prisma, client.id, existing, client, req.user.id);
-  res.json({ client, ...(refusals.length ? { refused: refusals } : {}) });
+  res.json({ client: shape(req, client), ...(refusals.length ? { refused: refusals } : {}) });
 }));
 
 // GET /api/clients/:id/activity — this client's audit trail (personal-detail

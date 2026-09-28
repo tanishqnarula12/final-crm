@@ -17,6 +17,7 @@
 import { loadTasks, saveTasks } from '../utils/tasks';
 import { uid } from '../utils/calc';
 import { api } from './api';
+import { createListSync } from './listSync';
 
 // --- Domain constants -------------------------------------------------------
 // Workflow: Created → forwarded to Internal Manager (Waiting for Assignment) →
@@ -112,20 +113,24 @@ const migrateLead = (l) => {
 };
 
 let cache = [];
+const sync = createListSync('/leads', 'leads');
 
 // Synchronous — reads the in-memory cache. See the module header for why.
 export const loadLeads = () => cache;
 
-// Fetches every lead from the server and populates the cache. Call once on
+// Fetches the leads from the server (only if they changed since the last
+// fetch — see services/listSync) and populates the cache. Call once on
 // login/app-load (App.jsx `loadData`) before any component reads leads.
-export async function hydrateLeads() {
-  const { leads } = await api.get('/leads');
-  cache = Array.isArray(leads) ? leads.map(migrateLead) : [];
+export async function hydrateLeads(opts) {
+  const leads = await sync.fetch({ force: !!opts?.force });
+  if (!leads) return cache;
+  cache = leads.map(migrateLead);
   window.dispatchEvent(new Event('crm:leads-updated'));
   return cache;
 }
 
 export const saveLeads = (leads) => {
+  const done = sync.beginWrite();
   cache = leads;
   window.dispatchEvent(new Event('crm:leads-updated'));
   // The server validates every change (RBAC) and returns the authoritative
@@ -133,6 +138,7 @@ export const saveLeads = (leads) => {
   // when that happens, so a blocked change (e.g. a delete only Admin can do)
   // doesn't just silently "not stick" with no explanation.
   api.put('/leads', { leads })
+    .finally(done)
     .then((res) => {
       if (Array.isArray(res?.leads)) {
         cache = res.leads;
@@ -148,7 +154,7 @@ export const saveLeads = (leads) => {
       console.error('Failed to persist leads:', err);
       // Roll back to the server's actual state so the UI never shows a
       // change (e.g. "deleted") that didn't really happen.
-      hydrateLeads().catch(() => {});
+      hydrateLeads({ force: true }).catch(() => {});
       window.dispatchEvent(new CustomEvent('crm:leads-sync-warning', {
         detail: { message: 'Your change could not be saved. The list has been refreshed.' },
       }));

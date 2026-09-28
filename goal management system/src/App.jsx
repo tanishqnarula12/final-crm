@@ -10,8 +10,10 @@ import {
 
 // DB Service & Calculation Utils
 import {
-  getClients, addClient, updateClient, deleteClient, addGoal, updateGoal, deleteGoal, getLeadMoms, reparentLeadMoms
+  getClients, addClient, updateClient, deleteClient, addGoal, updateGoal, deleteGoal, getLeadMoms, reparentLeadMoms,
+  applySavedClient,
 } from './services/db';
+import { resetListVersions } from './services/listSync';
 import {
   calcGoal, CURRENT_YEAR, CURRENT_MONTH, uid, monthsBetween, buildGoalEdits, initials, GOAL_PRESETS
 } from './utils/calc';
@@ -134,6 +136,7 @@ export default function App() {
     setChatUnread(0);
     clearNotifications();
     setNotifications([]);
+    resetListVersions(); // the next login always loads full lists
     setAuthed(false);
     setIsViewer(false);
     setIsAdmin(false);
@@ -268,7 +271,10 @@ export default function App() {
     localStorage.setItem('gms:theme', theme);
   }, [theme]);
 
-  // Load clients + hydrate the leads/tasks caches on startup
+  // Load clients + hydrate the leads/tasks caches on startup. Each list is
+  // only re-downloaded if it changed since it was last fetched (see
+  // services/listSync), so calling this again later is cheap; getClients()
+  // resolves to null when the client list is unchanged.
   const loadData = async () => {
     try {
       const [data] = await Promise.all([
@@ -283,7 +289,7 @@ export default function App() {
         hydrateTeam().catch((err) => console.error('Failed to load team directory:', err)),
         hydratePermissions().catch((err) => console.error('Failed to load permissions:', err)),
       ]);
-      setClients(data);
+      if (data) setClients(data);
     } catch (err) {
       console.error('Failed to load clients:', err);
     } finally {
@@ -1061,10 +1067,11 @@ export default function App() {
     }
   };
 
+  // Updates just this client on screen from the server's answer — it used to
+  // reload every client and nine other modules after each save.
   const handleUpdateClient = async (clientId, updates) => {
     try {
-      await updateClient(clientId, updates);
-      await loadData();
+      applySavedClient(await updateClient(clientId, updates));
     } catch (err) {
       alert('Error updating client: ' + err.message);
     }
@@ -1222,10 +1229,11 @@ export default function App() {
     return { done, failed };
   };
 
-  // Re-fetch just the current client directory (used by several module views).
+  // Re-fetch just the current client directory (used by several module views)
+  // — a no-op when it hasn't changed.
   const refreshClients = async () => {
     const data = await getClients();
-    setClients(data);
+    if (data) setClients(data);
   };
 
   // Which data each module view depends on. Clicking into a module re-pulls

@@ -43,7 +43,12 @@ export function createApp() {
   app.use(cookieParser());
 
   // Health check (no auth) — used by uptime checks and the verification steps.
-  app.get('/health', (req, res) => res.json({ status: 'ok', env: config.env, time: new Date().toISOString() }));
+  // `rev` is the deployed commit (Render sets RENDER_GIT_COMMIT), so a deploy
+  // can be confirmed from outside.
+  app.get('/health', (req, res) => res.json({
+    status: 'ok', env: config.env, time: new Date().toISOString(),
+    rev: (process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || undefined,
+  }));
 
   // Throttle auth attempts to blunt brute-force / credential stuffing.
   const authLimiter = rateLimit({

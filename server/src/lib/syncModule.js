@@ -126,21 +126,34 @@ const fieldChanged = (before, after, key) => JSON.stringify(before?.[key] ?? nul
  *                       // as part of a granted assignment
  *   stageRights,       // { [stage]: action } — moving INTO that stage also
  *                       // needs this matrix action (Leads: Converted → convert)
+ *   partial,           // true: `incoming` is only the records that changed and
+ *                       // `deleteIds` the ones removed — nothing else is
+ *                       // touched, read or returned (see routes/tasks.js PATCH)
+ *   deleteIds,         // partial only: ids to (soft-)delete, same checks as an
+ *                       // omitted row in a full sync
  * }
- * @returns { list, stats }
+ * @returns { list, stats, events, removedIds }  — in partial mode `list` holds
+ *   only the touched records and `removedIds` the touched ids now gone/hidden
  */
 export async function syncBulk(prisma, spec) {
   const {
     module, modelKey, incoming, actor, promote,
     stageField = null, assignOnCreate = 'admin', assignOnEdit = 'admin', deptOwnerIsActor = false,
     assignFields = [], assignCompanions = [], assignStage = null, stageRights = {},
+    partial = false, deleteIds = [],
   } = spec;
   const assignFieldSet = new Set(assignFields);
   const assignCompanionSet = new Set(assignCompanions);
   const moduleFor = typeof module === 'function' ? module : () => module;
   const model = prisma[modelKey];
 
-  const existingRows = await model.findMany();
+  // A partial sync reads only the rows it was sent (plus the ones to delete),
+  // so the DELETE pass below sees exactly `deleteIds` as "omitted" and never
+  // mistakes the rest of the table for a delete request.
+  const touchedIds = partial ? [...new Set([...incoming.map((r) => r.id), ...deleteIds])] : null;
+  const existingRows = partial
+    ? await model.findMany({ where: { id: { in: touchedIds } } })
+    : await model.findMany();
   const byId = new Map(existingRows.map((r) => [r.id, r]));
   const incomingIds = new Set(incoming.map((r) => r.id));
   const stats = { created: 0, updated: 0, rejected: 0, deleted: 0, kept: 0, failed: 0 };
@@ -413,6 +426,17 @@ export async function syncBulk(prisma, spec) {
     } else {
       stats.kept++; // omission is NOT a delete — the record survives
     }
+  }
+
+  if (partial) {
+    const after = await model.findMany({ where: { id: { in: touchedIds } }, orderBy: { createdAt: 'desc' } });
+    const visible = after.filter((r) => !r.deletedAt && can(actor, moduleFor(r), 'view', r));
+    const visibleIds = new Set(visible.map((r) => r.id));
+    return {
+      list: visible.map((r) => r.payload),
+      removedIds: touchedIds.filter((id) => !visibleIds.has(id)),
+      stats, events,
+    };
   }
 
   // Scope the returned "authoritative list" to what the actor can actually

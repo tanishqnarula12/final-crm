@@ -14,7 +14,8 @@ import {
   readSubPersons,
 } from '../utils/tasks';
 import { uid } from '../utils/calc';
-import { updateClient } from '../services/db';
+import { updateClient, applySavedClient } from '../services/db';
+import { useClientWithFiles, slimForSave } from '../services/clientFiles';
 import { useBlobUrl } from '../utils/documents';
 
 export default function TasksView({ clients = [], isViewer, activeTaskId, setActiveTaskId, onOpenTask, tasksChangeCounter }) {
@@ -670,11 +671,14 @@ export function TaskFormModal({ initial, clients, isViewer, onClose, onSave }) {
     ...(initial?.documents || {})
   }));
 
-  // Must be declared before the useEffect below that depends on it
-  const selectedClient = useMemo(
+  // Must be declared before the useEffect below that depends on it. The
+  // client list carries documents without their files; an NFT task (the kind
+  // with a documents section) loads this client's files so existing
+  // documents can be previewed and linked as before.
+  const selectedClient = useClientWithFiles(useMemo(
     () => clients.find(c => c.id === groupLeaderId) || clients.find(c => c.name === groupLeader) || null,
     [clients, groupLeaderId, groupLeader]
-  );
+  ), relatedTo === 'NFT');
 
   // Sync dataUrl from client attachments
   useEffect(() => {
@@ -796,10 +800,15 @@ export function TaskFormModal({ initial, clients, isViewer, onClose, onSave }) {
       return true;
     });
 
-    await updateClient(selectedClient.id, {
-      clientDetails: { ...selectedClient.clientDetails, attachments: [...newAttachments, ...rest] }
-    });
-    if (window.refreshAppData) await window.refreshAppData();
+    // Nothing added or removed (e.g. a plain stage change) → no client save at
+    // all; otherwise documents already on the client go back without their
+    // files (slimForSave — the server keeps the stored ones).
+    const nextAttachments = [...newAttachments, ...rest];
+    const existingSet = new Set(existingClientDocs);
+    if (nextAttachments.length === existingClientDocs.length && nextAttachments.every(a => existingSet.has(a))) return;
+    applySavedClient(await updateClient(selectedClient.id, {
+      clientDetails: { ...selectedClient.clientDetails, attachments: nextAttachments.map(slimForSave) }
+    }));
   };
 
   const updateNftField = (field, value) => {

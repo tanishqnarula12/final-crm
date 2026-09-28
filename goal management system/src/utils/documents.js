@@ -7,7 +7,7 @@
 // so the existing preview components can render it in an iframe and download it.
 
 import { useEffect, useMemo } from 'react';
-import { updateClient } from '../services/db';
+import { updateClient, applySavedClient } from '../services/db';
 import { getCurrentUser } from './auth';
 
 // Converts a base64 `data:` URL into an in-memory `blob:` URL. Chromium caps
@@ -254,9 +254,10 @@ export const saveGeneratedDocument = async (client, { kind, label, html, name: e
   };
   const details = client.clientDetails || {};
   const existing = details.attachments || [];
-  await updateClient(client.id, {
+  // Only this client is updated on screen afterwards (it used to wait for a
+  // reload of every client with every document file).
+  applySavedClient(await updateClient(client.id, {
     clientDetails: { ...details, attachments: [attachment, ...existing] },
-  });
-  if (window.refreshAppData) await window.refreshAppData();
+  }));
   return name;
 };

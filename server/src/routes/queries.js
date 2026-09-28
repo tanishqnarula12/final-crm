@@ -15,6 +15,7 @@ import { syncBulk } from '../lib/syncModule.js';
 import { can } from '../lib/permissions.js';
 import { notifyFromEvents } from '../lib/notify.js';
 import { listActivity } from '../lib/activityLog.js';
+import { checkUnchanged, loadRowsCached } from '../lib/listVersion.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -49,10 +50,13 @@ async function loadVisibleQuery(req, res, id) {
 
 // Queries are private to the two people on them (raiser + recipient) — Admin
 // sees everything; everyone else only sees queries they're involved in.
+// `?since=<version>` → `{ unchanged: true }` when nothing changed (lib/listVersion.js).
 router.get('/', asyncHandler(async (req, res) => {
-  const rows = await prisma.query.findMany({ where: { deletedAt: null }, orderBy: { createdAt: 'desc' } });
+  const check = await checkUnchanged(req, res, prisma, ['queries']);
+  if (check.unchanged) return;
+  const rows = await loadRowsCached(prisma, 'query', check.fingerprint);
   const visible = rows.filter((r) => can(req.user, 'queries', 'view', r));
-  res.json({ queries: visible.map((r) => r.payload) });
+  res.json({ queries: visible.map((r) => r.payload), version: check.version });
 }));
 
 router.put('/', asyncHandler(async (req, res) => {
