@@ -13,6 +13,7 @@ import { syncBulk } from '../lib/syncModule.js';
 import { can } from '../lib/permissions.js';
 import { notifyFromEvents } from '../lib/notify.js';
 import { checkUnchanged, tableFingerprint, loadRowsCached } from '../lib/listVersion.js';
+import { slimTask, slimTaskList, pickTaskFiles, canOpenTaskFiles, restoreTaskFiles } from '../lib/taskFiles.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -46,12 +47,25 @@ const taskModuleFor = (r) => COBR_WORKSPACE_MODULE[r?.relatedTo ?? r?.payload?.r
 // Tasks are private to the two people on them (assigner + assignee) — Admin
 // sees everything; everyone else only sees tasks where they're involved.
 // `?since=<version>` → `{ unchanged: true }` when nothing changed (lib/listVersion.js).
+// `?slim=1` → attachments without their files (lib/taskFiles.js).
 router.get('/', asyncHandler(async (req, res) => {
   const check = await checkUnchanged(req, res, prisma, ['tasks']);
   if (check.unchanged) return;
   const rows = await loadRowsCached(prisma, 'task', check.fingerprint);
   const visible = rows.filter((r) => can(req.user, taskModuleFor(r), 'view', r));
-  res.json({ tasks: visible.map((r) => r.payload), version: check.version });
+  const slim = req.query.slim ? slimTaskList(rows) : null;
+  res.json({ tasks: visible.map((r) => (slim ? slim.get(r.id) : r.payload)), version: check.version });
+}));
+
+// GET /api/tasks/:id/files[?ids=a,b] — attachment files for one task:
+// `{ files: { [attachmentId]: { dataUrl } } }`. For slim lists.
+router.get('/:id/files', asyncHandler(async (req, res) => {
+  const row = await prisma.task.findUnique({ where: { id: req.params.id } });
+  if (!row || row.deletedAt) return res.status(404).json({ error: 'Task not found' });
+  if (!(await canOpenTaskFiles(prisma, req.user, row, taskModuleFor))) return res.status(403).json({ error: 'Not allowed' });
+  const ids = typeof req.query.ids === 'string' && req.query.ids ? req.query.ids.split(',').slice(0, 200) : null;
+  res.set('Cache-Control', 'no-store');
+  res.json({ files: pickTaskFiles(row.payload, ids) });
 }));
 
 // GET /api/tasks/closed-for-client/:clientId — CLOSED tasks (Completed/Lost)
@@ -73,7 +87,8 @@ router.get('/closed-for-client/:clientId', asyncHandler(async (req, res) => {
     const isClosed = p.stage === 'Completed' || p.stage === 'Lost';
     return forClient && isClosed;
   });
-  res.json({ tasks: closed.map((r) => r.payload) });
+  const slim = req.query.slim ? slimTaskList(rows) : null;
+  res.json({ tasks: closed.map((r) => (slim ? slim.get(r.id) : r.payload)) });
 }));
 
 const syncSpec = {
@@ -94,6 +109,7 @@ const syncSpec = {
 // Whole-list save — what older browsers still send.
 router.put('/', asyncHandler(async (req, res) => {
   const { tasks } = parseBody(bulkSchema, req.body);
+  await restoreTaskFiles(prisma, req.user, tasks, taskModuleFor);
   const { list, stats, events } = await syncBulk(prisma, { ...syncSpec, incoming: tasks, actor: req.user });
   res.json({ ok: true, tasks: list, stats });
   notifyFromEvents(prisma, events).catch((err) => console.error('[notify] tasks:', err));
@@ -109,10 +125,12 @@ router.put('/', asyncHandler(async (req, res) => {
 // that server reading a short list as "delete everything else".
 router.patch('/', asyncHandler(async (req, res) => {
   const { tasks, deletedIds } = parseBody(partialSchema, req.body);
+  await restoreTaskFiles(prisma, req.user, tasks, taskModuleFor);
   const { list, stats, events, removedIds } = await syncBulk(prisma, {
     ...syncSpec, incoming: tasks, actor: req.user, partial: true, deleteIds: deletedIds,
   });
-  res.json({ ok: true, tasks: list, removedIds, stats });
+  // `?slim=1`: answer in the shape the browser keeps (files stay on the server).
+  res.json({ ok: true, tasks: req.query.slim ? list.map(slimTask) : list, removedIds, stats });
   notifyFromEvents(prisma, events).catch((err) => console.error('[notify] tasks:', err));
 }));
 

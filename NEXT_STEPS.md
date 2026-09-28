@@ -10,7 +10,8 @@ Do the items in the order of section 5, one at a time. Each gets tested and depl
 | 28 Sep, 15:19 | §2 Sessions stay signed in while used + sign-in box when a session ends | `c981013` | ✅ Live |
 | 28 Sep, 15:32 | §4-B Permission matrix re-check sends "unchanged" (58 bytes) instead of 23 KB | `49ce31b` | ✅ Live |
 | 28 Sep, 15:38 | §4-H step 1 (server): a client save that leaves `notes` out keeps the stored notes | `46fcf65` | ✅ Live |
-| 28 Sep | §4-H step 2 (app): client saves stop sending notes; Edit Client form stops sending documents | see git log | ✅ Pushed |
+| 28 Sep, ~15:50 | §4-H step 2 (app): client saves stop sending notes; Edit Client form stops sending documents | `7eec589` | ✅ Live (website only — Render doesn't redeploy for non-`server/` changes, so `/health` stays on `46fcf65`) |
+| 28 Sep | §4-A step 1 (server): `?slim=1` task lists, `GET /tasks/:id/files`, files restored on save | see git log | ✅ Pushed |
 
 ---
 
