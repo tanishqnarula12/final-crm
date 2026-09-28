@@ -10,12 +10,19 @@ import { getCurrentUser } from '../utils/auth';
 
 let CATALOG = null;
 let MATRIX = {}; // MATRIX[module][action][role] = scope
+// The server's matrix version from the last full download. App re-checks the
+// matrix every 30 s; sending this back gets a tiny "unchanged" answer unless
+// an admin saved a change (older servers ignore it and send the full matrix).
+let VERSION = null;
 
 export async function hydratePermissions() {
   try {
-    const { catalog, matrix } = await api.get('/permissions');
-    CATALOG = catalog;
-    MATRIX = matrix || {};
+    const since = VERSION && CATALOG ? `?since=${encodeURIComponent(VERSION)}` : '';
+    const res = await api.get(`/permissions${since}`);
+    if (res?.unchanged) return { CATALOG, MATRIX };
+    CATALOG = res.catalog;
+    MATRIX = res.matrix || {};
+    VERSION = res.version || null;
   } catch (err) {
     console.error('Failed to load permission matrix:', err);
   }

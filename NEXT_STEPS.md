@@ -1,0 +1,275 @@
+# Fintness CRM: planned follow-up work
+
+Written 28 Sep 2026, right after the speed fix (commit `c17870d`) went live, and updated as each item ships.
+Do the items in the order of section 5, one at a time. Each gets tested and deployed the way section 6 describes.
+
+## Progress log
+
+| When (UTC) | Item | Commit | Status |
+|---|---|---|---|
+| 28 Sep, 15:19 | §2 Sessions stay signed in while used + sign-in box when a session ends | `c981013` | ✅ Live |
+| 28 Sep | §4-B Permission matrix re-check sends "unchanged" (58 bytes) instead of 23 KB | see git log | ✅ Pushed |
+
+---
+
+## 1. Where things stand today
+
+**What was wrong.** Every uploaded document (PDFs, photos, generated proposals and MOMs) is stored inside the
+client's record in the database (`clients.clientDetails.attachments`, as base64 text). The 417 clients came to
+61.9 MB, and 99% of that was document files. The app downloaded all of it:
+
+- on login,
+- after most saves,
+- every 12 seconds while anyone had the Dashboard, Clients, Documents or a client profile open.
+
+This made saves slow, and it used **681 GB of Supabase's 250 GB monthly egress**. The billing cycle runs from the 7th to the 7th.
+
+**What `c17870d` changed (live 28 Sep 2026, 11:13 UTC):**
+
+| Change | Result |
+|---|---|
+| The client list no longer carries files. A file loads only when someone opens it. | 61.9 MB → 908 KB |
+| Background refresh asks "changed since?" first. | 58 bytes when nothing changed |
+| Note, document and proposal saves update only that client on screen. | A note shows in ~60 ms instead of after a full reload |
+| Saving a task sends only that task. | Was the full 9 MB task list |
+| A background refresh can no longer undo a save in progress. | Fixed the prospect Qualified → Close Won flicker |
+| `https://crm-api.fintness.in/health` now shows the deployed commit (`rev`). | Server deploys can be confirmed from outside |
+
+**Also live since 28 Sep 2026, 12:37 UTC (`eeb4bea` + `4aaa6d4`):**
+
+- **Note saves.** Notes save on their own (`POST/PATCH/DELETE /api/clients/:id/notes`). A note no longer rewrites
+  the whole client with its documents: ~700 ms → ~50 ms on a 10 MB client in testing.
+- **Save buttons.** Waiting saves go **Save → Saving… → ✓ Saved** and ignore repeat clicks (`utils/useSaveAction.js`,
+  `SaveLabel`). This covers notes, document rename/delete/upload, and "Save Document" on proposals, MOM, policy
+  review and portfolio review.
+- **Work anniversaries**, the same way as birthdays. They come from the profile's **Member since** date
+  (`teamMemberSince`).
+  - What happens on the day: from 8 AM (server time) a Notice Board post appears and expires at the end of that day,
+    and every other teammate gets a notification.
+  - The wording lives in `workAnniversaryText` in `server/src/lib/notificationScheduler.js`.
+  - The first real one is 10 Nov 2026.
+  - The "Fintness Finserv" admin account also has a Member since date, so it gets a post on 16 Apr. Clear that date
+    if you don't want it.
+
+**Keep an eye on:**
+
+- Supabase → **Usage → Egress**, daily view. It should drop from about 32 GB/day to about 1–2 GB/day.
+- The 681 GB already used stays counted until 7 Oct.
+- If Supabase restricts the project before then, turn off the spend cap (about $0.09 per extra GB) or contact their support.
+
+**No upgrade is needed** on Render or Supabase.
+
+---
+
+## 2. Preksha: "Not authenticated" when saving a proposal document  *(✅ done: `c981013`, live 28 Sep 15:19 UTC)*
+
+**What shipped:**
+
+- **Sessions renew while in use.** `POST /api/auth/renew` and `GET /api/auth/me` re-issue the cookie once the token
+  is 12 hours old (`renewSessionIfOld` in `server/src/lib/jwt.js`). The app calls renew about hourly and when a tab
+  comes back into view. Someone who uses the CRM daily now stays signed in; 7 days of no use still ends the session.
+- **Only those two routes renew**, never ordinary data requests. Otherwise a background refresh that finished just
+  after "Log out" could set a fresh cookie and quietly sign the user back in.
+- **A sign-in box when a session ends** (`SessionExpiredModal.jsx`). Any 401 outside the sign-in calls says "Your
+  session has ended. Please sign in again, then try once more." The box sits over the current screen, locked to the
+  same account, so a half-filled proposal or note is kept. The 12-second refresh notices within seconds.
+- **Other tabs follow.** Log out in one tab and the others show the box at once. Sign back in anywhere and the box
+  closes everywhere. If a *different* account signs in, other tabs reload.
+- **Sign-in attempt limit fixed.** It counted every `/api/auth/*` call per address, including the page-load session
+  check. Behind the proxy many teammates can share one address. Now only password attempts (`POST /login`,
+  `/change-password`) count, still 30 per 15 minutes.
+
+**Tested:**
+
+- 17 server checks with 2-minute sessions: renewal timing, an expired token can't be revived, logout, and the limit.
+- 16 browser checks as an Insurance Manager with the production permission matrix: a note typed before expiry
+  survives, it saves after signing in, the background refresh notices, other tabs follow, Sign out works.
+
+**Conclusions / what to watch:**
+
+- Most users won't see anything new. The box appears only if a session actually ends.
+- Anyone with a CRM tab that was open before 15:19 UTC gets renewal only after the tab reloads. The update banner
+  prompts a reload.
+- **Ask Preksha** to reload once. If "not authorised" ever appears again, it will now be the sign-in box (session)
+  or a different, specific message. Get a screenshot of that message.
+
+<details><summary>Original analysis (kept for reference)</summary>
+
+
+**Symptom.** Preksha Jain (Insurance Manager) can browse, but "Save Document" on a proposal opened from a client's
+profile fails with an authorisation-style message.
+
+**Already ruled out (checked 28 Sep, read-only):**
+
+- **Permissions.** Her matrix has Documents → Upload = All and Clients → Edit Personal = All. The server cannot refuse
+  this save for permission reasons. Even the built-in fallback defaults allow uploads for every role.
+- **The proposal screen.** An Insurance Manager gets the Insurance Proposal tab (`ProposalWorkspace.jsx`).
+- **Cloudflare.** Save-shaped requests (1 MB and 279 KB) sent to the live API reached the server, which replied
+  401 "Not authenticated" as expected with no login. No Cloudflare block.
+- **The save path.** It works for everyone else: Manish saved 10 documents on 28 Sep. Her own proposal saves on
+  19 and 21 Sep are stored correctly.
+
+**Most likely cause: the session ends while the app stays open.**
+
+- A login lasts a fixed 7 days (`server/src/config.js` `tokenTtl`, `server/src/lib/jwt.js` cookie `maxAge`). Using the
+  CRM does not extend it.
+- The app checks the session only when the page first loads (`refreshSession()` in `src/utils/auth.js`).
+- If a tab or the installed app stays open past 7 days, or the user logs out in another tab, the browser drops the cookie.
+- Background refreshes then fail silently and keep showing old data.
+- The first save fails with **"⚠️ Not authenticated"**.
+
+**Confirm first.** Ask Preksha for a screenshot of the exact message. "Not authenticated" or "Session invalid or
+expired" confirms this cause.
+
+**Workaround until it's fixed.** Close every CRM tab and the installed app, reopen crm.fintness.in, sign in, then save.
+
+**Fix to build:**
+
+1. **Server: renew the session while in use.**
+   - In `server/src/middleware/auth.js` `requireAuth`, when the token is older than about 12 hours, sign a new
+     token and set the cookie again. Use the same `cookieOptions()`.
+   - Active users then stay signed in. A session still ends after 7 days of no use.
+   - Chat uses the same cookie (`server/src/chat/socket.js`), and nothing there needs to change.
+2. **Frontend: a clear sign-in prompt.**
+   - In `src/services/api.js`, a 401 from any endpoint (except login, change-password and the startup `/auth/me`)
+     fires a `crm:session-expired` event.
+   - `App.jsx` shows a small **sign-in box on top of the current screen**. It does not switch to the login page, so
+     a half-filled proposal is not lost. After signing in, the user clicks Save again.
+   - The 12-second background refreshes would trigger the same prompt, so an expired session is noticed within
+     seconds, not at the next save.
+3. **Test locally.**
+   - Set `TOKEN_TTL=2m` and confirm the prompt appears, form state survives, and the save works after signing in.
+   - Confirm the cookie is re-issued after the renewal threshold.
+   - Confirm logout in another tab triggers the prompt.
+
+</details>
+
+---
+
+## 3. Move document files into Supabase Storage  *(priority 2, medium)*
+
+### What Supabase Storage is
+
+File storage built into the Supabase project, like a Google Drive for the app. The Pro plan includes **100 GB**;
+we use 0 GB today. Files live in **buckets** (top-level folders). A **private** bucket's files can only be opened
+through a temporary **signed link**, which our server creates after checking the CRM's normal permissions.
+
+### How to use it in the dashboard
+
+- **Storage** (left menu) → **New bucket** → name `client-documents` → leave **Public bucket OFF** → Create.
+- Click a bucket to browse folders and files. You can upload, download, rename and delete by hand. The API path
+  (`clients/<clientId>/<documentId>`) will show up as folders.
+- **Project Settings → API** holds the project URL and the **`service_role`** key.
+  - The `service_role` key bypasses all security rules. It goes **only** into Render's environment settings.
+    Never put it in the website, git, or a chat.
+- Check **Storage → Settings** for the upload size limit. We currently cap uploads at 5 MB in the app, and can raise that.
+- Egress: downloading a file counts toward the same egress quota, but only when someone actually opens a document.
+
+### Setup (the account owner does this)
+
+1. Create the private bucket `client-documents` as above.
+2. In Render → the API service → **Environment**, add two variables:
+   - `SUPABASE_URL` (Project Settings → API → Project URL)
+   - `SUPABASE_SERVICE_ROLE_KEY` (Project Settings → API → `service_role`)
+
+### Build plan (developer)
+
+- **Library.** Add `@supabase/supabase-js` to `server/` only:
+  ```js
+  import { createClient } from '@supabase/supabase-js';
+  const storage = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { persistSession: false } }).storage.from('client-documents');
+  await storage.upload(path, buffer, { contentType, upsert: false });   // store
+  const { data } = await storage.createSignedUrl(path, 60);             // 60-second link
+  await storage.remove([path]);                                         // delete
+  ```
+- **Document shape.** Keep today's metadata (`id, name, fileName, fileType, category, applicantName, docNumber,
+  date, uploadedBy, source`). Add `storagePath` and `size`. Stop storing `dataUrl` / `html` inline.
+- **Upload.** New `POST /api/clients/:id/documents`, with the same permission rule as today (Documents → Upload). The
+  server stores the file at `clients/<clientId>/<documentId>` and appends the metadata.
+  - Optional later: the server hands the browser a signed *upload* URL so large files skip the API.
+- **Open.** `GET /api/clients/:id/files` returns signed URLs instead of base64. On the frontend, only
+  `src/services/clientFiles.js` changes much, because the app already loads files on demand since `c17870d`.
+  - HTML documents (proposals/MOMs) are fetched as text for preview and print.
+- **Generated documents.** `saveGeneratedDocument` in `src/utils/documents.js` uploads the HTML to Storage.
+- **Delete.** Removing a document also removes the file. Consider a 30-day "trash" folder instead of an immediate delete.
+- **During rollout, support both kinds of document** (inline `dataUrl` and `storagePath`). Old documents and old
+  browser tabs then keep working until the copy below finishes.
+- **One-time copy of existing documents** (about 160 documents, about 60 MB). Must be resumable and safe to re-run:
+  1. **Full backup first**: a Supabase backup and a JSON export of the `clients` table kept off-site.
+  2. **Dry run**: list every document and its size, and change nothing.
+  3. For each document: upload its bytes → download them again and compare checksums → only then update that
+     client, setting `storagePath` and removing the inline copy. Guard the update with `updatedAt` so a user edit
+     in between isn't overwritten.
+  4. Run off-hours. Keep the backup until everything has been checked in the app.
+  5. Reversible: a reverse script can re-inline files from Storage if ever needed.
+- **Same treatment later** for:
+  - task attachments (`tasks.payload.attachments` and `stageHistory[].attachments`, about 7.5 MB)
+  - chat images (`chat_messages`, 7.6 MB)
+  - query attachments (`query_attachments`, 2.1 MB)
+
+**Result.** The database shrinks from about 122 MB to about 50 MB. Documents open faster, uploads over 5 MB become
+possible, and backups get smaller.
+
+---
+
+## 4. Other speed and cost improvements
+
+| # | Improvement | Why | Effort |
+|---|---|---|---|
+| A | **Task attachments on demand.** Same approach as clients in `c17870d` (slim list + restore on save), or Storage (§3). | The task list is 9 MB (attachments 3.75 MB + stage-history attachments 3.82 MB). Any task change makes every open Tasks/Dashboard/Profile screen download it once. | Small–medium |
+| B | ✅ **Done 28 Sep.** "Changed since?" for the permission matrix. `GET /api/permissions?since=<version>` answers `{unchanged:true}` (58 bytes, no table read) until an admin saves the matrix or the server restarts (`permissionsVersion()`). The editor screen still always loads the full matrix. 16/16 tests. | Every open tab downloaded the full matrix (23 KB + a 567-row table read) every 30 s. | Small |
+| C | **Faster first load (code-splitting).** Load heavy screens only when opened: Portfolio Review, proposals, chat, Excel export, charts. | The main app file is 3.4 MB and 12 MB is cached for offline use, which is slow on phones. | Medium |
+| D | **More database connections.** Add `connection_limit` (for example 10) and `pool_timeout` to `DATABASE_URL` on Render. Test Supabase's pooler mode first. | On a 1-CPU server Prisma opens only 3 connections by default, so one slow request makes others wait. | Small (settings) |
+| E | **Fewer database round trips on hot paths.** For example, a client save does read + update + include + logs one after another. | The API likely runs in Singapore (Render has no India region) and the DB is in Mumbai: about 50–60 ms per query, 5–8 queries per save. Longer term, host the API in Mumbai. | Medium |
+| F | **Housekeeping.** Retention or cleanup for `activity_logs` and `notifications` (about 6,000 rows each and growing), paging in their screens, and an index check. | Keeps queries and backups fast as data grows. | Small–medium |
+| G | **Advisor profile loads.** Check `hydrateAdvisorProfile` / the `advisor_profiles.data` size. It is loaded on every full reload (75,000 calls so far). | Less repeated work. | Small |
+| H | **The Edit Client form can undo a note added meanwhile.** The form (`ClientFormModal` in `Modals.jsx`) sends back the notes it loaded when it opened, and `PATCH /clients/:id` saves the whole `clientDetails`. So a note a colleague adds while the form is open is lost when the form is saved. Fix: leave notes out of that save and let only the notes routes (added 28 Sep 2026) change them. | Prevents silently lost notes. | Small |
+
+---
+
+## 5. Suggested order
+
+1. **§2 Preksha's session fix.** Small, and it unblocks a user.
+2. **§4-B permission refresh and §4-A task attachments.** Small, with a big effect on egress.
+3. **§3 Supabase Storage.** Needs the bucket and the Render keys first.
+4. **§4-C faster first load, §4-D connections, §4-F housekeeping.**
+5. **§4-E** only if saves still feel slow after the above.
+
+---
+
+## 6. How each change should be shipped (same as `c17870d`)
+
+- **Branch cleanly.** Work in a fresh git worktree from `final-crm/main`. The local `crm 2.0` checkout is on an old
+  branch with unrelated edits, so never push from it.
+- **Test locally.**
+  - Docker DB `fintness-pg-dev` on port 5433, with the **production permission matrix** copied in (read-only from prod).
+  - Test users in every role.
+  - Browser tests of the affected screens.
+  - A click-through of every sidebar section as several roles.
+- **Check mixed versions.** Test the new app against the old server, and the old app against the new server. Users
+  keep old tabs open, and Vercel deploys before Render.
+- **Anything that touches stored data** also needs a read-only check against real production data before deploy.
+  For `c17870d` that was the 417-client save round-trip: every document byte-identical.
+- **Before pushing:**
+  - Confirm no migration is pending and nothing writes on startup.
+  - Get the owner's OK.
+- **After pushing:**
+  - Confirm `/health` shows the new `rev` and the live bundle contains the new code.
+  - Run read-only checks on production.
+- **Credentials.** Database passwords and keys are never written into files or commits.
+
+---
+
+## 7. Useful facts
+
+- **Hosting.**
+  - Website on Vercel (crm.fintness.in).
+  - API on Render, Standard plan, 1 CPU / 2 GB, probably Singapore (crm-api.fintness.in).
+  - Database on Supabase Pro, Micro compute, ap-south-1 Mumbai.
+- **Production permission notes (28 Sep 2026).**
+  - Documents → Delete is **None for every role except Admin**.
+  - Insurance Manager has Clients → Edit Personal = All, Documents → Upload = All, Investment Proposal = None.
+- **Duplicate client names are normal.** Some clients exist twice because of the 22 Jul re-import. The soft-deleted
+  copies have no documents, which is expected. For example, "Praveen Singh Sikarwar" has a deleted duplicate; the
+  live record holds all 3 documents.

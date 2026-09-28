@@ -13,7 +13,8 @@ import {
   MODULES, MATRIX_ROLES, ALL_ROLES, ROLE_LABELS, ACTION_LABELS, OWNERSHIP,
   buildDefaultRows, defaultScope,
 } from '../lib/permissionCatalog.js';
-import { refreshPermissions } from '../lib/permissions.js';
+import { refreshPermissions, isMatrixLoaded } from '../lib/permissions.js';
+import { listVersion } from '../lib/listVersion.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -36,10 +37,20 @@ async function readMatrix() {
   return matrix;
 }
 
+// Every open tab re-checks the matrix every 30 s. It changes only when an
+// admin saves it (or the server restarts), both of which bump
+// permissionsVersion(), so a tab that sends back the version it last got
+// hears a tiny `{ unchanged: true }` — no table read, no 23 KB matrix.
+const matrixVersion = () => listVersion(null, 'permission-matrix');
+
 router.get('/', asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const version = isMatrixLoaded() ? matrixVersion() : undefined;
+  if (version && req.query.since === version) return res.json({ unchanged: true, version });
   res.json({
     catalog: { modules: MODULES, roles: MATRIX_ROLES, allRoles: ALL_ROLES, roleLabels: ROLE_LABELS, actionLabels: ACTION_LABELS, ownership: OWNERSHIP },
     matrix: await readMatrix(),
+    version,
   });
 }));
 
