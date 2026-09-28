@@ -52,11 +52,13 @@ export function diffFields(oldObj = {}, newObj = {}, keys = null) {
   return out;
 }
 
-// File contents never belong in the audit trail. A changed attachment list on
-// a Renewal/Claim/FD/Policy record used to be logged whole — base64 and all —
-// so 9 log rows held 8.8 MB of the 9.5 MB log (Sep 2026), and the Activity Log
-// screen downloaded them. A file (a long `data:` URL) is logged as a short
-// label; any other huge string (a generated document's HTML) likewise.
+// The audit trail is stored complete — a changed attachment list on a
+// Renewal/Claim/FD/Policy record is logged whole, file contents included, so
+// the log keeps a copy of anything later removed from a record. But the log
+// VIEWS never send file contents: 9 such rows held 8.8 MB of the 9.5 MB log
+// (Sep 2026), and the Activity Log screen downloaded them. On the way out a
+// file (a long `data:` URL) becomes a short label such as "[file · 400 KB]",
+// and any other huge string (a generated document's HTML) likewise.
 const fmtSize = (chars) => (chars >= 1e6 ? `${(chars / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(chars / 1e3))} KB`);
 export function withoutFileData(v) {
   if (typeof v === 'string') {
@@ -79,8 +81,8 @@ export function logActivity(db, { module, recordId, action, oldValue = null, new
       moduleName: module,
       recordId: String(recordId),
       action,
-      oldValue: oldValue == null ? undefined : withoutFileData(oldValue),
-      newValue: newValue == null ? undefined : withoutFileData(newValue),
+      oldValue: oldValue ?? undefined,
+      newValue: newValue ?? undefined,
       performedBy,
     },
   });
@@ -104,7 +106,7 @@ export async function listActivity(prisma, where, limit = 200) {
     module: r.moduleName,
     recordId: r.recordId,
     action: r.action,
-    // Older rows may still hold file contents — never send those on.
+    // Stored rows can hold file contents (see above) — never send those on.
     oldValue: withoutFileData(r.oldValue),
     newValue: withoutFileData(r.newValue),
     performedBy: r.performedBy,
