@@ -14,6 +14,8 @@
 //   • WORK_ANNIVERSARY — same slot and shape as birthdays, for each user whose
 //     profile "Member since" date (teamMemberSince) falls today in a later
 //     year, with how many years they've been with the team.
+//   • Clean-up     — once a night, READ notifications older than 60 days are
+//     deleted (see runNotificationCleanup). Unread ones are never touched.
 //
 // All times are the server's local timezone, matching how meetings/tasks store
 // their date/time strings (no offset) and how the frontend parses them.
@@ -279,6 +281,33 @@ export async function runScheduledNotices(now) {
   }
 }
 
+// ---- Notification clean-up --------------------------------------------------
+// Once a night, notifications that were READ more than 60 days ago go. The
+// bell only ever shows unread ones, so nobody loses anything they can see;
+// unread notifications are never touched, whatever their age. Scheduled
+// reminders can't come back because of this: task-due / birthday / anniversary
+// keys carry their date, and a meeting reminder only fires for a meeting
+// starting in the next 10 minutes. Runs in the 21:00 UTC hour (02:30 IST, when
+// nobody's working), never on server start. NOTIFICATION_RETENTION_DAYS
+// changes the age; 0 switches the clean-up off.
+const RETENTION_DAYS = process.env.NOTIFICATION_RETENTION_DAYS
+  ? Number(process.env.NOTIFICATION_RETENTION_DAYS) : 60;
+const CLEANUP_UTC_HOUR = 21;
+let lastCleanupDay = null;
+
+export async function runNotificationCleanup(now, { days = RETENTION_DAYS } = {}) {
+  if (!(days > 0) || now.getUTCHours() !== CLEANUP_UTC_HOUR) return 0;
+  const day = now.toISOString().slice(0, 10);
+  if (lastCleanupDay === day) return 0;
+  lastCleanupDay = day;
+  const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const { count } = await prisma.notification.deleteMany({
+    where: { readAt: { not: null }, createdAt: { lt: cutoff } },
+  });
+  console.log(`[scheduler] notification clean-up: removed ${count} read notification(s) older than ${days} days`);
+  return count;
+}
+
 async function tick() {
   const now = new Date();
   try { await runMeetingReminders(now); } catch (err) { console.error('[scheduler] meetings:', err); }
@@ -286,6 +315,7 @@ async function tick() {
   try { await runBirthdayReminders(now); } catch (err) { console.error('[scheduler] birthdays:', err); }
   try { await runWorkAnniversaryReminders(now); } catch (err) { console.error('[scheduler] work anniversaries:', err); }
   try { await runScheduledNotices(now); } catch (err) { console.error('[scheduler] scheduled-notices:', err); }
+  try { await runNotificationCleanup(now); } catch (err) { console.error('[scheduler] notification clean-up:', err); }
 }
 
 export function startNotificationScheduler() {
