@@ -8,7 +8,8 @@ Do the items in the order of section 5, one at a time. Each gets tested and depl
 | When (UTC) | Item | Commit | Status |
 |---|---|---|---|
 | 28 Sep, 15:19 | §2 Sessions stay signed in while used + sign-in box when a session ends | `c981013` | ✅ Live |
-| 28 Sep | §4-B Permission matrix re-check sends "unchanged" (58 bytes) instead of 23 KB | see git log | ✅ Pushed |
+| 28 Sep, 15:32 | §4-B Permission matrix re-check sends "unchanged" (58 bytes) instead of 23 KB | `49ce31b` | ✅ Live |
+| 28 Sep | §4-H step 1 (server): a client save that leaves `notes` out keeps the stored notes | see git log | ✅ Pushed |
 
 ---
 

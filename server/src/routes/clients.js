@@ -318,6 +318,14 @@ router.patch('/:id', asyncHandler(async (req, res) => {
       prisma, req.user, existing.id, requested.clientDetails.attachments, existing.clientDetails?.attachments,
     );
   }
+  // Notes have their own routes (below). A save that leaves `notes` out of
+  // clientDetails keeps the stored ones, the same way a missing `attachments`
+  // keeps the stored documents — so the Edit Client form, or a document
+  // save, can't undo a note someone added while it was open.
+  if (requested.clientDetails && !('notes' in requested.clientDetails)
+      && existing.clientDetails && 'notes' in existing.clientDetails) {
+    requested.clientDetails = { ...requested.clientDetails, notes: existing.clientDetails.notes };
+  }
   const { data, refusals, applied } = authorizeClientPatch(req.user, existing, requested);
   if (refusals.length && applied === 0) {
     return forbidden(res, `You don't have permission to ${refusals.join(' or ')}.`);
