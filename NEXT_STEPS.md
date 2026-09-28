@@ -11,7 +11,8 @@ Do the items in the order of section 5, one at a time. Each gets tested and depl
 | 28 Sep, 15:32 | §4-B Permission matrix re-check sends "unchanged" (58 bytes) instead of 23 KB | `49ce31b` | ✅ Live |
 | 28 Sep, 15:38 | §4-H step 1 (server): a client save that leaves `notes` out keeps the stored notes | `46fcf65` | ✅ Live |
 | 28 Sep, ~15:50 | §4-H step 2 (app): client saves stop sending notes; Edit Client form stops sending documents | `7eec589` | ✅ Live (website only — Render doesn't redeploy for non-`server/` changes, so `/health` stays on `46fcf65`) |
-| 28 Sep | §4-A step 1 (server): `?slim=1` task lists, `GET /tasks/:id/files`, files restored on save | see git log | ✅ Pushed |
+| 28 Sep, 16:11 | §4-A step 1 (server): `?slim=1` task lists, `GET /tasks/:id/files`, files restored on save | `4537cf0` | ✅ Live |
+| 28 Sep | §4-A step 2 (app): tasks load slim (9.7 MB → 0.29 MB); files open on click | see git log | ✅ Pushed |
 
 ---
 
@@ -220,7 +221,8 @@ possible, and backups get smaller.
 
 | # | Improvement | Why | Effort |
 |---|---|---|---|
-| A | **Task attachments on demand.** Same approach as clients in `c17870d` (slim list + restore on save), or Storage (§3). | The task list is 9 MB (attachments 3.75 MB + stage-history attachments 3.82 MB). Any task change makes every open Tasks/Dashboard/Profile screen download it once. | Small–medium |
+| A | ✅ **Done 28 Sep (`4537cf0` server, then the app).** The files sit in the Renewal / Claim / FD / Other-Policy registers (Task rows): `payload.attachments[]` 5.1 MB and `payload.stageHistory[].attachments[]` 4.3 MB (copies of the same files, never shown on screen). `?slim=1` lists drop them (`server/src/lib/taskFiles.js`); `GET /api/tasks/:id/files` serves one when clicked (register chips, and the client's Documents tab via `cobrWorkspaceDocuments` → `taskId`); saves put them back (`restoreTaskFiles`). Checks: 27 server + 4 access checks locally, all 241 production tasks round-trip byte-identical (read-only), 13 browser checks each as Admin and Insurance Manager, click-through of every section as 4 roles. **Found while testing, for §4-F:** when a register's attachments change, the activity log stores the *full files* in `oldValue`/`newValue`. | — | — |
+| A (original) | **Task attachments on demand.** Same approach as clients in `c17870d` (slim list + restore on save), or Storage (§3). | The task list is 9 MB (attachments 3.75 MB + stage-history attachments 3.82 MB). Any task change makes every open Tasks/Dashboard/Profile screen download it once. | Small–medium |
 | B | ✅ **Done 28 Sep.** "Changed since?" for the permission matrix. `GET /api/permissions?since=<version>` answers `{unchanged:true}` (58 bytes, no table read) until an admin saves the matrix or the server restarts (`permissionsVersion()`). The editor screen still always loads the full matrix. 16/16 tests. | Every open tab downloaded the full matrix (23 KB + a 567-row table read) every 30 s. | Small |
 | C | **Faster first load (code-splitting).** Load heavy screens only when opened: Portfolio Review, proposals, chat, Excel export, charts. | The main app file is 3.4 MB and 12 MB is cached for offline use, which is slow on phones. | Medium |
 | D | **More database connections.** Add `connection_limit` (for example 10) and `pool_timeout` to `DATABASE_URL` on Render. Test Supabase's pooler mode first. | On a 1-CPU server Prisma opens only 3 connections by default, so one slow request makes others wait. | Small (settings) |

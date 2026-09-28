@@ -470,6 +470,7 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
         <AttachmentField
           label="Documents Collected"
           files={f.attachments}
+          taskId={record?.id}
           onChange={(files2) => set({ attachments: files2 })}
           hint="Attach whatever has been collected so far (optional)."
         />

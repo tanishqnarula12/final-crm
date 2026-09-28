@@ -11,14 +11,34 @@ import { btnGhost } from '../UI';
 import { getCurrentUser } from '../../utils/auth';
 import { uid } from '../../utils/calc';
 import { useBlobUrl } from '../../utils/documents';
+import { needsFile, ensureTaskFile } from '../../services/clientFiles';
 
-export function AttachmentChips({ files = [], onRemove, compact = false }) {
+// `taskId`: the record these files are saved on. Saved files arrive without
+// their contents (utils/tasks.js loads tasks slim), so opening one fetches it
+// from that record first.
+export function AttachmentChips({ files = [], onRemove, compact = false, taskId = null }) {
   const [preview, setPreview] = useState(null);
+  const [opening, setOpening] = useState(null);
   // A raw base64 data: URL silently fails to load in an <iframe> once it's
   // long enough (a multi-page/landscape PDF crosses that well under any sane
   // upload-size limit) — see useBlobUrl in utils/documents for why.
   const previewPdfBlobUrl = useBlobUrl((preview?.dataUrl || '').startsWith('data:application/pdf') ? preview.dataUrl : null);
   if (!files.length) return null;
+
+  const open = async (f) => {
+    if (!needsFile(f)) { if (f.dataUrl) setPreview(f); return; }
+    if (!taskId || opening) return;
+    setOpening(f.id);
+    try {
+      const full = await ensureTaskFile(taskId, f);
+      if (full.dataUrl) setPreview(full);
+      else alert('This file could not be found.');
+    } catch (err) {
+      alert(err?.message || 'Could not open this file.');
+    } finally {
+      setOpening(null);
+    }
+  };
 
   return (
     <>
@@ -32,10 +52,10 @@ export function AttachmentChips({ files = [], onRemove, compact = false }) {
             <Paperclip size={compact ? 9 : 10} className="shrink-0" />
             <button
               type="button"
-              onClick={() => f.dataUrl && setPreview(f)}
+              onClick={() => open(f)}
               className="truncate hover:underline cursor-pointer"
             >
-              {f.name || f.fileName || 'file'}
+              {opening === f.id ? 'Opening…' : (f.name || f.fileName || 'file')}
             </button>
             {onRemove && (
               <button
@@ -98,6 +118,7 @@ export default function AttachmentField({
   disabled = false,
   lockedHint = '',
   hint = '',
+  taskId = null,
 }) {
   const inputRef = useRef(null);
 
@@ -152,7 +173,7 @@ export default function AttachmentField({
         <p className="text-[10px] text-slate-400 dark:text-slate-500 italic">{hint || 'No files attached yet.'}</p>
       ) : null}
 
-      <AttachmentChips files={files} onRemove={disabled ? null : remove} />
+      <AttachmentChips files={files} onRemove={disabled ? null : remove} taskId={taskId} />
     </div>
   );
 }

@@ -73,6 +73,28 @@ export async function ensureFile(clientId, a) {
   return withFile(a);
 }
 
+// Task attachments (Renewal / Claim / FD / Other-Policy records) come slim the
+// same way (utils/tasks.js asks for ?slim=1); their files live on the task.
+export function fetchTaskFiles(taskId, ids) {
+  const key = `task:${taskId}|${ids ? [...ids].sort().join(',') : '*'}`;
+  if (inflight.has(key)) return inflight.get(key);
+  const qs = ids ? `?ids=${encodeURIComponent(ids.join(','))}` : '';
+  const p = api.get(`/tasks/${encodeURIComponent(taskId)}/files${qs}`)
+    .then(({ files: got } = {}) => {
+      Object.entries(got || {}).forEach(([id, f]) => remember(id, f));
+      return got || {};
+    })
+    .finally(() => inflight.delete(key));
+  inflight.set(key, p);
+  return p;
+}
+
+export async function ensureTaskFile(taskId, a) {
+  if (!needsFile(a) || files.has(a.id) || !taskId) return withFile(a);
+  await fetchTaskFiles(taskId, [a.id]);
+  return withFile(a);
+}
+
 // A client with every document's file filled in — fetched in the background
 // the first time; until then the documents are returned slim (their details
 // still show). For forms that preview or link a client's existing documents;
@@ -102,20 +124,25 @@ export function useClientWithFiles(client, enabled = true) {
   }, [client, atts, tick]);
 }
 
-// One document for a preview: { file, loading, error }.
-export function useAttachmentFile(clientId, att) {
+// One document for a preview: { file, loading, error }. `taskId`: the document
+// is a task record's attachment (see cobrWorkspaceDocuments), not the client's.
+export function useAttachmentFile(clientId, att, taskId = null) {
   const [, setTick] = useState(0);
   const [error, setError] = useState('');
   const pending = needsFile(att) && !files.has(att?.id);
   useEffect(() => {
-    if (!pending || !clientId) return undefined;
+    if (!pending || !(taskId || clientId)) return undefined;
     let alive = true;
     setError('');
-    fetchClientFiles(clientId, [att.id])
-      .then(() => { if (alive) setTick((t) => t + 1); })
+    (taskId ? fetchTaskFiles(taskId, [att.id]) : fetchClientFiles(clientId, [att.id]))
+      .then((got) => {
+        if (!alive) return;
+        if (!got?.[att.id]) setError('This file could not be found.');
+        setTick((t) => t + 1);
+      })
       .catch((err) => { if (alive) setError(err?.message || 'Could not load this document.'); });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, att?.id, pending]);
+  }, [clientId, taskId, att?.id, pending]);
   return { file: withFile(att), loading: pending && !error, error };
 }

@@ -606,7 +606,7 @@ function DocPreviewModal({ doc: listedDoc, onClose }) {
   // Client documents come without their file (services/clientFiles.js) —
   // fetch this one's contents now that it's being opened.
   const { file, loading: fileLoading, error: fileError } = useAttachmentFile(
-    listedDoc.client?.id, listedDoc.type === 'custom' ? listedDoc.attachment : null,
+    listedDoc.client?.id, listedDoc.type === 'custom' ? listedDoc.attachment : null, listedDoc.taskId,
   );
   const doc = file && file !== listedDoc.attachment ? { ...listedDoc, attachment: file } : listedDoc;
   const meta = TYPE_META[doc.type];

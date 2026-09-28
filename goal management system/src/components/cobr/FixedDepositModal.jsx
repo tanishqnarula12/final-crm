@@ -414,6 +414,7 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
         <AttachmentField
           label="Attachments"
           files={f.attachments}
+          taskId={record?.id}
           onChange={(files) => set({ attachments: files })}
           disabled={!canChangeStageThis}
           lockedHint="You do not have permission to add attachments to this FD."

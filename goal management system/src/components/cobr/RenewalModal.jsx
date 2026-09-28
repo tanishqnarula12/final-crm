@@ -402,6 +402,7 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
         <AttachmentField
           label="Attachment"
           files={f.attachments}
+          taskId={record?.id}
           onChange={(files) => set({ attachments: files })}
           disabled={!attachUnlocked || !fieldsUnlocked}
           lockedHint={!attachUnlocked ? 'Attachments unlock once the stage reaches "Payment Done".' : 'Click Edit to add an attachment.'}

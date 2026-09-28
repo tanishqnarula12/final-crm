@@ -10,7 +10,16 @@ import { api } from '../services/api';
 import { createListSync } from '../services/listSync';
 
 let cache = [];
-const sync = createListSync('/tasks', 'tasks');
+// Tasks come "slim": each attachment (Renewal / Claim / FD / Other-Policy
+// records keep their files here) has its details but not its file, marked
+// `fileStripped: true` — the files were ~97% of the list (9.7 MB, Sep 2026).
+// A file is fetched when someone opens it (services/clientFiles.js
+// fetchTaskFiles). Saving a slim task back is safe: the server re-joins every
+// attachment with its stored file.
+const sync = createListSync('/tasks?slim=1', 'tasks');
+
+const hasSlimAttachments = (t) => [t?.attachments, ...(Array.isArray(t?.stageHistory) ? t.stageHistory.map((h) => h?.attachments) : [])]
+  .some((list) => Array.isArray(list) && list.some((a) => a?.fileStripped === true));
 
 export const loadTasks = () => cache;
 
@@ -33,7 +42,7 @@ export async function hydrateTasks(opts) {
 export async function fetchClosedTasksForClient(clientId) {
   if (!clientId) return [];
   try {
-    const { tasks } = await api.get(`/tasks/closed-for-client/${clientId}`);
+    const { tasks } = await api.get(`/tasks/closed-for-client/${clientId}?slim=1`);
     return Array.isArray(tasks) ? tasks : [];
   } catch {
     return []; // client not viewable / server hiccup — show nothing extra
@@ -75,9 +84,12 @@ export const saveTasks = (tasks) => {
   // user when that happens, so a blocked change doesn't just silently "not
   // stick" with no explanation (e.g. an assignee trying to edit task
   // details, or moving a stage backward).
-  api.patch('/tasks', { tasks: changed, deletedIds })
+  api.patch('/tasks?slim=1', { tasks: changed, deletedIds })
     .catch((err) => {
-      if (err?.status === 404 || err?.status === 405) return api.put('/tasks', { tasks });
+      // The whole-list fallback is for a server without PATCH — which also
+      // never sends slim tasks. If this list is slim, that server can't
+      // re-join the files, so never send it there.
+      if ((err?.status === 404 || err?.status === 405) && !tasks.some(hasSlimAttachments)) return api.put('/tasks', { tasks });
       throw err;
     })
     .finally(done)

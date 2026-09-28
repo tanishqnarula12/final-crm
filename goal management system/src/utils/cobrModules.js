@@ -589,6 +589,8 @@ export function cobrWorkspaceDocuments(clients) {
         date: item.date || r.updatedAt || '',
         isLegacy: false,
         attachment: item,
+        // The file lives on this record (tasks load slim) — previews fetch it from here.
+        taskId: r.id,
         sourceLabel: `${recordLabel} · ${r.applicant || ''}`.trim(),
         // Lives on the Renewal/Claim/FD/Policy record, not clientDetails
         // .attachments — deleting/renaming it belongs to that record's own

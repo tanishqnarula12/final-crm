@@ -569,6 +569,7 @@ export default function OtherPolicyModal({ record, clients = [], onClose, onSave
       <AttachmentField
         label="Policy Documents"
         files={f.attachments}
+        taskId={record?.id}
         onChange={(files) => set({ attachments: files })}
         disabled={!fieldsUnlocked}
       />
