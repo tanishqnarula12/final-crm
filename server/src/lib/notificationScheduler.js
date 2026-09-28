@@ -11,6 +11,9 @@
 //     13:00, 17:00 local), to its assignee. dedupeKey per task+date+slot.
 //   • BIRTHDAY     — once a day (from 08:00 local), every teammate is told
 //     about each user whose profile DOB falls today. dedupeKey per person+date.
+//   • WORK_ANNIVERSARY — same slot and shape as birthdays, for each user whose
+//     profile "Member since" date (teamMemberSince) falls today in a later
+//     year, with how many years they've been with the team.
 //
 // All times are the server's local timezone, matching how meetings/tasks store
 // their date/time strings (no offset) and how the frontend parses them.
@@ -151,6 +154,92 @@ export async function runBirthdayReminders(now) {
   await pushNotifications(prisma, items);
 }
 
+// ---- Work anniversaries (once/day, same slot as birthdays) ----------------
+// "Member since" is stored as YYYY-MM-DD and read as written (no timezone
+// conversion, which could slip it onto the previous day). Someone who joined
+// on 29 Feb is celebrated on 28 Feb in other years.
+const parseYmd = (s) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || ''));
+  return m ? { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) } : null;
+};
+const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+
+// Completed years with the team when `now` is the anniversary of `since`;
+// 0 on any other day, on the joining day itself, or for a missing date.
+export function workAnniversaryYears(since, now) {
+  const j = parseYmd(since);
+  if (!j) return 0;
+  const y = now.getFullYear();
+  const day = j.m === 2 && j.d === 29 && !isLeapYear(y) ? 28 : j.d;
+  if (j.m !== now.getMonth() + 1 || day !== now.getDate()) return 0;
+  return Math.max(0, y - j.y);
+}
+
+const yearsWithUs = (n) => `${n} year${n === 1 ? '' : 's'}`;
+const ordinal = (n) => {
+  const v = n % 100;
+  const suffix = ['th', 'st', 'nd', 'rd'][(v - 20) % 10] || ['th', 'st', 'nd', 'rd'][v] || 'th';
+  return `${n}${suffix}`;
+};
+const longDate = ({ y, m, d }) => new Date(y, m - 1, d).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+
+// The message templates, kept together so the wording is easy to change.
+export function workAnniversaryText(name, years, since) {
+  const joined = parseYmd(since);
+  return {
+    noticeTitle: `🎉 Happy ${ordinal(years)} Work Anniversary, ${name}!`,
+    noticeMessage: `Today ${name} completes ${yearsWithUs(years)} with Team Fintness`
+      + `${joined ? ` — part of the team since ${longDate(joined)}` : ''}. `
+      + 'Thank you for your hard work, dedication and everything you bring to the team. '
+      + "Here's to many more years together! 🥂 Join us in congratulating them.",
+    notifTitle: '🎉 Work anniversary today!',
+    notifBody: `${name} completes ${yearsWithUs(years)} with Team Fintness today — congratulate them! 🎊`,
+  };
+}
+
+export async function runWorkAnniversaryReminders(now) {
+  if (now.getHours() < BIRTHDAY_FROM_HOUR) return;
+  const todayKey = localDateKey(now);
+
+  const users = await prisma.user.findMany({
+    where: { active: true },
+    select: { id: true, name: true, profile: { select: { data: true } } },
+  });
+  const celebrants = users
+    .map((u) => ({ ...u, since: u.profile?.data?.teamMemberSince, years: workAnniversaryYears(u.profile?.data?.teamMemberSince, now) }))
+    .filter((u) => u.years >= 1);
+  if (!celebrants.length) return;
+
+  const items = [];
+  for (const person of celebrants) {
+    const text = workAnniversaryText(person.name, person.years, person.since);
+    for (const u of users) {
+      if (u.id === person.id) continue; // the Notice Board post is theirs to see
+      items.push({
+        userId: u.id, type: NOTIF.WORK_ANNIVERSARY,
+        title: text.notifTitle,
+        body: text.notifBody,
+        link: null,
+        dedupeKey: `work-anniversary:${person.id}:${todayKey}`,
+      });
+    }
+    // Notice Board post for the day itself only (gone after today), posted
+    // once however many ticks run — exactly like the birthday post above.
+    try {
+      await postSystemNotice(prisma, {
+        type: 'ANNIVERSARY',
+        title: text.noticeTitle,
+        message: text.noticeMessage,
+        dedupeKey: `work-anniversary-notice:${person.id}:${todayKey}`,
+        expiresAt: endOfDayExpiry(todayKey, 1),
+      });
+    } catch (err) {
+      console.error('[scheduler] work anniversary notice:', err);
+    }
+  }
+  await pushNotifications(prisma, items);
+}
+
 // ---- Scheduled notice board posts (future-dated trigger + auto-expiry) ----
 // A notice created with a future date sits invisible (see GET /api/notices'
 // effectiveDate filter) until this catches up to it — every tick, not
@@ -195,6 +284,7 @@ async function tick() {
   try { await runMeetingReminders(now); } catch (err) { console.error('[scheduler] meetings:', err); }
   try { await runTaskDueReminders(now); } catch (err) { console.error('[scheduler] task-due:', err); }
   try { await runBirthdayReminders(now); } catch (err) { console.error('[scheduler] birthdays:', err); }
+  try { await runWorkAnniversaryReminders(now); } catch (err) { console.error('[scheduler] work anniversaries:', err); }
   try { await runScheduledNotices(now); } catch (err) { console.error('[scheduler] scheduled-notices:', err); }
 }
 

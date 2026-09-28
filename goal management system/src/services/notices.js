@@ -3,7 +3,7 @@
 // it just fetches on mount and after local actions — see NoticeBoard.jsx.
 import { api } from './api';
 
-export const NOTICE_TYPES = ['GENERAL', 'ANNOUNCEMENT', 'HOLIDAY', 'BIRTHDAY', 'EVENT', 'LEAVE'];
+export const NOTICE_TYPES = ['GENERAL', 'ANNOUNCEMENT', 'HOLIDAY', 'BIRTHDAY', 'ANNIVERSARY', 'EVENT', 'LEAVE'];
 
 // Duration presets (days) for "how long this notice stays visible" — null
 // means it never expires. Shared with the create form's dropdown.

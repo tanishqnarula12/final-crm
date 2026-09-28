@@ -10,7 +10,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Bell, X, ClipboardList, AlarmClock, Video, Briefcase, UserPlus, Cake, MessageSquare, HelpCircle,
-  CalendarClock, CalendarCheck2, CheckCircle2, ThumbsUp,
+  CalendarClock, CalendarCheck2, CheckCircle2, ThumbsUp, Award,
 } from 'lucide-react';
 import { onNotificationArrival, playNotificationJingle } from '../services/notifications';
 import { onChatEvent } from '../services/chat';
@@ -27,6 +27,7 @@ const TYPE_META = {
   LEAD_NEW:         { icon: UserPlus,      ring: 'ring-emerald-500/30',dot: 'bg-emerald-500' },
   LEAD_RM_ASSIGNED: { icon: UserPlus,      ring: 'ring-teal-500/30',   dot: 'bg-teal-500' },
   BIRTHDAY:         { icon: Cake,          ring: 'ring-pink-500/30',   dot: 'bg-pink-500' },
+  WORK_ANNIVERSARY: { icon: Award,         ring: 'ring-emerald-500/30', dot: 'bg-emerald-500' },
   QUERY_RAISED:     { icon: HelpCircle,    ring: 'ring-indigo-500/30', dot: 'bg-indigo-500' },
   QUERY_RESOLVED:   { icon: CheckCircle2,  ring: 'ring-emerald-500/30',dot: 'bg-emerald-500' },
   QUERY_COMMENTED:  { icon: MessageSquare, ring: 'ring-sky-500/30',    dot: 'bg-sky-500' },

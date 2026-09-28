@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Megaphone, Cake, PartyPopper, MessageSquare, Calendar, Palmtree, Pin, Trash2, Plus, X, Smile } from 'lucide-react';
+import { Megaphone, Cake, PartyPopper, MessageSquare, Calendar, Palmtree, Pin, Trash2, Plus, X, Smile, Award } from 'lucide-react';
 import { Card, Avatar, inputCls, selectCls, btnPrimary, btnSecondary, CoolSelect } from './UI';
 import { listNotices, createNotice, deleteNotice, reactToNotice, NOTICE_TYPES, VISIBLE_FOR_OPTIONS } from '../services/notices';
 import { teamName } from '../services/team';
@@ -15,13 +15,14 @@ const TYPE_META = {
   ANNOUNCEMENT: { label: 'Announcement', icon: Megaphone, badge: 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400' },
   HOLIDAY: { label: 'Holiday', icon: Calendar, badge: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400' },
   BIRTHDAY: { label: 'Birthday', icon: Cake, badge: 'bg-pink-50 text-pink-600 dark:bg-pink-950/40 dark:text-pink-400' },
+  ANNIVERSARY: { label: 'Work Anniversary', icon: Award, badge: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400' },
   EVENT: { label: 'Event', icon: PartyPopper, badge: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400' },
   LEAVE: { label: 'Leave', icon: Palmtree, badge: 'bg-cyan-50 text-cyan-600 dark:bg-cyan-950/40 dark:text-cyan-400' },
 };
-// System-only types — never manually postable (birthdays/leave are generated
-// automatically from real profile/HR data, so letting anyone free-type one
-// would let them fake an announcement about someone else).
-const SYSTEM_ONLY_TYPES = ['BIRTHDAY', 'LEAVE'];
+// System-only types — never manually postable (birthdays, work anniversaries
+// and leave are generated automatically from real profile/HR data, so letting
+// anyone free-type one would let them fake an announcement about someone else).
+const SYSTEM_ONLY_TYPES = ['BIRTHDAY', 'ANNIVERSARY', 'LEAVE'];
 const MANAGER_ROLES = ['ADMIN', 'INTERNAL_MANAGER'];
 
 // Local YYYY-MM-DD — never use toISOString() here (UTC-based; near midnight
@@ -151,7 +152,7 @@ export default function NoticeBoard() {
           <span className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0"><Pin size={14} /></span>
           <div>
             <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Notice Board</h4>
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Birthdays, holidays &amp; team announcements</p>
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Birthdays, work anniversaries, holidays &amp; team announcements</p>
           </div>
         </div>
         <button

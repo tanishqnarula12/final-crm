@@ -16,7 +16,7 @@ import { emitToAll } from '../chat/socket.js';
 const router = Router();
 router.use(requireAuth);
 
-export const NOTICE_TYPES = ['GENERAL', 'ANNOUNCEMENT', 'HOLIDAY', 'BIRTHDAY', 'EVENT', 'LEAVE'];
+export const NOTICE_TYPES = ['GENERAL', 'ANNOUNCEMENT', 'HOLIDAY', 'BIRTHDAY', 'ANNIVERSARY', 'EVENT', 'LEAVE'];
 const MANAGER_ROLES = ['ADMIN', 'INTERNAL_MANAGER'];
 const isManager = (user) => (user.roles || []).some((r) => MANAGER_ROLES.includes(r));
 const dateRe = /^\d{4}-\d{2}-\d{2}$/;
