@@ -48,6 +48,8 @@ export function pathSegment(id) {
   return safe === s ? safe : `${safe}-${crypto.createHash('sha1').update(s).digest('hex').slice(0, 10)}`;
 }
 
+export const contentHash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex').slice(0, 16);
+
 // The string an app stored (`data:<mime>;base64,<…>`, or plain text such as a
 // generated document's HTML) → the bytes to store + how to rebuild it.
 export function encodeFileString(str, key) {

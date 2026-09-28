@@ -19,14 +19,15 @@
 //
 // Supabase Storage (when configured, lib/storage.js): a newly saved file is
 // moved into the private bucket and the attachment keeps only a `storage`
-// reference — { dataUrl|html|data: { path, enc, prefix?, contentType, size } }
+// reference — { dataUrl|html|data: { path, enc, prefix?, contentType, size } },
+// path clients/<clientId>/<documentId>/<key>-<content hash>
 // — from which the exact original string is rebuilt when the file is opened.
 // Browsers never see or send that reference (the slim shape hides it, and one
 // arriving in a request is ignored), so a crafted request can't point a
 // document at someone else's file. Files already inline stay inline until
 // the one-off copy moves them (NEXT_STEPS.md §3, step 2).
 import { can } from './permissions.js';
-import { storageEnabled, putObject, getObject, pathSegment, encodeFileString, decodeFileString } from './storage.js';
+import { storageEnabled, putObject, getObject, pathSegment, contentHash, encodeFileString, decodeFileString } from './storage.js';
 
 export const FILE_KEYS = ['dataUrl', 'html', 'data'];
 export const STRIPPED = 'fileStripped';
@@ -159,7 +160,10 @@ export async function storeAttachmentFiles(clientId, a) {
     if (typeof a[k] !== 'string') continue;
     const { bytes, contentType, ref } = encodeFileString(a[k], k);
     if (decodeFileString(bytes, ref) !== a[k]) throw new Error(`could not encode ${k} losslessly`);
-    const path = `clients/${pathSegment(clientId)}/${pathSegment(a.id)}/${k}`;
+    // The content hash in the name means two different files can never
+    // overwrite each other (even two documents that ended up with the same
+    // id); the same file saved twice lands on the same object.
+    const path = `clients/${pathSegment(clientId)}/${pathSegment(a.id)}/${k}-${contentHash(bytes)}`;
     await putObject(path, bytes, contentType);
     refs[k] = { path, ...ref, contentType, size: bytes.length };
     delete out[k];
