@@ -16,6 +16,7 @@ const ACTION_THEME = {
   UPLOAD_DOCUMENT: 'bg-purple-50 text-purple-700 ring-purple-200/60 dark:bg-purple-950/30 dark:text-purple-400 dark:ring-purple-900/40',
   DELETE_DOCUMENT: 'bg-rose-50 text-rose-700 ring-rose-200/60 dark:bg-rose-950/30 dark:text-rose-400 dark:ring-rose-900/40',
   RENAME_DOCUMENT: 'bg-amber-50 text-amber-700 ring-amber-200/60 dark:bg-amber-950/30 dark:text-amber-400 dark:ring-amber-900/40',
+  RESTORE: 'bg-emerald-50 text-emerald-700 ring-emerald-200/60 dark:bg-emerald-950/30 dark:text-emerald-400 dark:ring-emerald-900/40',
 };
 
 const fmt = (iso) => {

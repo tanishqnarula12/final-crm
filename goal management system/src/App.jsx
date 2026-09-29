@@ -33,6 +33,7 @@ import ClientProfileView from './components/ClientProfile';
 import MyProfileView from './components/MyProfile';
 import UsersAdmin from './components/UsersAdmin';
 import ActivityLogView from './components/ActivityLogView';
+import RecentlyDeleted from './components/RecentlyDeleted';
 import PermissionsMatrix from './components/PermissionsMatrix';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import ChatView from './components/chat/ChatView';
@@ -147,7 +148,7 @@ export default function App() {
     setAuthed(false);
     setIsViewer(false);
     setIsAdmin(false);
-    if (view === 'users' || view === 'chat') setView('dashboard');
+    if (['users', 'chat', 'activity-log', 'permissions', 'recently-deleted'].includes(view)) setView('dashboard');
     setSelectedClientId(null);
     setSelectedGoalId(null);
     setSelectedGoalName(null);
@@ -571,6 +572,30 @@ export default function App() {
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [authed]);
+
+  // A background save that failed is announced wherever you are. The Tasks,
+  // Queries, Leads and Meetings screens show their own message while open;
+  // everywhere else (the Servicing screen, or after moving on to another
+  // screen) nothing used to appear — a failed Servicing save on 28 Sep 2026
+  // looked saved until the next reload.
+  const [saveWarning, setSaveWarning] = useState('');
+  const viewRef = useRef(view);
+  useEffect(() => { viewRef.current = view; }, [view]);
+  useEffect(() => {
+    const OWN_SCREEN = { 'crm:tasks-sync-warning': 'tasks', 'crm:queries-sync-warning': 'queries', 'crm:leads-sync-warning': 'leads', 'crm:meetings-sync-warning': 'meetings' };
+    let timer;
+    const handlers = Object.entries(OWN_SCREEN).map(([event, screen]) => {
+      const onWarn = (e) => {
+        if (viewRef.current === screen) return; // that screen shows it itself
+        clearTimeout(timer);
+        setSaveWarning(e.detail?.message || 'Your change could not be saved.');
+        timer = setTimeout(() => setSaveWarning(''), 10000);
+      };
+      window.addEventListener(event, onWarn);
+      return [event, onWarn];
+    });
+    return () => { clearTimeout(timer); handlers.forEach(([event, fn]) => window.removeEventListener(event, fn)); };
+  }, []);
 
   const handleSessionRestored = (user) => {
     setIsAdmin((user.roles || []).includes('ADMIN'));
@@ -1459,6 +1484,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex bg-slate-50/40 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 antialiased font-sans">
+      {saveWarning && (
+        <div role="alert" className="fixed top-4 left-1/2 -translate-x-1/2 z-[19000] max-w-md w-[calc(100%-2rem)] flex items-start gap-2.5 px-4 py-3 rounded-2xl bg-rose-600 text-white shadow-2xl shadow-rose-600/30 animate-fade-in">
+          <AlertCircle size={16} className="shrink-0 mt-0.5" />
+          <p className="text-xs font-semibold leading-relaxed flex-1">{saveWarning}</p>
+          <button onClick={() => setSaveWarning('')} className="shrink-0 opacity-80 hover:opacity-100 cursor-pointer" aria-label="Dismiss"><X size={14} /></button>
+        </div>
+      )}
       {sessionExpired && getCurrentUser()?.email && (
         <SessionExpiredModal
           email={getCurrentUser().email}
@@ -1676,6 +1708,15 @@ export default function App() {
                       <span className="text-[8px] font-bold bg-blue-100 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 ml-1.5 px-1.5 py-0.5 rounded uppercase tracking-wider">Admin</span>
                     </button>
                   )}
+                  {isAdmin && (
+                    <button
+                      onClick={() => { setActiveDropdown(null); setView('recently-deleted'); }}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-650 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer transition-all"
+                    >
+                      <span>Recently deleted</span>
+                      <span className="text-[8px] font-bold bg-blue-100 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 ml-1.5 px-1.5 py-0.5 rounded uppercase tracking-wider">Admin</span>
+                    </button>
+                  )}
                   <button className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-650 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer transition-all">
                     Preferences <span className="text-[8px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-550 ml-1.5 px-1 py-0.5 rounded">Soon</span>
                   </button>
@@ -1760,6 +1801,12 @@ export default function App() {
         {view === 'permissions' && isAdmin && (
           <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
             <PermissionsMatrix />
+          </main>
+        )}
+
+        {view === 'recently-deleted' && isAdmin && (
+          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+            <RecentlyDeleted />
           </main>
         )}
 

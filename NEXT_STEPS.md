@@ -18,7 +18,8 @@ Do the items in the order of section 5, one at a time. Each gets tested and depl
 | 28 Sep, 18:09 | §3 step 1 (server): newly saved client document files go to Supabase Storage; existing files untouched (+ `62a05a7`, content-hash file names, 18:13) | `85bbd9a` | ✅ Live. First real upload stored on 29 Sep 10:47 IST |
 | 29 Sep | Investigated Preksha's "reverted" renewals and missing up-sell (see §8). Restored 3 records deleted on 25 Aug | — | ✅ Done (data fix, owner-approved) |
 | 29 Sep night | §3 step 2: copy the 159 existing documents to Storage | — | ⏳ Runbook: [STORAGE_COPY_TONIGHT.md](STORAGE_COPY_TONIGHT.md) |
-| 29 Sep | Delete safety, server (§8 prevention 0–2): only named records deleted; people on a record told about a delete; admin `GET /api/deleted` + restore | see git log | ✅ Pushed |
+| 29 Sep, 16:25 IST | Delete safety, server (§8 prevention 0–2): only named records deleted; people on a record told about a delete; admin `GET /api/deleted` + restore | `a88a47b` | ✅ Live |
+| 29 Sep | Delete safety, app: Leads/Meetings/Queries saves name their deletes; admin **Recently deleted** screen (Account menu) with Restore; delete questions name the record; failed saves announced on every screen | see git log | ✅ Pushed |
 
 **Checked after the last release (read-only, 28 Sep 16:37 UTC):** 241 tasks, 14 task files all present, no
 `fileStripped` marker stored anywhere, 159 live client documents (158 with a file, same as before), 122 notes on

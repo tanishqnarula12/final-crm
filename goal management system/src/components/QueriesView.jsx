@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { confirmDelete } from '../utils/confirmDelete';
 import { createPortal } from 'react-dom';
 import { Plus, X, Search, Trash2, HelpCircle, MessageSquare, ArrowRight, Paperclip, Download, FileText, Image as ImageIcon, Film, Eye, ScrollText, UploadCloud } from 'lucide-react';
 import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
@@ -91,7 +92,8 @@ export default function QueriesView({ isViewer, activeQueryId, setActiveQueryId,
   const openEdit = (q) => { onOpenQuery && onOpenQuery(q); };
 
   const handleDelete = (id) => {
-    if (!window.confirm('Delete this query? This cannot be undone.')) return;
+    const q = queries.find((x) => x.id === id) || {};
+    if (!confirmDelete('query', [q.category, (q.query || '').slice(0, 120)].filter(Boolean).join(' — '), [q.stage && `Stage: ${q.stage}`])) return;
     setQueries(prev => {
       const updated = prev.filter(x => x.id !== id);
       saveQueries(updated);

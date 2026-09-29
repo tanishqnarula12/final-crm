@@ -130,6 +130,10 @@ export async function hydrateLeads(opts) {
 }
 
 export const saveLeads = (leads) => {
+  // Name exactly what this save deletes: the server deletes only these, never
+  // a lead that's merely missing from the list (routes/leads.js).
+  const nextIds = new Set(leads.map((l) => l.id));
+  const deletedIds = cache.filter((l) => !nextIds.has(l.id)).map((l) => l.id);
   const done = sync.beginWrite();
   cache = leads;
   window.dispatchEvent(new Event('crm:leads-updated'));
@@ -137,7 +141,7 @@ export const saveLeads = (leads) => {
   // list; reconcile so any rejected edit reverts in the UI — and tell the user
   // when that happens, so a blocked change (e.g. a delete only Admin can do)
   // doesn't just silently "not stick" with no explanation.
-  api.put('/leads', { leads })
+  api.put('/leads', { leads, deletedIds })
     .finally(done)
     .then((res) => {
       if (Array.isArray(res?.leads)) {

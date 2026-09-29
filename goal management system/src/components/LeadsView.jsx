@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { confirmDelete } from '../utils/confirmDelete';
 import { createPortal } from 'react-dom';
 import {
   UserPlus, Search, Plus, X, Phone, MessageCircle, Mail, CalendarPlus,
@@ -175,7 +176,8 @@ export default function LeadsView({
   };
 
   const handleDelete = (id) => {
-    if (!window.confirm('Delete this lead? This cannot be undone.')) return;
+    const l = loadLeads().find((x) => x.id === id) || {};
+    if (!confirmDelete('lead', leadName(l) || l.mobile, [l.stage && `Stage: ${l.stage}`, l.mobile])) return;
     deleteLead(id);
     if (openLeadId === id) setOpenLeadId(null);
     refresh();

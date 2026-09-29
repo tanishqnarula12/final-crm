@@ -29,6 +29,10 @@ export async function hydrateQueries(opts) {
 // else (attaching files to a brand-new query — see App.handleSaveQueryGlobal)
 // can await it. Callers that don't care simply ignore the return value.
 export const saveQueries = (queries) => {
+  // Name exactly what this save deletes: the server deletes only these, never
+  // a query that's merely missing from the list (routes/queries.js).
+  const nextIds = new Set(queries.map((q) => q.id));
+  const deletedIds = cache.filter((q) => !nextIds.has(q.id)).map((q) => q.id);
   const done = sync.beginWrite();
   cache = queries;
   window.dispatchEvent(new Event('crm:queries-updated'));
@@ -36,7 +40,7 @@ export const saveQueries = (queries) => {
   // list; reconcile so any rejected edit reverts in the UI — and tell the user
   // when that happens (e.g. someone other than the raiser trying to edit the
   // query's own text, or the recipient trying to move the stage backward).
-  return api.put('/queries', { queries })
+  return api.put('/queries', { queries, deletedIds })
     .finally(done)
     .then((res) => {
       if (Array.isArray(res?.queries)) {

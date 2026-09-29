@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { confirmDelete } from '../utils/confirmDelete';
 import { createPortal } from 'react-dom';
 import {
   Plus, X, Search, Trash2, Video, MapPin, Link as LinkIcon, Calendar, CalendarDays, Clock,
@@ -112,7 +113,8 @@ export default function MeetingsView({ clients = [], isViewer, onOpenMeeting, on
   const openEdit = (m) => { onOpenMeeting && onOpenMeeting(m); };
 
   const handleDelete = (id) => {
-    if (!window.confirm('Delete this meeting? This cannot be undone.')) return;
+    const m = meetings.find((x) => x.id === id) || {};
+    if (!confirmDelete('meeting', m.title || m.agenda || m.clientName || 'Meeting', [[m.date, m.time].filter(Boolean).join(' '), m.status])) return;
     setMeetings(prev => {
       const updated = prev.filter(m => m.id !== id);
       saveMeetings(updated);

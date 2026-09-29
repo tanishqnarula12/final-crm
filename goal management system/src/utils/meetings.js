@@ -31,6 +31,10 @@ export async function hydrateMeetings(opts) {
 }
 
 export const saveMeetings = (meetings) => {
+  // Name exactly what this save deletes: the server deletes only these, never
+  // a meeting that's merely missing from the list (routes/meetings.js).
+  const nextIds = new Set(meetings.map((m) => m.id));
+  const deletedIds = cache.filter((m) => !nextIds.has(m.id)).map((m) => m.id);
   const done = sync.beginWrite();
   cache = meetings;
   window.dispatchEvent(new Event('crm:meetings-updated'));
@@ -41,7 +45,7 @@ export const saveMeetings = (meetings) => {
   // trying to change it) looked like it saved (the optimistic cache update
   // stuck) but silently reverted on the next refresh — exactly what made
   // rescheduling look broken, with zero explanation why.
-  api.put('/meetings', { meetings })
+  api.put('/meetings', { meetings, deletedIds })
     .finally(done)
     .then((res) => {
       if (Array.isArray(res?.meetings)) {

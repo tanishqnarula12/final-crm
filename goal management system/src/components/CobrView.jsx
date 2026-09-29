@@ -20,6 +20,7 @@ import {
 import { teamName } from '../services/team';
 import { fmtINR } from '../utils/calc';
 import { canDo } from '../utils/permissions';
+import { confirmDelete, filesNote } from '../utils/confirmDelete';
 import RecordTable from './cobr/RecordTable';
 import RenewalModal from './cobr/RenewalModal';
 import ClaimModal from './cobr/ClaimModal';
@@ -79,7 +80,7 @@ export default function CobrView({
 
   const handleDeleteRecord = (type, record) => {
     const label = COBR_EXCEL_SPEC[type]?.label || 'record';
-    if (!window.confirm(`Delete this ${label}? This cannot be undone.`)) return;
+    if (!confirmDelete(label, record.taskName, [record.stage && `Stage: ${record.stage}`, filesNote(record.attachments)])) return;
     saveTasks(loadTasks().filter((t) => t.id !== record.id));
   };
 

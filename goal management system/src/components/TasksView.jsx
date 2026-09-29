@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { confirmDelete, filesNote } from '../utils/confirmDelete';
 import { createPortal } from 'react-dom';
 import {
   Plus, X, Search, Trash2, ListChecks, MessageSquare, Send, Pencil, Check, ChevronDown, Crown, ArrowRight,
@@ -87,7 +88,8 @@ export default function TasksView({ clients = [], isViewer, activeTaskId, setAct
   const openEdit = (task) => { onOpenTask && onOpenTask(task); };
 
   const handleDelete = (id) => {
-    if (!window.confirm('Delete this task? This cannot be undone.')) return;
+    const t = tasks.find((x) => x.id === id) || {};
+    if (!confirmDelete('task', t.taskName, [t.stage && `Stage: ${t.stage}`, filesNote(t.attachments)])) return;
     setTasks(prev => {
       const updated = prev.filter(t => t.id !== id);
       saveTasks(updated);
