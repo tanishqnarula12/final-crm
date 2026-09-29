@@ -22,7 +22,9 @@ const router = Router();
 router.use(requireAuth);
 
 const leadSchema = z.object({ id: z.string().min(1) }).passthrough();
-const bulkSchema = z.object({ leads: z.array(leadSchema) });
+// `deletedIds`: the leads this save deletes (current app). When present,
+// nothing else is deleted — a lead missing from the list is kept.
+const bulkSchema = z.object({ leads: z.array(leadSchema), deletedIds: z.array(z.string().min(1)).optional() });
 
 // Only the leads the matrix's Leads → View lets this user see: All → every
 // lead; Assigned → the leads they're the RM of or created, plus the
@@ -123,7 +125,7 @@ async function cascadeDeleteLeadChildren(leadIds, actorId) {
 }
 
 router.put('/', asyncHandler(async (req, res) => {
-  const { leads } = parseBody(bulkSchema, req.body);
+  const { leads, deletedIds } = parseBody(bulkSchema, req.body);
 
   // A PAN must be unique across the whole system (leads AND clients). This is a
   // whole-array PUT, so only leads that are NEW or whose PAN actually CHANGED
@@ -157,6 +159,8 @@ router.put('/', asyncHandler(async (req, res) => {
     modelKey: 'lead',
     incoming: leads,
     actor: req.user,
+    explicitDeletes: Array.isArray(deletedIds),
+    deleteIds: deletedIds || [],
     stageField: 'stage',
     // Assigning the RM is the matrix's own "Assign RM" right (Admin always).
     // It used to be hard-wired to Admin only, so a role granted Assign RM got

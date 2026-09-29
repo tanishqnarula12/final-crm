@@ -15,7 +15,10 @@ Do the items in the order of section 5, one at a time. Each gets tested and depl
 | 28 Sep, 16:35 | §4-A step 2 (app): tasks load slim (9.7 MB → 0.29 MB); files open on click | `41f4ae1` | ✅ Live (website) |
 | 28 Sep, 16:41 | §4-F part 1: activity logs never store or send file contents | `92222c4` | ✅ Live — storing part reversed, see next row |
 | 28 Sep, 17:22 | §4-F: logs stored **complete** again (owner: logs protect the system's integrity); the log *screens* still show a label instead of files. Plus a nightly clean-up of read notifications older than 60 days | `9dcc3a8`, `c17c20c` | ✅ Live |
-| 28 Sep | §3 step 1 (server): newly saved client document files go to Supabase Storage; existing files untouched | see git log | ✅ Pushed |
+| 28 Sep, 18:09 | §3 step 1 (server): newly saved client document files go to Supabase Storage; existing files untouched (+ `62a05a7`, content-hash file names, 18:13) | `85bbd9a` | ✅ Live. First real upload stored on 29 Sep 10:47 IST |
+| 29 Sep | Investigated Preksha's "reverted" renewals and missing up-sell (see §8). Restored 3 records deleted on 25 Aug | — | ✅ Done (data fix, owner-approved) |
+| 29 Sep night | §3 step 2: copy the 159 existing documents to Storage | — | ⏳ Runbook: [STORAGE_COPY_TONIGHT.md](STORAGE_COPY_TONIGHT.md) |
+| 29 Sep | Delete safety, server (§8 prevention 0–2): only named records deleted; people on a record told about a delete; admin `GET /api/deleted` + restore | see git log | ✅ Pushed |
 
 **Checked after the last release (read-only, 28 Sep 16:37 UTC):** 241 tasks, 14 task files all present, no
 `fileStripped` marker stored anywhere, 159 live client documents (158 with a file, same as before), 122 notes on
@@ -350,3 +353,81 @@ possible, and backups get smaller.
 - **Duplicate client names are normal.** Some clients exist twice because of the 22 Jul re-import. The soft-deleted
   copies have no documents, which is expected. For example, "Praveen Singh Sikarwar" has a deleted duplicate; the
   live record holds all 3 documents.
+- **Servicing permissions (29 Sep).** Insurance Manager has Renewals → view, edit, change stage, log and delete = All.
+
+---
+
+## 8. Incident 29 Sep: "stage reverted, documents gone" and a missing up-sell
+
+**Reported:**
+
+- Preksha moved renewals to *Policy Document Shared* with the policy PDFs on Monday 28 Sep. By Tuesday the stage was
+  back and the files were gone.
+- An up/cross-sell entry she made in Servicing weeks earlier had also disappeared.
+
+**Found (read-only, activity log + records):**
+
+1. **Nothing was reverted.** The server never received Monday's changes: there are **zero** logged changes by
+   anyone on any Servicing record on 28 Sep.
+   - Her 7-day sign-in had expired. This is the same cause as the "not authorised" message she reported that day.
+   - The Servicing screen shows a change straight away and saves in the background. The save was refused, and on
+     Servicing screens a failed save showed **no message** (the warning only existed on the Tasks screen).
+   - When she signed in again at 5:00 PM IST, the app loaded the real saved state.
+   - On 29 Sep at 3:27–3:28 PM she redid Anil Kumar Sharma and Nimmi Chhabra (HDFC Click 2 Protect Plus). Both
+     saved correctly.
+   - Session expiry itself was fixed on 28 Sep (`c981013`): sessions renew while in use, and a sign-in box appears if
+     one ends. Other failures (e.g. a dropped connection) were still silent on Servicing; see "Prevention" below.
+2. **The up-sell was deleted, along with two other real records.** On **25 Aug, 4:46–4:47 PM IST**, the **admin
+   account (mail@fintness.in)** deleted about 12 records in a test-data clean-up. Three of them were real records
+   Preksha had created, and none was re-entered afterwards:
+   - *Renewal – Manish Trigunayak – TATA Medicare Plus*: Policy Document Shared, **Up Sell ₹2,000**, premium ₹18,099,
+     one photo.
+   - *Claim – Manisha Sharma – Health / Hospitalisation*: at Escalate to Ombudsman, 7 history entries, one photo.
+   - *Policy – Ishwar Dutt Pathak – ICICI Health Shield 360*: Active, the policy PDF.
+
+   Deletes are soft (the record is hidden, not erased), so all three were intact.
+
+**Fixed on 29 Sep (owner-approved data change):**
+
+- The three records were **restored**. `deletedAt` was cleared only where it still matched the recorded deletion
+  time, and a `RESTORE` entry was added to each record's activity log.
+- Data and files were verified byte-identical to a backup taken just before (`backup_restore_3_records_before.json`,
+  session scratchpad).
+- The restored Claim is open and overdue (due 21 Aug), so Preksha gets the normal due reminders for it.
+
+3. **36 real Queries were deleted in one save on 3 Aug, 5:45 PM IST**, from the admin account. They were the team's
+   feedback and requests (Nitesh, Vimla, Manish, Mehul, Vaishali), some still Open.
+   - At that minute an automated test ran against the live CRM with the admin login. Its "ZZTEST" client, goal,
+     query and task were created and removed within a minute.
+   - It saved a Queries list containing only its own query, and the server treated every query missing from that
+     list as deleted. Leads, Meetings and Queries still saved whole lists that way, so a stale or partial list could
+     delete records.
+   - All 36 are intact (soft-deleted). They were **not restored yet: waiting for the owner's OK.**
+4. **15 older tasks deleted from the admin account (Jul–Sep) had been created by someone else.** For example: Nitesh's
+   "Vijaya Rani Agrawal – Capital Report is not correct" and "Krishna Ahuja – HUF investments status", Vaishali's
+   "Harendra Deeg – Initial Call" and "Rachana Sahu – Initial Call", and Manish's "Rachana Sahu – IIN, Mandate and
+   FATCA Creation". Some are probably intentional (duplicates, tests), so the owner should review them in *Recently
+   deleted* once that screen is live.
+
+**How the 25 Aug deletions happened.** They were clicked one by one, 2–9 seconds apart, register by register. That
+is someone deleting what they took for test records, not a software fault. 94 of the 95 task/Servicing deletions
+ever were made from the shared admin account.
+
+**Prevention (planned 29 Sep, see progress log):**
+
+0. **Only named records are ever deleted (server, 29 Sep).** Whole-list saves now say exactly what they delete
+   (`deletedIds`); a record merely missing from a list is kept. Older app versions still delete by leaving a record
+   out, but at most one per save (one Delete click). If more are missing, nothing is deleted and a warning is
+   logged. Tested: 29 API checks, including the exact 3 Aug case.
+
+1. **Notify the owner.** When someone deletes a Servicing record or task that another person created or is
+   assigned to, those people get a notification naming who deleted it.
+2. **Recently deleted → Restore.** Admins get this in Servicing, so a mistaken delete is undone in one click, with
+   no database work.
+3. **A clearer delete question.** It names the record, client, stage and number of files, and no longer claims it
+   "cannot be undone".
+4. **Make failed saves visible everywhere.** Not only on the Tasks screen: the screen goes back to the saved state
+   with a clear message.
+5. **Use personal admin accounts.** The shared `mail@fintness.in` login makes the log say "Fintness Finserv"
+   instead of who actually did it. For test data, use one clearly named test client (e.g. "ZZ Test Client") so
+   clean-ups can't catch real records.

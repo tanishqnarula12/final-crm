@@ -135,12 +135,19 @@ const fieldChanged = (before, after, key) => JSON.stringify(before?.[key] ?? nul
  * @returns { list, stats, events, removedIds }  — in partial mode `list` holds
  *   only the touched records and `removedIds` the touched ids now gone/hidden
  */
+// Whole-list saves from app versions that don't name their deletes: the most
+// records a single save may delete just by leaving them out (see DELETE pass).
+const MAX_LEGACY_OMISSION_DELETES = 1;
+
 export async function syncBulk(prisma, spec) {
   const {
     module, modelKey, incoming, actor, promote,
     stageField = null, assignOnCreate = 'admin', assignOnEdit = 'admin', deptOwnerIsActor = false,
     assignFields = [], assignCompanions = [], assignStage = null, stageRights = {},
     partial = false, deleteIds = [],
+    // Whole-list saves: with `explicitDeletes` only `deleteIds` are deleted and
+    // a record simply missing from the list is kept. See the DELETE pass.
+    explicitDeletes = false,
   } = spec;
   const assignFieldSet = new Set(assignFields);
   const assignCompanionSet = new Set(assignCompanions);
@@ -396,9 +403,28 @@ export async function syncBulk(prisma, spec) {
     stats.updated++;
   }
 
-  // ---- DELETE (omitted rows) -----------------------------------------------
+  // ---- DELETE ----------------------------------------------------------------
+  // Only records the caller names (`deleteIds`) are deleted — in a partial
+  // save and in a whole-list save sent with `explicitDeletes`. A record that is
+  // merely missing from a whole list is NOT a delete request: the list can be
+  // stale (someone else added a record since it was loaded) or partial (a
+  // script), and on 3 Aug 2026 a whole-list save of queries missing 36 real
+  // ones deleted all 36. Older app versions still delete by leaving a record
+  // out; for them at most ONE missing record counts as a delete (one Delete
+  // click). More than one missing at once deletes nothing and is logged.
+  const deleteSet = new Set(deleteIds);
+  const named = partial || explicitDeletes;
+  const omittedDeletable = named ? [] : existingRows.filter((row) => !incomingIds.has(row.id) && !row.deletedAt
+    && can(actor, moduleFor(row), 'view', row) && canDelete(actor, moduleFor(row), row));
+  const legacyBlocked = omittedDeletable.length > MAX_LEGACY_OMISSION_DELETES;
+  if (legacyBlocked) {
+    stats.blocked = omittedDeletable.length;
+    console.warn(`[syncBulk] ${modelKey}: a whole-list save by ${actor.id} left out ${omittedDeletable.length} records — not deleting any of them`);
+  }
   for (const row of existingRows) {
     if (incomingIds.has(row.id) || row.deletedAt) continue;
+    if (named && !deleteSet.has(row.id)) { stats.kept++; continue; }
+    if (legacyBlocked) { stats.kept++; continue; }
     const mod = moduleFor(row);
     // A record the actor can't even VIEW is not "omitted" in any meaningful
     // sense — their bulk save only ever contains what they can see, so a

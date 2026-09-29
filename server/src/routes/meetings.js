@@ -18,7 +18,9 @@ const router = Router();
 router.use(requireAuth);
 
 const meetingSchema = z.object({ id: z.string().min(1) }).passthrough();
-const bulkSchema = z.object({ meetings: z.array(meetingSchema) });
+// `deletedIds`: the meetings this save deletes (current app). When present,
+// nothing else is deleted — a meeting missing from the list is kept.
+const bulkSchema = z.object({ meetings: z.array(meetingSchema), deletedIds: z.array(z.string().min(1)).optional() });
 
 // Meetings are visible to everyone by default (matrix view = ALL) — this GET
 // intentionally does NOT filter by ownership, only by can(...,'view',...) per
@@ -33,12 +35,14 @@ router.get('/', asyncHandler(async (req, res) => {
 }));
 
 router.put('/', asyncHandler(async (req, res) => {
-  const { meetings } = parseBody(bulkSchema, req.body);
+  const { meetings, deletedIds } = parseBody(bulkSchema, req.body);
   const { list, stats, events } = await syncBulk(prisma, {
     module: 'meetings',
     modelKey: 'meeting',
     incoming: meetings,
     actor: req.user,
+    explicitDeletes: Array.isArray(deletedIds),
+    deleteIds: deletedIds || [],
     assignOnCreate: 'anyone', // the creator can name a host (assignedTo)
     assignOnEdit: 'editor',   // only the creator may change it later
     promote: (m) => ({

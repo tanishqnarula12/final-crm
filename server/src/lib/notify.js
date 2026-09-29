@@ -30,6 +30,7 @@ export const NOTIF = {
   LEAVE_RESPONDED: 'LEAVE_RESPONDED',
   NOTICE_POSTED: 'NOTICE_POSTED',
   NOTICE_REACTED: 'NOTICE_REACTED',
+  RECORD_DELETED: 'RECORD_DELETED',
 };
 
 export const serializeNotification = (n) => ({
@@ -316,11 +317,40 @@ export async function notifyFromEvents(prisma, events) {
           link: { view: 'queries', id: rec.id },
         });
       }
+    } else if (ev.type === 'DELETE' && DELETE_NOTICE[ev.module]) {
+      // Tell everyone on the record when someone else deletes it — a mistaken
+      // delete used to go unnoticed for weeks (25 Aug 2026: three real
+      // Servicing records removed in a test clean-up nobody heard about).
+      const { view, kind, label } = DELETE_NOTICE[ev.module];
+      const who = await actorName();
+      const people = new Set([
+        rec.createdBy, rec.departmentOwner, rec.assignedTo, rec.ownerId,
+        ...(Array.isArray(rec.subPersons) ? rec.subPersons : []),
+        ...(Array.isArray(rec.attendees) ? rec.attendees : []),
+      ].filter((u) => u && u !== ev.actorId));
+      const what = typeof kind === 'function' ? kind(rec) : kind;
+      for (const userId of people) {
+        items.push({
+          userId, type: NOTIF.RECORD_DELETED,
+          title: `🗑 ${who} deleted a ${what}`,
+          body: `${label(rec)} — if this was a mistake, an admin can restore it from Recently deleted.`,
+          link: { view },
+        });
+      }
     }
   }
 
   await pushNotifications(prisma, items);
 }
+
+// Modules whose deletes are announced to the people on the record.
+const DELETE_NOTICE = {
+  tasks: { view: 'tasks', kind: 'task', label: taskLabel },
+  ...Object.fromEntries([...COBR_WORKSPACE_MODULES].map((m) => [m, { view: 'cobr', kind: cobrKind, label: taskLabel }])),
+  queries: { view: 'queries', kind: 'query', label: queryLabel },
+  leads: { view: 'leads', kind: 'lead', label: leadLabel },
+  meetings: { view: 'meetings', kind: 'meeting', label: (rec) => pick(rec, ['title', 'agenda', 'clientName', 'leadName']) || 'Meeting' },
+};
 
 // Leave isn't routed through syncBulk (see routes/leave.js for why), so it
 // doesn't produce domain events for notifyFromEvents above — these two are

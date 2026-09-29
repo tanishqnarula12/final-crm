@@ -30,6 +30,7 @@ import pushRoutes from './routes/push.js';
 import noticeRoutes from './routes/notices.js';
 import managedPortfolioRoutes from './routes/managedPortfolio.js';
 import schemePerformanceRoutes from './routes/schemePerformance.js';
+import deletedRoutes from './routes/deleted.js';
 
 export function createApp() {
   const app = express();
@@ -86,6 +87,7 @@ export function createApp() {
   app.use('/api/notices', noticeRoutes);
   app.use('/api/managed-portfolio', managedPortfolioRoutes);
   app.use('/api/scheme-performance', schemePerformanceRoutes);
+  app.use('/api/deleted', deletedRoutes);
 
   app.use(notFound);
   app.use(errorHandler);

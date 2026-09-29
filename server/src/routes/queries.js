@@ -21,7 +21,9 @@ const router = Router();
 router.use(requireAuth);
 
 const querySchema = z.object({ id: z.string().min(1) }).passthrough();
-const bulkSchema = z.object({ queries: z.array(querySchema) });
+// `deletedIds`: the queries this save deletes (current app). When present,
+// nothing else is deleted — a query missing from the list is kept.
+const bulkSchema = z.object({ queries: z.array(querySchema), deletedIds: z.array(z.string().min(1)).optional() });
 
 // ~5MB of raw file ≈ 6.9MB once base64-encoded; the app-wide JSON body limit is
 // 25mb, so one file per request stays comfortably inside it.
@@ -60,12 +62,14 @@ router.get('/', asyncHandler(async (req, res) => {
 }));
 
 router.put('/', asyncHandler(async (req, res) => {
-  const { queries } = parseBody(bulkSchema, req.body);
+  const { queries, deletedIds } = parseBody(bulkSchema, req.body);
   const { list, stats, events } = await syncBulk(prisma, {
     module: 'queries',
     modelKey: 'query',
     incoming: queries,
     actor: req.user,
+    explicitDeletes: Array.isArray(deletedIds),
+    deleteIds: deletedIds || [],
     stageField: 'stage',
     assignOnCreate: 'anyone', // the raiser picks who it's raised to
     assignOnEdit: 'editor',   // only the raiser may reassign later
