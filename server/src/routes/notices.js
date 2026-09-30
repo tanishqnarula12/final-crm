@@ -143,9 +143,11 @@ export function isDue(row, now) {
 // broadcast live the same way a normal post is. `expiresAt` defaults to
 // never (leave's post), but a caller may pass one (birthday's "gone after
 // today"). `dedupeKey` is only needed by callers that might otherwise fire
-// twice (the scheduler's recurring tick); a P2002 there is swallowed, not
-// thrown, so a duplicate attempt is just a no-op.
+// twice (the scheduler's recurring tick): one already posted is a no-op,
+// checked first so the unique index isn't hit every minute (a P2002 from a
+// race is still swallowed, not thrown).
 export async function postSystemNotice(prisma, { type, title, message, dedupeKey = null, expiresAt = null, templateKind = null, templateData = null }) {
+  if (dedupeKey && await prisma.notice.findUnique({ where: { dedupeKey }, select: { id: true } })) return null;
   try {
     const row = await prisma.notice.create({
       data: { type, title, message, createdBy: null, dedupeKey, effectiveDate: localDateKey(), triggered: true, expiresAt, templateKind, templateData },

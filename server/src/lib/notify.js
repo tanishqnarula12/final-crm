@@ -100,18 +100,32 @@ async function resolveRecipients(prisma, items) {
 
 /**
  * Insert notifications and push them live. Recipients are resolved to real user
- * ids (id or legacy name); unresolvable ones are skipped. Silently skips rows
- * that violate the (userId,dedupeKey) unique index (already-sent reminders).
+ * ids (id or legacy name); unresolvable ones are skipped. Rows whose
+ * (userId,dedupeKey) was already sent are skipped up front: the scheduler
+ * re-offers its reminders every minute, and letting the unique index reject
+ * each one was a failed INSERT and an error line in the database log (~10,000
+ * a day in Sep 2026). The index still catches a race.
  * @returns the rows actually created.
  */
 export async function pushNotifications(prisma, items) {
   const list = (items || []).filter((i) => i?.userId && i?.title);
   if (!list.length) return [];
   const resolved = await resolveRecipients(prisma, list);
+  const sentKey = (userId, dedupeKey) => `${userId}\u0000${dedupeKey}`;
+  const sent = new Set();
+  const keys = [...new Set(list.map((i) => i.dedupeKey).filter(Boolean))];
+  if (keys.length) {
+    const rows = await prisma.notification.findMany({ where: { dedupeKey: { in: keys } }, select: { userId: true, dedupeKey: true } });
+    for (const r of rows) sent.add(sentKey(r.userId, r.dedupeKey));
+  }
   const created = [];
   for (const it of list) {
     const userId = resolved.get(it.userId);
     if (!userId) continue; // recipient couldn't be matched to an active user
+    if (it.dedupeKey) {
+      if (sent.has(sentKey(userId, it.dedupeKey))) continue; // already sent
+      sent.add(sentKey(userId, it.dedupeKey));
+    }
     try {
       const row = await prisma.notification.create({
         data: {

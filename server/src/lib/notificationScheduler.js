@@ -19,6 +19,12 @@
 //
 // All times are the server's local timezone, matching how meetings/tasks store
 // their date/time strings (no offset) and how the frontend parses them.
+//
+// Every tick re-checks, so each job reads only the fields it needs: the
+// task-due job used to read every task whole (15 MB with their attachments,
+// Sep 2026) once a minute through the 9/13/17 o'clock hours, and the birthday
+// jobs every profile, photos included, twice a minute. An already-sent
+// reminder is skipped before it's inserted (lib/notify.js pushNotifications).
 import { prisma } from '../db.js';
 import { pushNotifications, notifyNoticePosted, NOTIF } from './notify.js';
 import { postSystemNotice, serializeNotice, endOfDayExpiry, isDue } from '../routes/notices.js';
@@ -77,16 +83,23 @@ export async function runMeetingReminders(now) {
 }
 
 // ---- Task-due reminders (3×/day) ------------------------------------------
+// Only the fields the reminder uses (missing ones come back null), not the
+// whole payload with its attachments.
+const loadTaskDueFields = () => prisma.$queryRaw`
+  SELECT id, "assignedTo", "createdBy",
+         payload->'stage' AS stage, payload->'dueDate' AS "dueDate", payload->'title' AS title, payload->'name' AS name
+  FROM tasks WHERE "deletedAt" IS NULL`;
+
 export async function runTaskDueReminders(now) {
   const hour = now.getHours();
   const slot = TASK_DUE_SLOTS.indexOf(hour);
   if (slot === -1) return; // not a reminder hour
   const todayKey = localDateKey(now);
 
-  const rows = await prisma.task.findMany({ where: { deletedAt: null } });
+  const rows = await loadTaskDueFields();
   const items = [];
   for (const row of rows) {
-    const t = row.payload || {};
+    const t = row; // the payload fields come back on the row itself
     const stage = String(t.stage || '').toLowerCase();
     if (DONE_TASK_STAGES.has(stage)) continue;
     if (!t.dueDate) continue;
@@ -109,15 +122,22 @@ export async function runTaskDueReminders(now) {
 }
 
 // ---- Birthday reminders (once/day) ----------------------------------------
+// Active users with just the two profile dates these jobs match on, in the
+// shape they always read: { id, name, profile: { data: { dob, teamMemberSince } } }.
+async function loadTeamDates() {
+  const rows = await prisma.$queryRaw`
+    SELECT u.id, u.name, p.data->'dob' AS dob, p.data->'teamMemberSince' AS "teamMemberSince"
+    FROM users u LEFT JOIN advisor_profiles p ON p."userId" = u.id
+    WHERE u.active = true`;
+  return rows.map(({ dob, teamMemberSince, ...u }) => ({ ...u, profile: { data: { dob, teamMemberSince } } }));
+}
+
 export async function runBirthdayReminders(now) {
   if (now.getHours() < BIRTHDAY_FROM_HOUR) return;
   const todayKey = localDateKey(now);
   const todayMd = monthDay(now);
 
-  const users = await prisma.user.findMany({
-    where: { active: true },
-    select: { id: true, name: true, profile: { select: { data: true } } },
-  });
+  const users = await loadTeamDates();
   const celebrants = users.filter((u) => {
     const dob = u.profile?.data?.dob;
     return dob && monthDay(dob) === todayMd;
@@ -203,10 +223,7 @@ export async function runWorkAnniversaryReminders(now) {
   if (now.getHours() < BIRTHDAY_FROM_HOUR) return;
   const todayKey = localDateKey(now);
 
-  const users = await prisma.user.findMany({
-    where: { active: true },
-    select: { id: true, name: true, profile: { select: { data: true } } },
-  });
+  const users = await loadTeamDates();
   const celebrants = users
     .map((u) => ({ ...u, since: u.profile?.data?.teamMemberSince, years: workAnniversaryYears(u.profile?.data?.teamMemberSince, now) }))
     .filter((u) => u.years >= 1);
