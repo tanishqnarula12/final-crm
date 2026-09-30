@@ -5,6 +5,7 @@ import { ChatAvatar, GroupAvatar } from './Avatars';
 import { updateConversation, deleteConversation } from '../../services/chat';
 import { fmtTime, dayLabel } from './chatFormat';
 import AvatarCropperModal from '../AvatarCropperModal';
+import { useBackLayer } from '../../utils/backNav';
 
 const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
 
@@ -12,6 +13,7 @@ const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
 // any member), an audit line of who last edited, and a member roster whose
 // rows open each teammate's profile card.
 export default function GroupInfoPanel({ conv, me, usersById, onlineSet, onClose, onUpdated, onDeleted, onOpenProfile }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(conv.name || '');
   const [description, setDescription] = useState(conv.description || '');

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Users, UserPlus, ListChecks, FolderOpen, UserCheck, LayoutDashboard, Video, TrendingUp, MoreHorizontal, Calculator, FileSpreadsheet, HelpCircle, Trophy, Target, PieChart } from 'lucide-react';
 import logoImg from '../assets/logo.png';
 import { canTopSchemes } from '../utils/permissions';
+import { useBackLayer } from '../utils/backNav';
 
 const NAV = [
   { id: 'dashboard', label: 'Dash', icon: LayoutDashboard },
@@ -183,6 +184,7 @@ const MOBILE_LABEL = { clients: 'Clients', prospects: 'Prospects', documents: 'D
 
 export function MobileNav({ view, setView, badges = {}, onSelectOthersTab, othersSubTab }) {
   const [sheetOpen, setSheetOpen] = useState(false);
+  useBackLayer(sheetOpen, () => setSheetOpen(false));
   const primary = NAV.filter((n) => PRIMARY.includes(n.id));
   const rest = NAV.filter((n) => !PRIMARY.includes(n.id) && n.id !== 'others');
   const tools = OTHERS_TOOLS.filter((t) => t.id !== 'top_schemes' || canTopSchemes('view'));

@@ -13,6 +13,7 @@ import {
   LEAVE_STATUS_THEME, fmtLeaveRange, fmtLeaveStamp,
   LEAVE_TYPES, HALF_DAY_SLOTS, fmtLeaveType,
 } from '../utils/leave';
+import { useBackLayer } from '../utils/backNav';
 
 export default function LeaveView({ activeLeaveId, setActiveLeaveId } = {}) {
   const me = getCurrentUser();
@@ -192,6 +193,7 @@ function LeaveRow({ leave, showRequester, onEdit, onRespond }) {
 }
 
 function LeaveFormModal({ initial, onClose, onSaved }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const isEdit = !!initial;
   const isReapply = isEdit && initial.status === 'Rejected';
   const [leaveType, setLeaveType] = useState(initial?.leaveType || 'Full Day');
@@ -313,6 +315,7 @@ function LeaveFormModal({ initial, onClose, onSaved }) {
 }
 
 function LeaveRespondModal({ leave, onClose, onResponded }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');

@@ -26,6 +26,7 @@ import { cobrTotals } from '../utils/cobr';
 import { cobrWorkspaceDocuments } from '../utils/cobrModules';
 import { printHtmlDocument, printSafeDataUrl, wrapStandaloneHtml, useBlobUrl } from '../utils/documents';
 import { buildMomHtml } from '../utils/momHtml';
+import { useBackLayer } from '../utils/backNav';
 
 export default function ClientProfileView({
   client, clients = [], onEditClient, onDeleteClient, isViewer,
@@ -84,6 +85,7 @@ export default function ClientProfileView({
   const [selectedFile, setSelectedFile] = React.useState(null);
   const [selectedFileDataUrl, setSelectedFileDataUrl] = React.useState('');
   const [uploadState, setUploadState] = React.useState('idle'); // 'idle' | 'uploading' | 'done'
+  useBackLayer(isUploadModalOpen, () => (uploadState === 'idle' ? setIsUploadModalOpen(false) : false));
   const [uploadError, setUploadError] = React.useState('');
   const resolvedDocTitle = (docTitle === 'Other' ? customDocTitle : docTitle).trim();
 
@@ -99,6 +101,7 @@ export default function ClientProfileView({
 
   // Edit Doc States
   const [editingDoc, setEditingDoc] = React.useState(null);
+  useBackLayer(!!editingDoc, () => setEditingDoc(null));
   const [editDocTitle, setEditDocTitle] = React.useState('');
   const [editDocApplicant, setEditDocApplicant] = React.useState('');
 
@@ -1960,6 +1963,7 @@ function ApplicantDetailRow({ label, value }) {
 }
 
 function ApplicantViewModal({ applicant: a, onClose }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   return createPortal(
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up" onClick={(e) => e.stopPropagation()}>
@@ -2013,6 +2017,7 @@ const TYPE_META = {
 };
 
 function DocPreviewModal({ doc: listedDoc, onClose }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   // Client documents come without their file (services/clientFiles.js) —
   // fetch this one's contents now that it's being opened.
   const { file, loading: fileLoading, error: fileError } = useAttachmentFile(

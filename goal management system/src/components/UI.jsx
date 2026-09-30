@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ChevronDown, X, Search, Check, Filter, Loader2 } from 'lucide-react';
 import { avatarColor, initials } from '../utils/calc';
 import { teamPhoto } from '../services/team';
+import { useBackLayer } from '../utils/backNav';
 
 // Shows a team member's uploaded profile picture when one exists, otherwise
 // coloured initials. `photo` can be passed explicitly; otherwise it's resolved
@@ -140,6 +141,7 @@ export function MultiSelect({
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState(null);
   const triggerRef = useRef(null);
+  useBackLayer(open, () => setOpen(false));
 
   const updateRect = () => {
     const r = triggerRef.current?.getBoundingClientRect();

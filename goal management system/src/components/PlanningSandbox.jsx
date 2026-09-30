@@ -31,6 +31,7 @@ import { Field, inputCls, btnPrimary, btnGhost, btnSecondary } from './UI';
 import { calcGoal, uid, buildGoalEdits } from '../utils/calc';
 import { normalizeAllocation, buildAllocationEdits } from '../utils/assets';
 import { getCurrentUser } from '../utils/auth';
+import { useBackLayer } from '../utils/backNav';
 
 const storageKey = () => `crm:planningSandbox:${getCurrentUser()?.id || 'anon'}`;
 
@@ -256,6 +257,7 @@ export default function PlanningSandbox({ mode }) {
 // Name / PAN / age for the demo — only what the Goal Mapping and Asset
 // Allocation headers and PDF exports actually show.
 function DemoDetailsModal({ initial, onClose, onSave }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const [name, setName] = useState(initial.name || '');
   const [pan, setPan] = useState(initial.pan || '');
   const [age, setAge] = useState(initial.age || '');

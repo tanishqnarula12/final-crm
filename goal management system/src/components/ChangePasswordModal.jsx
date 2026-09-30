@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { X, KeyRound, Check, ShieldCheck } from 'lucide-react';
 import { Field, inputCls, btnPrimary, btnGhost } from './UI';
 import { changePassword } from '../utils/auth';
+import { useBackLayer } from '../utils/backNav';
 
 // Self-service password change — any logged-in user (including VIEWER) can
 // change their own password, but must prove they know the current one first.
 // Distinct from the admin "Reset Password" field in UsersAdmin.jsx, which
 // lets an admin set a new password for someone else without knowing the old one.
 export default function ChangePasswordModal({ onClose }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');

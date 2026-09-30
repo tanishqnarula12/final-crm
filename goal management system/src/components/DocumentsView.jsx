@@ -14,6 +14,7 @@ import { printHtmlDocument, printSafeDataUrl, wrapStandaloneHtml, useBlobUrl } f
 import { buildMomHtml } from '../utils/momHtml';
 import { cobrWorkspaceDocuments } from '../utils/cobrModules';
 import { DOCUMENT_TYPE_GROUPS } from '../utils/documentTypes';
+import { useBackLayer } from '../utils/backNav';
 
 // ---------------------------------------------------------------------------
 // Build a unified, DB-driven list of generated documents from the clients data.
@@ -54,6 +55,7 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedFileDataUrl, setSelectedFileDataUrl] = useState('');
   const [uploadState, setUploadState] = useState('idle'); // 'idle' | 'uploading' | 'done'
+  useBackLayer(isUploadModalOpen, () => (uploadState === 'idle' ? setIsUploadModalOpen(false) : false));
   const [uploadError, setUploadError] = useState('');
 
   // What actually gets stored/linked as the document category.
@@ -603,6 +605,7 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
 // Preview modal — renders the document content and supports print / Save PDF.
 // ---------------------------------------------------------------------------
 function DocPreviewModal({ doc: listedDoc, onClose }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   // Client documents come without their file (services/clientFiles.js) —
   // fetch this one's contents now that it's being opened.
   const { file, loading: fileLoading, error: fileError } = useAttachmentFile(

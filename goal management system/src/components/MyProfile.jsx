@@ -12,6 +12,7 @@ import { avatarColor, initials, fmtDate, DOB_MIN, dobMax } from '../utils/calc';
 import {
   loadAdvisorProfile, saveAdvisorProfile, ADVISOR_ROLES, MARITAL_STATUS_OPTIONS
 } from '../utils/advisorProfile';
+import { useBackLayer } from '../utils/backNav';
 
 const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
 
@@ -366,6 +367,7 @@ export default function MyProfileView() {
 }
 
 function Modal({ title, onClose, children, footer, maxWidth = 'max-w-3xl' }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   return (
     <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in" onClick={onClose}>
       <div className={`bg-white dark:bg-slate-900 rounded-2xl w-full ${maxWidth} shadow-2xl my-8 border border-slate-200/50 dark:border-slate-800/80 animate-scale-up`} onClick={(e) => e.stopPropagation()}>

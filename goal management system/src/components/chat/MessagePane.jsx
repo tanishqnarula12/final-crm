@@ -20,6 +20,7 @@ import EmojiPicker from './EmojiPicker';
 import { QUICK_REACTIONS } from './emojiData';
 import ProfileCard from './ProfileCard';
 import GroupInfoPanel from './GroupInfoPanel';
+import { useBackLayer } from '../../utils/backNav';
 
 // A message can only be edited within 15 minutes of being sent — after that the
 // Edit option disappears and the text is locked (the server enforces the same
@@ -51,6 +52,12 @@ export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAct
   const [deletingChat, setDeletingChat] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  // Phone/browser Back closes these first (then the conversation itself —
+  // see ChatView).
+  useBackLayer(!!lightbox, () => setLightbox(null));
+  useBackLayer(!!deleteTarget, () => (deleting ? false : setDeleteTarget(null)));
+  useBackLayer(headerMenuOpen, () => setHeaderMenuOpen(false));
+  useBackLayer(searchOpen, () => { setSearchOpen(false); setSearchQ(''); setSearchResults(null); });
   // Phones: press-and-hold action sheet, its "Select text" view, and a
   // short "Copied" confirmation.
   const [sheetMsg, setSheetMsg] = useState(null);
@@ -1084,6 +1091,7 @@ function MessageBubble({
 // Phone press-and-hold sheet: reactions on top, the message, then actions.
 // ---------------------------------------------------------------------------
 function MessageActionSheet({ m, mine, sender, meId, rights, onClose, onReact, onReply, onCopy, onSelectText, onPin, onEdit, onDelete }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const [full, setFull] = useState(false);
   const myEmoji = Object.entries(m.reactions || {}).find(([, ids]) => (ids || []).includes(meId))?.[0] || null;
   const act = (fn) => () => { onClose(); fn(); };
@@ -1158,6 +1166,7 @@ function SheetItem({ icon: Icon, label, onClick, danger }) {
 // works, so any part of it can be copied (the bubble itself reserves
 // press-and-hold for the action sheet).
 function SelectTextSheet({ m, onCopyAll, onClose }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   return createPortal(
     <div className="fixed inset-0 z-[9995] flex flex-col justify-end" onClick={onClose}>
       <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[2px] animate-fade-in" />

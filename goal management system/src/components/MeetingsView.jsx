@@ -15,6 +15,7 @@ import {
   MODE_THEME, meetingDateTime, fmtMeetingWhen, fmtMeetingStamp, isOverdue,
 } from '../utils/meetings';
 import { uid, initials, avatarColor } from '../utils/calc';
+import { useBackLayer } from '../utils/backNav';
 
 // ===========================================================================
 // MEETINGS MODULE — table + calendar views of all scheduled/done meetings
@@ -698,6 +699,7 @@ function CalendarView({ meetings, onOpenMeeting, statusFilter, query }) {
 //   `lockClient` → client picker is fixed (used when scheduling from a profile)
 // ===========================================================================
 export function MeetingFormModal({ initial, clients = [], isViewer, lockClient = false, onCreateMom, onClose, onSave }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const isEdit = Boolean(initial?.id);
   const isLeadMeeting = !!initial?.leadId;
   const [isEditingMode, setIsEditingMode] = useState(!isEdit);

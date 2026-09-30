@@ -21,6 +21,7 @@ import { isPolicy, isRenewal, isClaim, isFd, RENEWAL_STAGES, CLAIM_STAGES, FD_ST
 import { isCobrTask, cobrTotals } from '../utils/cobr';
 import { can } from '../services/permissions';
 import { getManagedPortfolio, setAumOverride, setSipOverride, setInsuranceOverride } from '../services/managedPortfolio';
+import { useBackLayer } from '../utils/backNav';
 
 // Parse "₹ 50,000" / "50000" / numbers → number
 const num = (v) => Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
@@ -1530,6 +1531,7 @@ const MP_FIELD_META = {
 // ₹ / Lakh / Crore for convenience and converted to raw rupees on save.
 // Clearing the amount removes the manual entry entirely.
 function ManagedPortfolioEditModal({ field, override, crmValue, onClose, onSaved }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const meta = MP_FIELD_META[field];
   const overrideAmount = field === 'aum' ? override?.aumAmount : field === 'sip' ? override?.sipAmount : override?.insuranceAmount;
   const hasOverride = overrideAmount != null;

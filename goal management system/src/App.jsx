@@ -47,6 +47,7 @@ import MomWorkspace from './components/MomWorkspace';
 import ProposalWorkspace from './components/ProposalWorkspace';
 import Sidebar, { MobileNav } from './components/Sidebar';
 import { useIsPhone, useVisualViewport } from './utils/viewport';
+import { startBackNav, useBackLayer, LAYER, EXIT_HINT_EVENT } from './utils/backNav';
 import TasksView, { TaskFormModal } from './components/TasksView';
 import QueriesView, { QueryFormModal } from './components/QueriesView';
 import LeaveView from './components/LeaveView';
@@ -1496,6 +1497,27 @@ export default function App() {
     }
   };
 
+  // ── Back button (phone / browser) — see utils/backNav.js ────────────────
+  // Back steps out one level at a time: a popup, then the goal / client /
+  // sub-tab, then the module (to the Dashboard). On the Dashboard the first
+  // Back shows "Press back again to exit".
+  const navReady = authed && loaded;
+  useEffect(() => { if (navReady) startBackNav(); }, [navReady]);
+  useBackLayer(navReady && view !== 'dashboard', () => handleSetView('dashboard'), LAYER.MODULE);
+  useBackLayer(navReady && view === 'clients' && inClientProfile, backToClients, LAYER.SCREEN);
+  useBackLayer(navReady && view === 'clients' && !inClientProfile && tab !== 'clients', () => setTab('clients'), LAYER.SCREEN);
+  useBackLayer(navReady && view === 'clients' && !!selectedGoalId, () => setSelectedGoalId(null), LAYER.DETAIL);
+  useBackLayer(navReady && view === 'clients' && tab === 'goals' && !!selectedGoalName, () => setSelectedGoalName(null), LAYER.DETAIL);
+  useBackLayer(!!activeDropdown, () => setActiveDropdown(null));
+  useBackLayer(!!(momLeadId && momLeadSubject), closeMomLeadOverlay);
+  const [exitHint, setExitHint] = useState(false);
+  useEffect(() => {
+    let timer;
+    const show = () => { setExitHint(true); clearTimeout(timer); timer = setTimeout(() => setExitHint(false), 2000); };
+    window.addEventListener(EXIT_HINT_EVENT, show);
+    return () => { window.removeEventListener(EXIT_HINT_EVENT, show); clearTimeout(timer); };
+  }, []);
+
   if (!authed) {
     return <Login onLogin={handleLogin} theme={theme} setTheme={setTheme} />;
   }
@@ -1516,6 +1538,11 @@ export default function App() {
           <AlertCircle size={16} className="shrink-0 mt-0.5" />
           <p className="text-xs font-semibold leading-relaxed flex-1">{saveWarning}</p>
           <button onClick={() => setSaveWarning('')} className="shrink-0 opacity-80 hover:opacity-100 cursor-pointer" aria-label="Dismiss"><X size={14} /></button>
+        </div>
+      )}
+      {exitHint && (
+        <div role="status" className="no-print fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:bottom-6 left-1/2 -translate-x-1/2 z-[19000] px-4 py-2.5 rounded-full bg-slate-900/90 dark:bg-white/90 text-white dark:text-slate-900 text-xs font-bold shadow-xl whitespace-nowrap pointer-events-none animate-pop-in">
+          Press back again to exit
         </div>
       )}
       {sessionExpired && getCurrentUser()?.email && (

@@ -6,6 +6,7 @@ import { emitTyping } from '../../services/chat';
 import { ChatAvatar } from './Avatars';
 import { fileMeta, humanSize, isImageAttachment } from './chatFormat';
 import EmojiPicker from './EmojiPicker';
+import { useBackLayer } from '../../utils/backNav';
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024; // per-file cap (server caps the dataUrl too)
 const ACCEPT = 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv';
@@ -39,6 +40,8 @@ const Composer = forwardRef(function Composer(
   const [showPoll, setShowPoll] = useState(false);
   const [trayOpen, setTrayOpen] = useState(false); // phones: the "+" menu (attach / poll / emoji)
   const isPhone = useIsPhone();
+  useBackLayer(emojiOpen, () => setEmojiOpen(false));
+  useBackLayer(trayOpen, () => setTrayOpen(false));
 
   const taRef = useRef(null);
 
@@ -468,6 +471,7 @@ const Composer = forwardRef(function Composer(
 // Poll composer modal
 // ---------------------------------------------------------------------------
 function PollComposer({ onClose, onCreate }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState(['', '']);
   const [multi, setMulti] = useState(false);

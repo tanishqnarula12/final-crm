@@ -12,12 +12,14 @@ import { getCurrentUser } from '../../utils/auth';
 import { uid } from '../../utils/calc';
 import { useBlobUrl } from '../../utils/documents';
 import { needsFile, ensureTaskFile } from '../../services/clientFiles';
+import { useBackLayer } from '../../utils/backNav';
 
 // `taskId`: the record these files are saved on. Saved files arrive without
 // their contents (utils/tasks.js loads tasks slim), so opening one fetches it
 // from that record first.
 export function AttachmentChips({ files = [], onRemove, compact = false, taskId = null }) {
   const [preview, setPreview] = useState(null);
+  useBackLayer(!!preview, () => setPreview(null));
   const [opening, setOpening] = useState(null);
   // A raw base64 data: URL silently fails to load in an <iframe> once it's
   // long enough (a multi-page/landscape PDF crosses that well under any sane

@@ -15,6 +15,7 @@ import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
 import { fmtINR } from '../utils/calc';
 import { canDo, allowedStageOptions } from '../utils/permissions';
+import { useBackLayer } from '../utils/backNav';
 
 // `interactive` = the working view (opened from the Tasks module / dashboard /
 // profile task lists): the Mark Done/Rejected checklist is live and detail
@@ -22,6 +23,7 @@ import { canDo, allowedStageOptions } from '../utils/permissions';
 // checklist is READ-ONLY (status badges only, no marking) — marking happens in
 // the Tasks module — and this view is only for tracking totals + reopening.
 export default function CobrTaskModal({ task, interactive = true, allowReopen = false, onClose, onSave }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const [stage, setStage] = useState(task.stage || 'Open');
   const [assignedTo, setAssignedTo] = useState(task.assignedTo || '');
   // Several sub-people may be tagged on a COBR task (same rule as Tasks: each

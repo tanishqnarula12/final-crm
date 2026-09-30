@@ -24,6 +24,7 @@ import { CountrySelect, StateSelect, CitySelect } from './LocationPicker';
 import { useBlobUrl } from '../utils/documents';
 import { triggerInsuranceProspectDownload } from '../utils/prospectDownload';
 import { DOCUMENT_TYPES, documentTypeLabel } from '../utils/documentTypes';
+import { useBackLayer } from '../utils/backNav';
 
 // KYC dropdown option sets
 const OCCUPATION_OPTIONS = ['Salaried', 'Self Employed', 'House Wife'];
@@ -744,6 +745,7 @@ const todayDateString = () => {
 //   mode "edit":   receives a single `initial` prospect (+ stage management)
 // ===========================================================================
 export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial = null, clients = [], onClose, onConfirm, isViewer = false }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const isEdit = mode === 'edit';
   const seed = isEdit ? initial : base;
 
@@ -1977,6 +1979,7 @@ function existingDocsFor(linkedClient, categoryLabel, currentCategoryFiles = [])
 function DocUploadGroup({ label, required, files, onAdd, onRemove, existingDocs = [], clientAttachments = [], isViewer = false }) {
   const inputRef = useRef(null);
   const [previewFile, setPreviewFile] = useState(null);
+  useBackLayer(!!previewFile, () => setPreviewFile(null));
   // Hover tooltip state: { dataUrl, name, x, y }
   const [tooltip, setTooltip] = useState(null);
   const tooltipTimer = useRef(null);

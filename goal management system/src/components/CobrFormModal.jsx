@@ -15,8 +15,10 @@ import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
 import { uid } from '../utils/calc';
 import { canDo } from '../utils/permissions';
+import { useBackLayer } from '../utils/backNav';
 
 export default function CobrFormModal({ clients = [], onClose, onSave }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const [groupLeaderId, setGroupLeaderId] = useState('');
   const [groupLeader, setGroupLeader] = useState('');
   const [applicant, setApplicant] = useState('');

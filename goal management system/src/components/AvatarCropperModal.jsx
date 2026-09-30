@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ZoomIn, Check } from 'lucide-react';
 import { btnPrimary, btnGhost } from './UI';
+import { useBackLayer } from '../utils/backNav';
 
 const VIEWPORT = 300; // preview circle size, css px
 const OUTPUT = 480; // exported square image size, px
@@ -13,6 +14,7 @@ const OUTPUT = 480; // exported square image size, px
 // so both go through the same "make it look good before it's set" step
 // instead of whatever crop/orientation the source file happened to have.
 export default function AvatarCropperModal({ src, onCancel, onConfirm }) {
+  useBackLayer(true, onCancel); // phone/browser Back closes it
   const [natural, setNatural] = useState(null); // { w, h }
   const [scale, setScale] = useState(1);
   const [minScale, setMinScale] = useState(1);

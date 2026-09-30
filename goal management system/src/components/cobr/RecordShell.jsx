@@ -9,6 +9,7 @@ import { Avatar, inputCls, selectCls, Field, CoolSelect, btnPrimary, btnGhost } 
 import { fmtTaskStamp } from '../../utils/tasks';
 import { loadTeam, teamName } from '../../services/team';
 import { stageBadgeCls, STAGE_BTN_TONE, STAGE_SETS } from '../../utils/cobrModules';
+import { useBackLayer } from '../../utils/backNav';
 
 // View Mode -> Close / Edit(if allowed); Edit Mode -> Cancel / Save. Mirrors
 // the Tasks module's TaskFormModal footer pattern so every editor in the app
@@ -56,6 +57,7 @@ export function ViewEditFooter({ isEditingMode, canEditThis, canSave, stageDirty
 }
 
 export function RecordModal({ title, subtitle, onClose, children, footer, maxWidth = 'max-w-3xl' }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   return (
     <div className="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-50 flex items-center justify-center p-0 md:p-6 overflow-hidden animate-fade-in" onClick={onClose}>
       <div

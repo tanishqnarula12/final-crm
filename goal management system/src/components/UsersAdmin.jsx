@@ -10,6 +10,7 @@ import { ADVISOR_ROLES, MARITAL_STATUS_OPTIONS } from '../utils/advisorProfile';
 import { DOB_MIN, dobMax } from '../utils/calc';
 import { api } from '../services/api';
 import { getCurrentUser } from '../utils/auth';
+import { useBackLayer } from '../utils/backNav';
 
 // The 7 RBAC access roles. This is the ACCESS/permission axis — distinct from
 // the "Job Title / Advisor Role" (ADVISOR_ROLES) HR label captured below.
@@ -176,6 +177,7 @@ export default function UsersAdmin() {
 const emptyBank = () => ({ accountHolder: '', bankName: '', accountNumber: '', ifsc: '', branch: '' });
 
 function UserFormModal({ initial, isSelf, onClose, onSaved }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const isEdit = !!initial;
 
   // --- Account & access ---

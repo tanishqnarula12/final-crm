@@ -10,6 +10,7 @@ import { getCurrentUser } from '../../utils/auth';
 import { ChatAvatar, GroupAvatar } from './Avatars';
 import { fmtListStamp, conversationName, conversationOtherUser } from './chatFormat';
 import MessagePane from './MessagePane';
+import { useBackLayer, LAYER } from '../../utils/backNav';
 
 export default function ChatView({ onQuickAction, initialConversationId, initialMessageId }) {
   const me = getCurrentUser();
@@ -29,6 +30,8 @@ export default function ChatView({ onQuickAction, initialConversationId, initial
 
   const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
   const active = conversations.find((c) => c.id === activeId) || null;
+  // Back from an open conversation returns to the chat list (WhatsApp-style).
+  useBackLayer(!!activeId, () => setActiveId(null), LAYER.SCREEN);
 
   const refreshConversations = useCallback(async () => {
     try {
@@ -315,6 +318,7 @@ export default function ChatView({ onQuickAction, initialConversationId, initial
 // ---------------------------------------------------------------------------
 
 function NewChatModal({ me, users, online, starting, onClose, onStartDM, onCreateGroup }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const [tab, setTab] = useState('dm'); // 'dm' | 'group'
   const [q, setQ] = useState('');
   const [groupName, setGroupName] = useState('');

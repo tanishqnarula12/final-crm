@@ -16,6 +16,7 @@ import {
   monthLabel, monthKey, pct, RESULT,
 } from '../../utils/schemePerf';
 import { createUpload } from '../../services/schemePerformance';
+import { useBackLayer } from '../../utils/backNav';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
@@ -28,6 +29,7 @@ const smallSelect =
   'px-2 py-1.5 text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer max-w-[190px]';
 
 export default function UploadWizard({ existingMonths = [], onClose, onSaved }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const [file, setFile] = useState(null);
   const [fileDataUrl, setFileDataUrl] = useState('');
   const [sheets, setSheets] = useState(null);

@@ -3,6 +3,7 @@ import { X, Plus, Trash2, Wallet, MessageSquare, Check, BarChart2 } from 'lucide
 import { inputCls, btnPrimary, btnGhost } from './UI';
 import { fmtFull, fmtINR, uid } from '../utils/calc';
 import { ASSET_SCHEMA, SECTION_IDS, normalizeAllocation } from '../utils/assets';
+import { useBackLayer } from '../utils/backNav';
 
 // Accent classes per section, keyed by schema accent
 const ACCENTS = {
@@ -17,6 +18,7 @@ const parseAmt = (s) => {
 };
 
 export default function AssetAllocationModal({ clientName, initial, onClose, onSave }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const norm = useMemo(() => normalizeAllocation(initial), [initial]);
 
   // Working form state — amounts kept as strings so fields can be cleared

@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { X, Mail, Briefcase, ShieldCheck, MessageSquare } from 'lucide-react';
 import { ChatAvatar } from './Avatars';
+import { useBackLayer } from '../../utils/backNav';
 
 const ROLE_LABEL = {
   ADMIN: 'Admin', RM: 'Relationship Manager', PORTFOLIO_MANAGER: 'Portfolio Manager',
@@ -13,6 +14,7 @@ const roleLabels = (roles = []) => roles.map((r) => ROLE_LABEL[r] || r).join(', 
 // (avatar, name, job title, role, email, presence) — deliberately not the
 // full HR profile. Opened by clicking avatars/names anywhere in chat.
 export default function ProfileCard({ user, online = false, isSelf = false, onClose, onMessage }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   if (!user) return null;
   return createPortal(
     <div className="fixed inset-0 z-[9998] bg-slate-900/60 dark:bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>

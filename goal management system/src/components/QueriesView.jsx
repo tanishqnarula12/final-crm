@@ -13,6 +13,7 @@ import {
 } from '../utils/queries';
 import { uid } from '../utils/calc';
 import { useBlobUrl } from '../utils/documents';
+import { useBackLayer } from '../utils/backNav';
 
 // --- Activity log (audit trail) display helpers ------------------------
 // action -> human label. Mirrors what syncModule.js actually logs for
@@ -260,6 +261,7 @@ function FilterChip({ label, count, active, onClick }) {
 }
 
 export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const isEdit = !!initial;
   const me = getCurrentUser();
   const [category, setCategory] = useState(initial?.category || '');
@@ -397,6 +399,7 @@ export function QueryFormModal({ initial, isViewer, onClose, onSave }) {
   const blobCache = useRef(new Map());
   const [hoverPreview, setHoverPreview] = useState(null); // { att, dataUrl, top, left }
   const [lightbox, setLightbox] = useState(null);         // { att, dataUrl }
+  useBackLayer(!!lightbox, () => setLightbox(null));
   const hoverToken = useRef(0);
   // A raw base64 data: URL silently fails to load in an <iframe>/<embed>
   // once it's long enough (a multi-page/landscape PDF crosses that well

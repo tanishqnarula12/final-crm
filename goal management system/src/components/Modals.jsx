@@ -11,6 +11,7 @@ import { RELATIONS } from '../utils/team';
 import { loadTeam, resolveTeamMemberId } from '../services/team';
 import { CountrySelect, StateSelect, CitySelect } from './LocationPicker';
 import { isAdminRole } from '../utils/auth';
+import { useBackLayer } from '../utils/backNav';
 
 const parseAssetAmt = (s) => {
   const n = Number(String(s ?? '').replace(/,/g, ''));
@@ -35,6 +36,7 @@ const MARITAL_STATUSES = ['Single', 'Married', 'Divorced', 'Widowed'];
 // Phones (below sm): a full-width sheet rising from the bottom edge, using
 // the dynamic viewport height so the browser's toolbars don't hide the footer.
 function Modal({ title, onClose, children, footer, maxWidth = 'max-w-md' }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   return (
     <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-fade-in" onClick={onClose}>
       <div className={`bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-2xl w-full flex flex-col max-h-[94dvh] sm:max-h-[90vh] ${maxWidth} shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up`} onClick={(e) => e.stopPropagation()}>

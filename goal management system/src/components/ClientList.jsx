@@ -13,6 +13,7 @@ import { canCreateClient, canDeleteClient } from '../utils/permissions';
 import { hasAllocation } from '../utils/assets';
 import { teamName, loadTeam } from '../services/team';
 import ClientSearchDropdown from './ClientSearchDropdown';
+import { useBackLayer } from '../utils/backNav';
 
 // Manage Columns — the optional columns an advisor can pin onto the Client
 // Directory table, on top of the always-on Name / PAN / Age columns.
@@ -163,6 +164,7 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
   const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
+  useBackLayer(showColumnPicker, () => setShowColumnPicker(false));
   const [pickerRect, setPickerRect] = useState(null);
   const columnTriggerRef = useRef(null);
   const [query, setQuery] = useState('');
@@ -707,6 +709,7 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
 const DELETE_ALL_PASSWORD = '1-2KA4,4-2KA1';
 
 function DeleteAllClientsModal({ count, onClose, onConfirm }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const [password, setPassword] = useState('');
   const [stage, setStage] = useState('password'); // 'password' | 'confirm' | 'working' | 'done'
   const [error, setError] = useState('');

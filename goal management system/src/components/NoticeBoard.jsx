@@ -9,6 +9,7 @@ import { getCurrentUser } from '../utils/auth';
 import { QUICK_REACTIONS } from './chat/emojiData';
 import EmojiPicker from './chat/EmojiPicker';
 import logoImg from '../assets/logo.png';
+import { useBackLayer } from '../utils/backNav';
 
 const TYPE_META = {
   GENERAL: { label: 'General', icon: MessageSquare, badge: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
@@ -143,6 +144,7 @@ export default function NoticeBoard() {
     setReactFull(false);
   };
   const closeReactPopover = () => { setReactPopover(null); setReactFull(false); };
+  useBackLayer(!!reactPopover, closeReactPopover);
   const pickReaction = (emoji) => { handleReact(reactPopover.id, emoji); closeReactPopover(); };
 
   return (
@@ -318,6 +320,7 @@ export default function NoticeBoard() {
 }
 
 function NewNoticeModal({ onClose, onPosted }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const [type, setType] = useState('GENERAL');
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');

@@ -19,6 +19,7 @@ import {
   LEAD_STAGES, LEAD_SOURCES, CLIENT_TYPES, RELATED_TO_OPTIONS, LOST_REASONS, FOLLOWUP_TYPES,
   STAGE_THEME, STATUS_THEME, SOURCE_THEME, scoreBand, computeScore, leadName, fmtStamp,
 } from '../services/leads';
+import { useBackLayer } from '../utils/backNav';
 
 // Lead list filters persist per browser — someone who works a single RM's
 // pipeline shouldn't have to re-pick it on every visit. Only an explicit
@@ -413,6 +414,7 @@ export default function LeadsView({
 // CREATE / EDIT LEAD MODAL
 // ===========================================================================
 function LeadFormModal({ initial, clients = [], onClose, onSave }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const isEdit = !!initial;
   const [f, setF] = useState(() => ({
     name: initial?.name || `${initial?.firstName || ''} ${initial?.lastName || ''}`.trim(),
@@ -533,6 +535,7 @@ function LeadFormModal({ initial, clients = [], onClose, onSave }) {
 // LEAD DETAIL MODAL — stage stepper, quick actions, timeline, notes, follow-ups
 // ===========================================================================
 function LeadDetailModal({ lead, isViewer, onClose, onEdit, onRefresh, onConvertLead, onScheduleLeadMeeting, onLeadMeetingDone, onOpenLeadMeetingForm, onCreateLeadMom, onEditLeadMom, onToast }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   // Opens straight to Details — everything entered at creation should be the
   // first thing visible on clicking a lead, not hidden behind a tab click.
   const [tab, setTab] = useState('details');

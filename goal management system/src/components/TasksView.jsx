@@ -18,6 +18,7 @@ import { uid } from '../utils/calc';
 import { updateClient, applySavedClient } from '../services/db';
 import { useClientWithFiles, slimForSave } from '../services/clientFiles';
 import { useBlobUrl } from '../utils/documents';
+import { useBackLayer } from '../utils/backNav';
 
 export default function TasksView({ clients = [], isViewer, activeTaskId, setActiveTaskId, onOpenTask, tasksChangeCounter }) {
   const me = getCurrentUser();
@@ -304,6 +305,7 @@ function existingDocsFor(linkedClient, categoryLabel, currentCategoryFiles = [])
 function DocUploadGroup({ label, required, files, onAdd, onRemove, existingDocs = [], clientAttachments = [], isViewer = false }) {
   const inputRef = useRef(null);
   const [previewFile, setPreviewFile] = useState(null);
+  useBackLayer(!!previewFile, () => setPreviewFile(null));
   // Hover tooltip state: { dataUrl, name, x, y }
   const [tooltip, setTooltip] = useState(null);
   const tooltipTimer = useRef(null);
@@ -649,6 +651,7 @@ export function GroupLeaderSelect({ options, value, pan, onSelect, disabled }) {
 }
 
 export function TaskFormModal({ initial, clients, isViewer, onClose, onSave }) {
+  useBackLayer(true, onClose); // phone/browser Back closes it
   const isEdit = !!initial;
   const [isEditingMode, setIsEditingMode] = useState(!isEdit);
   const [stage, setStage] = useState(initial?.stage || 'Open');
