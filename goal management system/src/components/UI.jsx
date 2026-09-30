@@ -31,6 +31,120 @@ export function Avatar({ name, size = 'md', photo, className = '' }) {
   );
 }
 
+// Phone-style bottom sheet. Slides up from the bottom edge; drag the handle
+// (or the sheet itself while it's scrolled to the top) down to dismiss —
+// past ~30% of its height or with a flick it closes, otherwise it springs
+// back. Every close (backdrop tap, Back button, Escape, the parent setting
+// `open` false) slides it away before it unmounts, so the parent just
+// flips `open`. Also locks page scroll while shown.
+const SHEET_CLOSE_MS = 260;
+// `dragFromBody={false}` limits dragging to the handle (for sheets whose body
+// needs vertical gestures itself, e.g. selecting text).
+export function BottomSheet({ open, onClose, children, zClass = 'z-[9995]', panelClass = '', maxWidth = 'max-w-lg', dragFromBody = true }) {
+  const [mounted, setMounted] = useState(open);
+  if (open && !mounted) setMounted(true);
+  const closing = mounted && !open;
+  const panelRef = useRef(null);
+  const backdropRef = useRef(null);
+  const drag = useRef(null);
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; });
+  useBackLayer(open, onClose);
+
+  useEffect(() => {
+    if (open || !mounted) return undefined;
+    const t = setTimeout(() => setMounted(false), SHEET_CLOSE_MS);
+    return () => clearTimeout(t);
+  }, [open, mounted]);
+
+  useEffect(() => {
+    if (!mounted) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => { if (e.key === 'Escape') closeRef.current(); };
+    window.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
+  }, [mounted]);
+
+  const onTouchStart = (e) => {
+    const panel = panelRef.current;
+    if (!panel || closing || e.touches.length !== 1) return;
+    // From the handle always; from the body only when neither the sheet nor
+    // anything scrollable under the finger is scrolled down — otherwise a
+    // downward swipe is that content scrolling back up.
+    const fromHandle = !!e.target.closest('[data-sheet-handle]');
+    let scrolled = false;
+    for (let el = e.target; el && el !== panel.parentElement; el = el.parentElement) {
+      if (el.scrollTop > 0) { scrolled = true; break; }
+    }
+    drag.current = fromHandle || (dragFromBody && !scrolled)
+      ? { y: e.touches[0].clientY, t: Date.now(), dy: 0, active: false }
+      : null;
+  };
+  const onTouchMove = (e) => {
+    const d = drag.current;
+    const panel = panelRef.current;
+    if (!d || !panel) return;
+    const dy = e.touches[0].clientY - d.y;
+    if (!d.active) {
+      if (dy < -6) { drag.current = null; return; } // an upward swipe scrolls the sheet
+      if (dy < 6) return;
+      d.active = true;
+    }
+    d.dy = Math.max(0, dy);
+    panel.style.transition = 'none';
+    panel.style.transform = `translateY(${d.dy}px)`;
+    if (backdropRef.current) {
+      backdropRef.current.style.transition = 'none';
+      backdropRef.current.style.opacity = String(Math.max(0, 1 - d.dy / (panel.offsetHeight || 400)));
+    }
+  };
+  const onTouchEnd = () => {
+    const d = drag.current;
+    const panel = panelRef.current;
+    drag.current = null;
+    if (!d || !d.active || !panel) return;
+    const speed = d.dy / Math.max(1, Date.now() - d.t); // px per ms
+    if (d.dy > panel.offsetHeight * 0.3 || (speed > 0.5 && d.dy > 30)) {
+      onClose();
+      return;
+    }
+    panel.style.transition = 'transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)';
+    panel.style.transform = '';
+    if (backdropRef.current) {
+      backdropRef.current.style.transition = 'opacity 0.2s';
+      backdropRef.current.style.opacity = '';
+    }
+  };
+
+  if (!mounted) return null;
+  return createPortal(
+    <div className={`fixed inset-0 flex flex-col justify-end ${zClass}`}>
+      <div
+        ref={backdropRef}
+        onClick={onClose}
+        className="absolute inset-0 bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-sm animate-backdrop-in"
+        style={closing ? { opacity: 0, transition: `opacity ${SHEET_CLOSE_MS}ms ease-in` } : undefined}
+      />
+      <div
+        ref={panelRef}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchEnd}
+        className={`relative w-full ${maxWidth} mx-auto max-h-[85dvh] overflow-y-auto overscroll-contain bg-white dark:bg-slate-900 rounded-t-3xl border-t border-slate-200/70 dark:border-slate-800 shadow-2xl animate-sheet-up ${panelClass}`}
+        style={closing ? { transform: 'translateY(100%)', transition: `transform ${SHEET_CLOSE_MS}ms cubic-bezier(0.4, 0, 1, 1)` } : undefined}
+      >
+        <div data-sheet-handle className="sticky top-0 z-10 flex justify-center pt-2.5 pb-3 bg-inherit rounded-t-3xl touch-none cursor-grab">
+          <span className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700" />
+        </div>
+        {children}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 export function Card({ children, className = '' }) {
   return (
     <div className={`bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-lg shadow-slate-100/40 dark:shadow-none hover:shadow-xl hover:shadow-slate-200/30 dark:hover:shadow-none transition-all duration-300 ${className}`}>

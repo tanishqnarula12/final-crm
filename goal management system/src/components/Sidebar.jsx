@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Users, UserPlus, ListChecks, FolderOpen, UserCheck, LayoutDashboard, Video, TrendingUp, MoreHorizontal, Calculator, FileSpreadsheet, HelpCircle, Trophy, Target, PieChart } from 'lucide-react';
 import logoImg from '../assets/logo.png';
 import { canTopSchemes } from '../utils/permissions';
-import { useBackLayer } from '../utils/backNav';
+import { BottomSheet } from './UI';
 
 const NAV = [
   { id: 'dashboard', label: 'Dash', icon: LayoutDashboard },
@@ -183,22 +183,13 @@ const PRIMARY = ['dashboard', 'leads', 'clients', 'tasks'];
 const MOBILE_LABEL = { clients: 'Clients', prospects: 'Prospects', documents: 'Documents' };
 
 export function MobileNav({ view, setView, badges = {}, onSelectOthersTab, othersSubTab }) {
+  // Back button, Escape, scroll lock and the slide-away all live in BottomSheet.
   const [sheetOpen, setSheetOpen] = useState(false);
-  useBackLayer(sheetOpen, () => setSheetOpen(false));
   const primary = NAV.filter((n) => PRIMARY.includes(n.id));
   const rest = NAV.filter((n) => !PRIMARY.includes(n.id) && n.id !== 'others');
   const tools = OTHERS_TOOLS.filter((t) => t.id !== 'top_schemes' || canTopSchemes('view'));
   const moreActive = sheetOpen || rest.some((n) => n.id === view) || view === 'others';
   const moreBadge = rest.reduce((sum, n) => sum + (badges[n.id] || 0), 0);
-
-  useEffect(() => {
-    if (!sheetOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const onKey = (e) => { if (e.key === 'Escape') setSheetOpen(false); };
-    window.addEventListener('keydown', onKey);
-    return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
-  }, [sheetOpen]);
 
   const go = (id) => { setSheetOpen(false); setView(id); };
   const badgeEl = (n) => n > 0 && (
@@ -235,11 +226,15 @@ export function MobileNav({ view, setView, badges = {}, onSelectOthersTab, other
         </div>
       </nav>
 
-      {sheetOpen && createPortal(
-        <div className="md:hidden fixed inset-0 z-[35]">
-          <div className="absolute inset-0 bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-sm animate-fade-in" onClick={() => setSheetOpen(false)} />
-          <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto bg-white dark:bg-slate-900 rounded-t-3xl border-t border-slate-200/70 dark:border-slate-800 shadow-2xl animate-slide-up px-4 pt-3 pb-[calc(5rem+env(safe-area-inset-bottom))]">
-            <div className="mx-auto w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700 mb-4" />
+      {/* Sits under the tab bar (z-35 < z-40), so the bar stays tappable and
+          "More" toggles it. Drag the handle down to dismiss. */}
+      <BottomSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        zClass="md:hidden z-[35]"
+        maxWidth=""
+        panelClass="px-4 pb-[calc(5rem+env(safe-area-inset-bottom))]"
+      >
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-1 mb-2">Modules</p>
             <div className="grid grid-cols-4 gap-1.5 mb-5">
               {rest.map(({ id, label, icon: Icon }) => {
@@ -285,10 +280,7 @@ export function MobileNav({ view, setView, badges = {}, onSelectOthersTab, other
                 );
               })}
             </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      </BottomSheet>
     </>
   );
 }

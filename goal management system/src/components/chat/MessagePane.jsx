@@ -21,6 +21,7 @@ import { QUICK_REACTIONS } from './emojiData';
 import ProfileCard from './ProfileCard';
 import GroupInfoPanel from './GroupInfoPanel';
 import { useBackLayer } from '../../utils/backNav';
+import { BottomSheet } from '../UI';
 
 // A message can only be edited within 15 minutes of being sent — after that the
 // Edit option disappears and the text is locked (the server enforces the same
@@ -60,8 +61,14 @@ export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAct
   useBackLayer(searchOpen, () => { setSearchOpen(false); setSearchQ(''); setSearchResults(null); });
   // Phones: press-and-hold action sheet, its "Select text" view, and a
   // short "Copied" confirmation.
+  // The message stays set while its sheet slides away; `…Open` drives it,
+  // and `sheetKey` gives each press-and-hold a fresh sheet (reactions row,
+  // not the last one's emoji picker).
   const [sheetMsg, setSheetMsg] = useState(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetKey, setSheetKey] = useState(0);
   const [selectMsg, setSelectMsg] = useState(null);
+  const [selectOpen, setSelectOpen] = useState(false);
   const [copiedAt, setCopiedAt] = useState(0);
   const meIsAdmin = (me.roles || []).includes('ADMIN');
   const copyMessage = async (m) => {
@@ -545,7 +552,7 @@ export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAct
                     isGroup={isGroup}
                     isAdmin={meIsAdmin}
                     highlighted={highlightId === m.id}
-                    onLongPress={() => setSheetMsg(m)}
+                    onLongPress={() => { setSheetMsg(m); setSheetKey((k) => k + 1); setSheetOpen(true); }}
                     read={mine && readByAll(m)}
                     onReply={() => { setEditing(null); setReplyTo(m); }}
                     onEdit={() => { setReplyTo(null); setEditing(m); }}
@@ -625,23 +632,25 @@ export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAct
       {/* Phone press-and-hold sheet + its "Select text" view */}
       {sheetMsg && (
         <MessageActionSheet
+          key={sheetKey}
+          open={sheetOpen}
           m={sheetMsg}
           mine={sheetMsg.senderId === me.id}
           sender={usersById.get(sheetMsg.senderId)}
           meId={me.id}
           rights={messageRights(sheetMsg, sheetMsg.senderId === me.id, meIsAdmin)}
-          onClose={() => setSheetMsg(null)}
+          onClose={() => setSheetOpen(false)}
           onReact={(emoji) => handleReact(sheetMsg, emoji)}
           onReply={() => { setEditing(null); setReplyTo(sheetMsg); }}
           onCopy={() => copyMessage(sheetMsg)}
-          onSelectText={() => setSelectMsg(sheetMsg)}
+          onSelectText={() => { setSelectMsg(sheetMsg); setSelectOpen(true); }}
           onPin={() => handlePin(sheetMsg)}
           onEdit={() => { setReplyTo(null); setEditing(sheetMsg); }}
           onDelete={() => handleDelete(sheetMsg)}
         />
       )}
       {selectMsg && (
-        <SelectTextSheet m={selectMsg} onCopyAll={() => copyMessage(selectMsg)} onClose={() => setSelectMsg(null)} />
+        <SelectTextSheet open={selectOpen} m={selectMsg} onCopyAll={() => copyMessage(selectMsg)} onClose={() => setSelectOpen(false)} />
       )}
       {copiedAt > 0 && (
         <div className="absolute left-1/2 -translate-x-1/2 bottom-24 z-40 px-4 py-2 rounded-full bg-slate-900/90 dark:bg-white/90 text-white dark:text-slate-900 text-xs font-bold shadow-xl animate-pop-in pointer-events-none">
@@ -1090,27 +1099,17 @@ function MessageBubble({
 // ---------------------------------------------------------------------------
 // Phone press-and-hold sheet: reactions on top, the message, then actions.
 // ---------------------------------------------------------------------------
-function MessageActionSheet({ m, mine, sender, meId, rights, onClose, onReact, onReply, onCopy, onSelectText, onPin, onEdit, onDelete }) {
-  useBackLayer(true, onClose); // phone/browser Back closes it
+// BottomSheet does the slide-in, drag-down-to-dismiss, slide-away close,
+// Back button and Escape; the parent flips `open`.
+function MessageActionSheet({ open, m, mine, sender, meId, rights, onClose, onReact, onReply, onCopy, onSelectText, onPin, onEdit, onDelete }) {
   const [full, setFull] = useState(false);
   const myEmoji = Object.entries(m.reactions || {}).find(([, ids]) => (ids || []).includes(meId))?.[0] || null;
   const act = (fn) => () => { onClose(); fn(); };
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
   const preview = m.deleted ? 'This message was deleted'
     : m.content || (m.type === 'poll' ? `📊 ${m.poll?.question || 'Poll'}` : '📎 Attachment');
 
-  return createPortal(
-    <div className="fixed inset-0 z-[9995] flex flex-col justify-end" onClick={onClose}>
-      <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[2px] animate-fade-in" />
-      <div
-        className="relative w-full max-w-lg mx-auto bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl animate-slide-up pb-[calc(0.75rem+env(safe-area-inset-bottom))] select-none"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mx-auto mt-2.5 mb-3 w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700" />
+  return (
+    <BottomSheet open={open} onClose={onClose} panelClass="pb-[calc(0.75rem+env(safe-area-inset-bottom))] select-none">
         {!m.deleted && (full ? (
           <div className="px-3 pb-3 flex justify-center">
             <EmojiPicker onPick={(e) => { onClose(); onReact(e); }} className="!w-full !max-w-none !shadow-none" />
@@ -1143,9 +1142,7 @@ function MessageActionSheet({ m, mine, sender, meId, rights, onClose, onReact, o
           {rights.canEdit && <SheetItem icon={Pencil} label="Edit" onClick={act(onEdit)} />}
           {rights.canDelete && <SheetItem icon={Trash2} label="Delete" danger onClick={act(onDelete)} />}
         </div>
-      </div>
-    </div>,
-    document.body
+    </BottomSheet>
   );
 }
 
@@ -1165,16 +1162,11 @@ function SheetItem({ icon: Icon, label, onClick, danger }) {
 // "Select text": the message in a sheet where the phone's own text selection
 // works, so any part of it can be copied (the bubble itself reserves
 // press-and-hold for the action sheet).
-function SelectTextSheet({ m, onCopyAll, onClose }) {
-  useBackLayer(true, onClose); // phone/browser Back closes it
-  return createPortal(
-    <div className="fixed inset-0 z-[9995] flex flex-col justify-end" onClick={onClose}>
-      <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[2px] animate-fade-in" />
-      <div
-        className="relative w-full max-w-lg mx-auto bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl animate-slide-up flex flex-col max-h-[80dvh] pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-4 pt-4 pb-1 shrink-0">
+// Only the handle drags this sheet — on the text, a drag is a selection.
+function SelectTextSheet({ open, m, onCopyAll, onClose }) {
+  return (
+    <BottomSheet open={open} onClose={onClose} dragFromBody={false} panelClass="flex flex-col pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+        <div className="flex items-center justify-between px-4 pb-1 shrink-0">
           <h3 className="text-base font-bold text-slate-900 dark:text-white">Select text</h3>
           <button onClick={onClose} title="Close" className="w-9 h-9 -mr-1.5 rounded-full flex items-center justify-center text-slate-500 active:bg-slate-100 dark:active:bg-slate-800 cursor-pointer">
             <X size={18} />
@@ -1192,9 +1184,7 @@ function SelectTextSheet({ m, onCopyAll, onClose }) {
             <Copy size={15} /> Copy all
           </button>
         </div>
-      </div>
-    </div>,
-    document.body
+    </BottomSheet>
   );
 }
 
