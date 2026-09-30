@@ -1,10 +1,13 @@
 # Storage copy: moving the older document files into Supabase Storage
 
-**Status, 30 Sep 2026, 9:07 AM IST**
+**Status: ✅ done, 30 Sep 2026, 9:06–9:20 AM IST.**
 
-- **Canary done.** The "Test" client's 7 documents (11 files, 4.2 MB) are copied and checked.
-- **Waiting on the owner.** The owner opens 2 of those documents in the live CRM (see "Owner check" below).
-- **Then the rest.** The other 37 clients (152 documents, about 60 MB) follow.
+- **Everything copied and checked.** All 159 older documents (187 files) are in Storage; nothing is left inline and
+  nothing was skipped.
+- **Checked in the live CRM.** The owner opened a photo, a proposal page and a PDF.
+- **Smaller database.** Client data went from 64 MB to 999 kB.
+
+What's left is in "After the copy" at the end.
 
 ---
 
@@ -40,7 +43,7 @@ Yes. This is what happens to a document depending on when it was uploaded:
 
   Ask everyone to reload the CRM once: Ctrl+Shift+R on a computer, or close and reopen the app on a phone.
 
-## Owner check (after the canary)
+## Owner check (after the canary) — ✓ done 30 Sep
 
 In the live CRM, open client **Test** → Documents and check that these open normally:
 
@@ -106,8 +109,29 @@ Unchanged since the 29 Sep dry run.
 | 30 Sep 09:06 | **Canary**: client "Test" (`id_aay0t0e`), 7 documents / 11 files, 4.2 MB | ✓ 7 copied, 0 skipped |
 | 30 Sep 09:06 | Backup written, read back, second copy matches by SHA-256 | ✓ |
 | 30 Sep 09:07 | `--verify`: 11 of 11 files OK, no problems | ✓ |
-| next | Owner opens 2 documents of "Test" in the live CRM | waiting |
-| next | The rest: 37 clients, 152 documents | — |
+| 30 Sep 09:09 | Script pushed (`a15ab95`); Render redeployed, `/health` ok | ✓ |
+| 30 Sep ~09:12 | **Owner check in the live CRM:** PAN Card_Test (photo) and insurance_Test_2026-09-03_17-16 (proposal page) open from Storage; so does Cancelled Cheque_Madhu Gupta (PDF) | ✓ |
+| 30 Sep 09:14 | Pre-flight again: no activity in the last hour; 37 clients / 152 documents / 60.0 MB left | ✓ |
+| 30 Sep 09:16–09:20 | **The rest**: 37 clients, 152 documents (176 files). Backup 60.1 MB, second copy matches by SHA-256 | ✓ 152 copied, 0 skipped |
+| 30 Sep 09:22 | `--verify` both runs: 7 documents / 11 files and 152 / 176. No problems | ✓ |
+| 30 Sep 09:22 | Dry run finds **0** documents left inline. All 160 documents with a file are in Storage; 1 never had a file | ✓ |
+| 30 Sep 09:25 | Bucket: 185 objects, 49.4 MB. 188 references, all pointing at existing objects; 0 unreferenced objects | ✓ |
+| 30 Sep 09:27 | Clients table: `clientDetails` 999 kB in all (was about 64 MB), largest record 3.7 KB. API healthy | ✓ |
+
+**Found along the way** (nothing lost or damaged):
+
+- **185 objects for 188 references.** Three pairs of documents on the same client share one id *and* have identical
+  files, so each pair points at one object:
+  - "PAN Card_Test" / "Nominee PAN Card_Test" on Test;
+  - two duplicate "Nominee PAN Card_Reena Bansal" entries on Anand bansal;
+  - two duplicate "Nominee PAN Card_Anand bansal" entries on Anand bansal.
+
+  Every entry still opens its own exact original.
+- **Shared ids have a side effect.** Because of those shared ids, deleting one entry of a pair in the app removes both
+  from the list. The files would stay in Storage and in the backup. This predates the copy; a small fix is to give
+  every document its own id (NEXT_STEPS §3).
+- **"Cancelled Cheque_Madhu Gupta" asks for a password.** The PDF has its own password, as bank PDFs often do. The
+  stored bytes match the upload exactly, checked by content hash and PDF structure.
 
 ## Steps (the developer runs these)
 
@@ -157,6 +181,12 @@ back, files inline in the database, exactly as before.
 
   If the old key is turned off first, stored documents can't be opened until Render has the new one. New uploads
   would fall back to the database, so they stay safe either way.
-- Delete the temporary test bucket `client-documents-test`, used only for rehearsals.
+- **Ask everyone to reload the CRM once**: Ctrl+Shift+R on a computer, or close and reopen the app on a phone. This is
+  only for a tab left open since before 28 Sep 4:36 PM.
+- **Keep the test bucket for now.** `client-documents-test` holds only rehearsal data. Keep it for step 3's rehearsals,
+  then delete it.
 - Keep both backup folders for at least 2 weeks. For an extra copy off this computer, put one on an encrypted pen drive.
+  Undo commands, if ever needed:
+  - Test client: `--restore "C:\Users\aniln\FintnessBackups\2026-09-30-storage-copy\client-attachments-before-storage-2026-09-30T03-36-53-252Z.restore.json"`
+  - The other 37: `--restore "C:\Users\aniln\FintnessBackups\2026-09-30-storage-copy\client-attachments-before-storage-2026-09-30T03-46-14-360Z.restore.json"`
 - Later: the same treatment for task/Servicing attachments, chat images and query attachments (NEXT_STEPS §3 step 3).

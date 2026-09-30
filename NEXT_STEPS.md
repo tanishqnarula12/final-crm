@@ -17,9 +17,9 @@ Do the items in the order of section 5, one at a time. Each gets tested and depl
 | 28 Sep, 17:22 | §4-F: logs stored **complete** again (owner: logs protect the system's integrity); the log *screens* still show a label instead of files. Plus a nightly clean-up of read notifications older than 60 days | `9dcc3a8`, `c17c20c` | ✅ Live |
 | 28 Sep, 18:09 | §3 step 1 (server): newly saved client document files go to Supabase Storage; existing files untouched (+ `62a05a7`, content-hash file names, 18:13) | `85bbd9a` | ✅ Live. First real upload stored on 29 Sep 10:47 IST |
 | 29 Sep | Investigated Preksha's "reverted" renewals and missing up-sell (see §8). Restored 3 records deleted on 25 Aug | — | ✅ Done (data fix, owner-approved) |
-| 29 Sep night | §3 step 2: copy the 159 existing documents to Storage | — | ⏳ Runbook: [STORAGE_COPY_TONIGHT.md](STORAGE_COPY_TONIGHT.md) |
 | 29 Sep, 16:25 IST | Delete safety, server (§8 prevention 0–2): only named records deleted; people on a record told about a delete; admin `GET /api/deleted` + restore | `a88a47b` | ✅ Live |
-| 29 Sep | Delete safety, app: Leads/Meetings/Queries saves name their deletes; admin **Recently deleted** screen (Account menu) with Restore; delete questions name the record; failed saves announced on every screen | see git log | ✅ Pushed |
+| 29 Sep, 16:49 IST | Delete safety, app: Leads/Meetings/Queries saves name their deletes; admin **Recently deleted** screen (Account menu) with Restore; delete questions name the record; failed saves announced on every screen | `963e6eb` | ✅ Live |
+| 30 Sep, 03:36–03:50 (9:06–9:20 AM IST) | §3 step 2: **all 159 older client documents (187 files, 64 MB) copied to Storage.** One client first ("Test"), which the owner opened in the live CRM, then the other 37. Verify 187/187, nothing left inline, 0 skipped. Client data in the database is now 999 kB instead of 64 MB | script `a15ab95` | ✅ Done. Log + undo: [STORAGE_COPY_TONIGHT.md](STORAGE_COPY_TONIGHT.md) |
 
 **Checked after the last release (read-only, 28 Sep 16:37 UTC):** 241 tasks, 14 task files all present, no
 `fileStripped` marker stored anywhere, 159 live client documents (158 with a file, same as before), 122 notes on
@@ -35,6 +35,10 @@ Do the items in the order of section 5, one at a time. Each gets tested and depl
 | 4 | ✅ **Decided 28 Sep** (§4-F). | — | (a) Activity logs: **keep everything** — they protect the system's integrity; no log row is ever edited or deleted. (b) Notifications: **yes, carefully** → nightly clean-up of *read* ones older than 60 days (built; unread never touched). |
 | 5 | *Optional:* **more database connections** (§4-D). | Only if the app ever feels slow when many people save at once. | Render → API → Environment → `DATABASE_URL`: add `connection_limit=8&pool_timeout=20` (use `&` if the URL already has a `?`). Today the pool is 3 on a 1-CPU server; the database allows 60 and uses ~9. Redeploy afterwards. |
 | 6 | *Optional:* clear the **Member since** date on the "Fintness Finserv" admin account. | Otherwise it gets a work-anniversary post on 16 Apr. | My Profile of that account → Member since. |
+| 7 | **Now due (30 Sep): rotate the Supabase `service_role` key** (#3). | The copy is finished; the old key was shared in a chat. | In this order, so documents never stop opening: new key in Supabase → Render `SUPABASE_SERVICE_ROLE_KEY` → wait for the redeploy → open one document in the CRM → only then turn off the old key. |
+| 8 | **Ask everyone to reload the CRM once** (30 Sep). | A tab open since before 28 Sep 16:36 IST runs the old app, which can't show documents that moved to Storage until reloaded. Nothing is lost. | Ctrl+Shift+R on a computer; close and reopen the app on a phone. |
+| 9 | **Keep the document backups private and for ≥ 2 weeks.** | They hold clients' KYC files: the undo for the copy. | `C:\Users\aniln\FintnessBackups\2026-09-30-storage-copy\` and a second copy in `C:\Users\aniln\AppData\Local\FintnessBackups\2026-09-30-storage-copy\`. An encrypted pen drive copy is a good extra. |
+| 10 | **Decide on the 36 queries deleted on 3 Aug** (§8). | They were deleted by a test, not by a person. | Say yes and they're restored the same careful way as the 3 records on 29 Sep. |
 
 ---
 
@@ -172,7 +176,7 @@ expired" confirms this cause.
 
 ---
 
-## 3. Move document files into Supabase Storage  *(step 1 live 28 Sep; step 2 waits for the owner's OK)*
+## 3. Move document files into Supabase Storage  *(step 1 live 28 Sep; ✅ step 2 done 30 Sep; step 3 next)*
 
 ### Status (28 Sep)
 
@@ -197,13 +201,29 @@ expired" confirms this cause.
   rename. Read-only on production: all 857 client records round-trip byte-identical and the slim list is unchanged
   for all 417 live clients.
 
-**Step 2 (needs your OK): copy the ~160 existing files.** A script is written first, then:
+**Step 2, done 30 Sep 9:06–9:20 AM IST: the 159 existing documents copied.** Script
+`server/scripts/copyClientFilesToStorage.js`; full log, safety steps and undo in
+[STORAGE_COPY_TONIGHT.md](STORAGE_COPY_TONIGHT.md).
 
-1. Dry run (read-only list).
-2. Full backup.
-3. Per document: upload, download and compare, then replace the inline copy (guarded so a user's edit in between
-   is never overwritten).
-4. Re-check everything.
+- **How it ran.** Two backups first, checked by SHA-256. Each file was uploaded, downloaded again and compared, then
+  swapped in, guarded so a user's edit in between is never overwritten. It was rebuilt through the app's own code,
+  then checked again with a read-only `--verify`.
+- **Order.** One client first ("Test"). The owner opened its photo and proposal page, and a PDF already in Storage,
+  in the live CRM. Then the other 37 clients.
+- **Result:**
+  - 159 documents and 187 files are in Storage, 188 references in total with the 29 Sep upload. Every reference
+    points at an object that exists; no objects are unreferenced.
+  - 0 documents are left inline; 1 reference never had a file.
+  - Client data in the database went from 64 MB to 999 kB, with the largest client record at 3.7 KB. The table's
+    disk space is reused by Postgres rather than returned at once.
+- **Found along the way** (nothing lost):
+  - **3 pairs of documents share one id on the same client** ("PAN Card_Test" / "Nominee PAN Card_Test"; two
+    duplicate "Nominee PAN Card" entries on Anand bansal). Their files are identical, so each pair points at one
+    object.
+  - **Deleting one entry of a pair removes both from the list** (ClientProfile/DocumentsView filter by id). The files
+    stay in Storage and the backup. This predates the copy and is worth a small fix: give every document its own id.
+  - **"Cancelled Cheque_Madhu Gupta" asks for a password** because the PDF has its own password, as bank PDFs often
+    do. Its stored bytes match the upload exactly.
 
 **Step 3, later:** task attachments, chat images, query attachments, and optionally signed links so files download
 straight from Storage.
@@ -301,7 +321,8 @@ possible, and backups get smaller.
 
 1. ✅ **§2 Preksha's session fix.** Small, and it unblocks a user.
 2. ✅ **§4-B permission refresh and §4-A task attachments** (+ ✅ §4-H notes). Small, with a big effect on egress.
-3. ⏳ **§3 Supabase Storage.** Waiting on the owner: bucket + Render keys ("Your tasks" #3).
+3. ✅ **§3 Supabase Storage, steps 1–2**: every client document is in Storage (30 Sep). Next: rotate the key ("Your
+   tasks" #7), then step 3 (task/Servicing attachments, chat images, query attachments), done the same way.
 4. ✅ **§4-F** (logs kept complete, screens file-free; nightly clean-up of old read notifications) · §4-D is your setting, optional · ⏸ §4-C checked and deferred (see §4).
 5. **§4-E** only if saves still feel slow after the above. Judge after a few days on the new code.
 
