@@ -68,7 +68,7 @@ export default function UpdateBanner() {
   if (!updateReady) return null;
 
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[9997] flex items-center gap-3 p-3 pl-4 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/60 dark:border-slate-800/80 shadow-2xl animate-slide-in-right max-w-[calc(100vw-2rem)]">
+    <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4 left-1/2 -translate-x-1/2 z-[9997] flex items-center gap-3 p-3 pl-4 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/60 dark:border-slate-800/80 shadow-2xl animate-slide-in-right max-w-[calc(100vw-2rem)]">
       <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
         <RefreshCw size={16} />
       </div>

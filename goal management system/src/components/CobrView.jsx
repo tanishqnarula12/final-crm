@@ -433,7 +433,7 @@ function CobrTab({ cobrTasks, onOpenCobr }) {
             className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
           />
         </div>
-        <div className="w-44">
+        <div className="w-full sm:w-44">
           <CoolSelect value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} className={selectCls + ' py-2 text-xs'}>
             <option value="all">All Stages ({counts.all})</option>
             {COBR_STAGES.map((s) => <option key={s} value={s}>{s} ({counts[s] || 0})</option>)}
@@ -445,7 +445,42 @@ function CobrTab({ cobrTasks, onOpenCobr }) {
         {filtered.length === 0 ? (
           <p className="text-sm text-slate-400 p-8 text-center">No COBR requests match this filter.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phones: one card per request instead of the 980px table. */}
+          <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+            {filtered.map((t) => {
+              const totals = cobrTotals(t.cobrEntries);
+              const completed = t.stage === 'Completed';
+              return (
+                <div key={t.id} onClick={() => onOpenCobr(t, true)} className="p-4 cursor-pointer active:bg-slate-50 dark:active:bg-slate-800/40 transition-colors">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-slate-900 dark:text-slate-100 break-words">{t.groupLeader || '—'}</div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        {t.applicant && t.applicant !== t.groupLeader && <span>{t.applicant} · </span>}
+                        <span className="font-mono">{t.pan || '—'}</span>
+                      </div>
+                    </div>
+                    <span className={`shrink-0 inline-flex items-center leading-none px-2 py-1 text-[9px] font-bold uppercase tracking-wider ring-1 rounded-full ${STAGE_THEME[t.stage] || 'bg-slate-100 text-slate-600 ring-slate-200/60 dark:bg-slate-800 dark:text-slate-400'}`}>
+                      {t.stage || 'Open'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 mt-2.5 text-[11px] text-slate-500 dark:text-slate-400">
+                    <span className="truncate">{t.cobrType || '—'} · {teamName(t.assignedTo) || '—'}</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 tabular-nums shrink-0">{fmtINR(totals.total)}</span>
+                  </div>
+                  {completed && (
+                    <div className="flex items-center gap-3 mt-1.5 text-[10px] font-semibold tabular-nums">
+                      <span className="text-emerald-600 dark:text-emerald-400">Done {fmtINR(totals.done)}</span>
+                      <span className="text-rose-600 dark:text-rose-400">Rejected {fmtINR(totals.rejected)}</span>
+                      <span className="text-slate-500 dark:text-slate-400">Pending {fmtINR(totals.pending)}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left min-w-[980px]">
               <thead>
                 <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800">
@@ -491,6 +526,7 @@ function CobrTab({ cobrTasks, onOpenCobr }) {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Card>
     </div>

@@ -45,7 +45,8 @@ import { isAuthenticated, isViewerRole, isAdminRole, refreshSession, renewSessio
 import SessionExpiredModal from './components/SessionExpiredModal';
 import MomWorkspace from './components/MomWorkspace';
 import ProposalWorkspace from './components/ProposalWorkspace';
-import Sidebar from './components/Sidebar';
+import Sidebar, { MobileNav } from './components/Sidebar';
+import { useIsPhone, useVisualViewport } from './utils/viewport';
 import TasksView, { TaskFormModal } from './components/TasksView';
 import QueriesView, { QueryFormModal } from './components/QueriesView';
 import LeaveView from './components/LeaveView';
@@ -79,6 +80,19 @@ import InstallPrompt from './components/InstallPrompt';
 import UpdateBanner from './components/UpdateBanner';
 import { subscribeToPush, unsubscribeFromPush } from './services/push';
 
+// Every screen's page container: 12px side gutters on phones, 24px from sm up.
+const MAIN_CLS = 'max-w-7xl w-full mx-auto px-3 sm:px-6 pt-4 pb-8';
+
+// Heading in the phone top bar (below md, where the rail is replaced by the
+// bottom tab bar and there's no other "where am I" cue).
+const MOBILE_TITLES = {
+  dashboard: 'Dashboard', leads: 'Leads', clients: 'Clients', tasks: 'Tasks', meetings: 'Meetings',
+  prospects: 'Prospects', cobr: 'Servicing', queries: 'Queries', documents: 'Documents', reports: 'Reports',
+  myprofile: 'My Profile', leave: 'Leave', users: 'User Management', permissions: 'Permission Matrix',
+  'activity-log': 'Activity Log', 'recently-deleted': 'Recently Deleted',
+};
+const OTHERS_TITLES = { other_tools: 'Calculator', top_schemes: 'Top Schemes', goal_planner: 'Goal Planner', asset_planner: 'Asset Allocation' };
+
 export default function App() {
   const [authed, setAuthed] = useState(() => isAuthenticated());
   const [isViewer, setIsViewer] = useState(() => isViewerRole());
@@ -102,6 +116,19 @@ export default function App() {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  // Phone chat: sized to the visible viewport (see the chat wrapper below),
+  // with the page underneath locked so iOS can't scroll it behind the chat.
+  const isPhone = useIsPhone();
+  const chatBox = useVisualViewport(view === 'chat' && isPhone);
+  useEffect(() => {
+    if (!(view === 'chat' && isPhone)) return undefined;
+    const root = document.documentElement;
+    const prev = [root.style.overflow, document.body.style.overflow];
+    root.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    return () => { root.style.overflow = prev[0]; document.body.style.overflow = prev[1]; };
+  }, [view, isPhone]);
 
   const [advisorProfile, setAdvisorProfile] = useState(() => loadAdvisorProfile());
 
@@ -1508,17 +1535,27 @@ export default function App() {
       <InstallPrompt />
       <UpdateBanner />
       {view !== 'chat' && (
-        <Sidebar
-          view={view}
-          setView={handleSetView}
-          onNavDoubleClick={handleNavDoubleClick}
-          badges={{ leads: leadsBadge, chat: chatUnread, tasks: moduleBadges.tasks, cobr: moduleBadges.cobr, meetings: moduleBadges.meetings, prospects: moduleBadges.prospects, queries: moduleBadges.queries }}
-          othersSubTab={othersSubTab}
-          onSelectOthersTab={setOthersSubTab}
-        />
+        <>
+          <Sidebar
+            view={view}
+            setView={handleSetView}
+            onNavDoubleClick={handleNavDoubleClick}
+            badges={{ leads: leadsBadge, chat: chatUnread, tasks: moduleBadges.tasks, cobr: moduleBadges.cobr, meetings: moduleBadges.meetings, prospects: moduleBadges.prospects, queries: moduleBadges.queries }}
+            othersSubTab={othersSubTab}
+            onSelectOthersTab={setOthersSubTab}
+          />
+          <MobileNav
+            view={view}
+            setView={handleSetView}
+            badges={{ leads: leadsBadge, tasks: moduleBadges.tasks, cobr: moduleBadges.cobr, meetings: moduleBadges.meetings, prospects: moduleBadges.prospects, queries: moduleBadges.queries }}
+            othersSubTab={othersSubTab}
+            onSelectOthersTab={setOthersSubTab}
+          />
+        </>
       )}
 
-      <div className={`flex-1 min-w-0 flex flex-col min-h-screen relative ${view === 'chat' ? 'pt-0' : 'pt-14'}`}>
+      {/* Phones: clear the fixed top bar (plus the notch) and the bottom tab bar. */}
+      <div className={`flex-1 min-w-0 flex flex-col min-h-screen relative ${view === 'chat' ? 'pt-0' : 'pt-[calc(3.5rem+env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))] md:pt-14 md:pb-0'}`}>
         {/* Top Right Floating Dock — flush "notch" at rest (sharp top
             corners, rounded bottom), morphs into a fully-rounded floating
             "island" once the page scrolls (iPhone Dynamic Island style), and
@@ -1528,11 +1565,23 @@ export default function App() {
             standing in for a rounded pill looks subtly angular up close.
             border-radius corners are true circular arcs AND transition
             smoothly on their own, so there's no shape-morph trick needed. */}
+        {/* Phones (below md): the same dock becomes a full-width top bar with
+            the logo and the current screen's name; it doesn't float. */}
         {view !== 'chat' && (
-          <div className={`no-print fixed right-12 z-30 flex flex-col items-end filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:drop-shadow-[0_4px_16px_rgba(0,0,0,0.25)] transition-[top] duration-500 ease-out ${dockFloating ? 'top-3' : 'top-0'}`}>
+          <div className={`no-print fixed inset-x-0 top-0 md:left-auto md:right-12 z-30 flex flex-col items-end filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:drop-shadow-[0_4px_16px_rgba(0,0,0,0.25)] transition-[top] duration-500 ease-out ${dockFloating ? 'md:top-3' : 'md:top-0'}`}>
             <div
-              className={`bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-slate-200/20 dark:border-slate-800/40 pl-9 pr-9 py-2.5 flex items-center gap-5.5 transition-all duration-500 ease-out ${dockFloating ? 'border rounded-full' : 'border-b border-x rounded-b-[28px]'}`}
+              className={`w-full md:w-auto bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-slate-200/20 dark:border-slate-800/40 pl-3 pr-3 pt-[calc(0.5rem+env(safe-area-inset-top))] pb-2 border-b md:pl-9 md:pr-9 md:pt-2.5 md:pb-2.5 flex items-center gap-3 md:gap-5.5 transition-all duration-500 ease-out ${dockFloating ? 'md:border md:rounded-full' : 'md:border-b md:border-x md:rounded-b-[28px]'}`}
             >
+              <button
+                onClick={() => handleSetView('dashboard')}
+                className="md:hidden flex items-center gap-2.5 min-w-0 flex-1 text-left cursor-pointer"
+                aria-label="Go to Dashboard"
+              >
+                <img src={logoImg} className="h-8 w-8 object-contain rounded-lg ring-1 ring-slate-200/60 dark:ring-slate-800 shrink-0" alt="" />
+                <span className="text-[15px] font-bold tracking-tight text-slate-900 dark:text-white truncate font-heading">
+                  {view === 'others' ? (OTHERS_TITLES[othersSubTab] || 'Tools') : (MOBILE_TITLES[view] || 'Fintness CRM')}
+                </span>
+              </button>
               {/* Module-refresh spinner — a small circle that spins briefly
                   while the module we just navigated into re-pulls its data.
                   Space is reserved always so it never shifts the dock layout. */}
@@ -1610,7 +1659,7 @@ export default function App() {
             {/* Chat unread-messages hover preview */}
             {chatPreviewOpen && (
               <div
-                className="absolute top-11 right-24 w-80 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/80 shadow-2xl z-45 animate-scale-up p-4 mt-2 text-left"
+                className="hidden md:block absolute top-11 right-24 w-80 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/80 shadow-2xl z-45 animate-scale-up p-4 mt-2 text-left"
                 onMouseEnter={() => clearTimeout(chatPreviewCloseTimer.current)}
                 onMouseLeave={() => {
                   chatPreviewCloseTimer.current = setTimeout(() => setChatPreviewOpen(false), 250);
@@ -1634,7 +1683,7 @@ export default function App() {
 
             {/* Dropdown Popovers - Outside the clipped dock */}
             {activeDropdown === 'bell' && (
-              <div className="absolute top-11 right-10 w-80 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/80 shadow-2xl z-45 animate-scale-up p-4 mt-2 text-left">
+              <div className="absolute left-2 right-2 top-full max-h-[calc(100dvh-9rem)] overflow-y-auto md:left-auto md:right-10 md:top-11 md:w-80 md:max-h-none md:overflow-visible rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/80 shadow-2xl z-45 animate-scale-up p-4 mt-2 text-left">
                 <NotificationPanel
                   notifications={notifications}
                   onMarkRead={markNotificationRead}
@@ -1646,7 +1695,7 @@ export default function App() {
 
             {/* Profile Dropdown */}
             {activeDropdown === 'profile' && (
-              <div className="absolute top-11 right-0 w-64 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/80 shadow-2xl z-45 animate-scale-up p-4 mt-2 text-left">
+              <div className="absolute left-2 right-2 top-full max-h-[calc(100dvh-9rem)] overflow-y-auto md:left-auto md:right-0 md:top-11 md:w-64 md:max-h-none md:overflow-visible rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/80 shadow-2xl z-45 animate-scale-up p-4 mt-2 text-left">
                 <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-3 mb-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0 overflow-hidden">
                     {advisorProfile.photo ? (
@@ -1756,7 +1805,7 @@ export default function App() {
         )}
 
         {view === 'dashboard' && (
-          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+          <main className={MAIN_CLS}>
             <DashboardView
               clients={clients}
               advisorName={advisorProfile.name}
@@ -1775,37 +1824,37 @@ export default function App() {
         )}
 
         {view === 'myprofile' && (
-          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+          <main className={MAIN_CLS}>
             <MyProfileView />
           </main>
         )}
 
         {view === 'leave' && (
-          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+          <main className={MAIN_CLS}>
             <LeaveView activeLeaveId={activeLeaveId} setActiveLeaveId={setActiveLeaveId} />
           </main>
         )}
 
         {view === 'users' && isAdmin && (
-          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+          <main className={MAIN_CLS}>
             <UsersAdmin />
           </main>
         )}
 
         {view === 'activity-log' && isAdmin && (
-          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+          <main className={MAIN_CLS}>
             <ActivityLogView />
           </main>
         )}
 
         {view === 'permissions' && isAdmin && (
-          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+          <main className={MAIN_CLS}>
             <PermissionsMatrix />
           </main>
         )}
 
         {view === 'recently-deleted' && isAdmin && (
-          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+          <main className={MAIN_CLS}>
             <RecentlyDeleted />
           </main>
         )}
@@ -1855,7 +1904,13 @@ export default function App() {
                   onMarkAllRead={markAllNotificationsRead}
                   onOpenNotification={handleOpenNotification}
                 />
-                <div className="flex-1 min-w-0 h-screen flex flex-col">
+                {/* Phones: a full-screen layer sized to the visible area, so
+                    the composer stays on top of the on-screen keyboard. */}
+                <div
+                  className="flex-1 min-w-0 h-screen flex flex-col max-md:fixed max-md:inset-x-0 max-md:top-0 max-md:z-30"
+                  style={chatBox ? { height: chatBox.height, transform: `translateY(${chatBox.offsetTop}px)` } : undefined}
+                  data-keyboard={chatBox && window.innerHeight - chatBox.height > 150 ? 'open' : undefined}
+                >
                   <ChatView
                     onQuickAction={(action) => {
                       if (action === 'task') { setEditingTask(null); setShowTaskForm(true); }
@@ -1874,7 +1929,7 @@ export default function App() {
         )}
 
         {view === 'leads' && (
-          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+          <main className={MAIN_CLS}>
             <LeadsView
               isViewer={isViewer}
               clients={clients}
@@ -1892,7 +1947,7 @@ export default function App() {
         )}
 
         {view === 'tasks' && (
-          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+          <main className={MAIN_CLS}>
             <TasksView 
               clients={clients} 
               isViewer={isViewer} 
@@ -1905,7 +1960,7 @@ export default function App() {
         )}
 
         {view === 'cobr' && (
-          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+          <main className={MAIN_CLS}>
             <CobrView
               isViewer={isViewer}
               clients={clients}
@@ -1920,7 +1975,7 @@ export default function App() {
         )}
 
         {view === 'meetings' && (
-          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+          <main className={MAIN_CLS}>
             <MeetingsView
               clients={clients}
               isViewer={isViewer}
@@ -1935,13 +1990,13 @@ export default function App() {
         )}
 
         {view === 'documents' && (
-          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+          <main className={MAIN_CLS}>
             <DocumentsView clients={clients} tasksChangeCounter={tasksChangeCounter} />
           </main>
         )}
 
         {view === 'queries' && (
-          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+          <main className={MAIN_CLS}>
             <QueriesView
               isViewer={isViewer}
               activeQueryId={activeQueryId}
@@ -1953,7 +2008,7 @@ export default function App() {
         )}
 
         {view === 'prospects' && (
-          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+          <main className={MAIN_CLS}>
             <ProspectsView
               isViewer={isViewer}
               onOpenProspect={handleOpenProspect}
@@ -1967,7 +2022,7 @@ export default function App() {
         )}
 
         {view === 'reports' && (
-          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+          <main className={MAIN_CLS}>
             <div className="flex flex-col items-center justify-center text-center py-24 animate-fade-in">
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/20 mb-5">
                 <TrendingUp size={28} />
@@ -1979,7 +2034,7 @@ export default function App() {
         )}
 
         {view === 'others' && (
-          <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+          <main className={MAIN_CLS}>
             <OthersView
               clients={clients}
               isViewer={isViewer}
@@ -1992,7 +2047,7 @@ export default function App() {
         {view === 'clients' && (
         <>
       {/* Main Container */}
-      <main className="max-w-7xl w-full mx-auto px-6 pt-4 pb-8">
+      <main className={MAIN_CLS}>
         {/* Navigation Tabs (top-level) OR per-client profile sub-nav */}
         {!inClientProfile ? (
           <div className="w-full overflow-x-auto mb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -2292,7 +2347,7 @@ export default function App() {
 
       {/* Footer */}
       {view !== 'chat' && (
-        <footer className="max-w-7xl w-full mx-auto px-6 py-10 text-xs text-slate-400 dark:text-slate-500 text-center border-t border-slate-200/40 dark:border-slate-800/40 mt-12">
+        <footer className="max-w-7xl w-full mx-auto px-3 sm:px-6 py-10 text-xs text-slate-400 dark:text-slate-500 text-center border-t border-slate-200/40 dark:border-slate-800/40 mt-12">
           © {CURRENT_YEAR} Team Fintness · Building fitter financial futures
         </footer>
       )}
@@ -2485,7 +2540,7 @@ export default function App() {
               `fixed`, so it doesn't reserve any layout space; without extra
               clearance here the "Saved MOM Drafts" panel and wizard tab bar
               render right underneath it and visually collide. */}
-          <div className="max-w-7xl w-full mx-auto px-6 pt-20 pb-8">
+          <div className="max-w-7xl w-full mx-auto px-3 sm:px-6 pt-20 pb-8">
             {momLeadMomsLoading ? (
               <div className="flex items-center justify-center py-24 text-slate-400 dark:text-slate-500 text-sm font-semibold">
                 Loading…
@@ -2513,7 +2568,7 @@ function ChatSidebar({
   return (
     <aside
       style={{ width: '64px' }}
-      className="no-print h-screen flex flex-col bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-r border-slate-200/70 dark:border-slate-800/70 z-30 shrink-0 shadow-md dark:shadow-none overflow-hidden"
+      className="no-print h-screen hidden md:flex flex-col bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-r border-slate-200/70 dark:border-slate-800/70 z-30 shrink-0 shadow-md dark:shadow-none overflow-hidden"
     >
       <div className="flex flex-col h-full w-full py-6 justify-between items-center min-h-0">
         {/* Top: Back Button */}

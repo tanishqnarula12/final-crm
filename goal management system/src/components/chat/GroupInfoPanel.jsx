@@ -84,7 +84,7 @@ export default function GroupInfoPanel({ conv, me, usersById, onlineSet, onClose
     <div className="fixed inset-0 z-[9997] flex justify-end animate-fade-in" onClick={onClose}>
       <div className="absolute inset-0 bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-[2px]" />
       <div
-        className="relative w-full max-w-sm h-full bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200/70 dark:border-slate-800 flex flex-col animate-slide-in-right"
+        className="relative w-full max-w-sm h-full bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200/70 dark:border-slate-800 flex flex-col animate-slide-in-right pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

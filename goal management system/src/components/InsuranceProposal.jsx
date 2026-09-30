@@ -1159,7 +1159,7 @@ export default function InsuranceProposal({ client, isViewer }) {
 
           {/* Card 2: Applicants Grid */}
           <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-md rounded-[20px] space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/60">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800/60">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-purple-50/50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 flex items-center justify-center border border-purple-100/40 dark:border-purple-900/30">
                   <Heart size={18} />

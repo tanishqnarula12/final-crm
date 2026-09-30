@@ -192,7 +192,7 @@ export default function ClientDetail({
                     {!isViewer && mayDeleteGoal && (
                       <button
                         onClick={(e) => { e.stopPropagation(); onDeleteGoal(g.id); }}
-                        className="text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 p-2 rounded-xl hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100 cursor-pointer active:scale-95"
+                        className="text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 p-2 rounded-xl hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100 touch:opacity-100 cursor-pointer active:scale-95"
                         title="Delete goal"
                       >
                         <Trash2 size={14} />
@@ -296,7 +296,7 @@ function AssumptionsSection({ client, onSave, isViewer }) {
 
   return (
     <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80">
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-blue-50/50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-100/40 dark:border-blue-900/30 flex items-center justify-center">
             <FileText size={18} />

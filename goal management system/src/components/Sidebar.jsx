@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Users, UserPlus, ListChecks, FolderOpen, UserCheck, LayoutDashboard, Video, TrendingUp, MoreHorizontal, Calculator, FileSpreadsheet, HelpCircle, Trophy, Target, PieChart } from 'lucide-react';
 import logoImg from '../assets/logo.png';
@@ -52,11 +52,13 @@ export default function Sidebar({ view, setView, onNavDoubleClick, badges = {}, 
   return (
     <aside
       style={{ width: '64px' }}
-      className="no-print sticky top-0 h-screen flex flex-col bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-r border-slate-200/70 dark:border-slate-800/70 z-30 shrink-0 shadow-md dark:shadow-none overflow-hidden"
+      className="no-print sticky top-0 h-screen hidden md:flex flex-col bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-r border-slate-200/70 dark:border-slate-800/70 z-30 shrink-0 shadow-md dark:shadow-none overflow-hidden"
     >
-      <div className="flex flex-col h-full w-full py-6 justify-between items-center min-h-0">
+      {/* Short screens (a phone or small tablet on its side): no logo and
+          tighter spacing, so most of the modules fit without scrolling. */}
+      <div className="flex flex-col h-full w-full py-6 [@media(max-height:520px)]:py-2 justify-between items-center min-h-0">
         {/* Logo */}
-        <div className="flex flex-col items-center shrink-0 w-full mb-6">
+        <div className="flex flex-col items-center shrink-0 w-full mb-6 [@media(max-height:520px)]:hidden">
           <img
             src={logoImg}
             className="h-10 w-10 object-contain rounded-xl ring-1 ring-slate-200/60 dark:ring-slate-800 shadow-sm"
@@ -65,7 +67,7 @@ export default function Sidebar({ view, setView, onNavDoubleClick, badges = {}, 
         </div>
 
         {/* Nav */}
-        <nav className="w-full px-2 space-y-4 flex-1 flex flex-col items-center overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden min-h-0 py-1">
+        <nav className="w-full px-2 space-y-4 [@media(max-height:520px)]:space-y-1 flex-1 flex flex-col items-center overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden min-h-0 py-1">
           {NAV.map(({ id, label, icon: Icon }) => {
             const active    = view === id;
             const badge     = badges[id] || 0;
@@ -74,9 +76,10 @@ export default function Sidebar({ view, setView, onNavDoubleClick, badges = {}, 
             const btn = (
               <button
                 ref={isOthers ? othersRef : undefined}
+                data-nav={id}
                 onClick={() => { setView(id); }}
                 onDoubleClick={() => onNavDoubleClick && onNavDoubleClick(id)}
-                className={`dock-item w-12 h-12 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer relative ${
+                className={`dock-item w-12 h-12 [@media(max-height:520px)]:h-10 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer relative ${
                   active
                     ? 'bg-blue-600/10 dark:bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/20 dark:border-blue-500/30'
                     : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100/60 dark:hover:bg-slate-850 hover:text-slate-900 dark:hover:text-white'
@@ -169,5 +172,121 @@ export default function Sidebar({ view, setView, onNavDoubleClick, badges = {}, 
         document.body
       )}
     </aside>
+  );
+}
+
+// ── Phones (below md): a bottom tab bar instead of the side rail ────────────
+// Four main modules plus "More", which opens a sheet with every other module
+// and the Others tools. Tablets and up keep the rail above.
+const PRIMARY = ['dashboard', 'leads', 'clients', 'tasks'];
+const MOBILE_LABEL = { clients: 'Clients', prospects: 'Prospects', documents: 'Documents' };
+
+export function MobileNav({ view, setView, badges = {}, onSelectOthersTab, othersSubTab }) {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const primary = NAV.filter((n) => PRIMARY.includes(n.id));
+  const rest = NAV.filter((n) => !PRIMARY.includes(n.id) && n.id !== 'others');
+  const tools = OTHERS_TOOLS.filter((t) => t.id !== 'top_schemes' || canTopSchemes('view'));
+  const moreActive = sheetOpen || rest.some((n) => n.id === view) || view === 'others';
+  const moreBadge = rest.reduce((sum, n) => sum + (badges[n.id] || 0), 0);
+
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => { if (e.key === 'Escape') setSheetOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
+  }, [sheetOpen]);
+
+  const go = (id) => { setSheetOpen(false); setView(id); };
+  const badgeEl = (n) => n > 0 && (
+    <span className="absolute -top-1 right-0.5 min-w-[16px] h-4 px-1 flex items-center justify-center text-[9px] font-black rounded-full bg-rose-500 text-white ring-2 ring-white dark:ring-slate-900">
+      {n > 99 ? '99+' : n}
+    </span>
+  );
+  const tab = (id, label, Icon, active, badge, onClick) => (
+    <button
+      key={id}
+      data-nav={id}
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      className="relative flex flex-col items-center justify-center gap-1 min-w-0 cursor-pointer select-none"
+    >
+      <span className={`relative w-12 h-7 rounded-full flex items-center justify-center transition-colors ${
+        active ? 'bg-blue-600/10 dark:bg-blue-500/15 text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'
+      }`}>
+        <Icon size={19} />
+        {badgeEl(badge)}
+      </span>
+      <span className={`text-[10px] font-bold leading-none truncate max-w-full px-0.5 ${active ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
+        {label}
+      </span>
+    </button>
+  );
+
+  return (
+    <>
+      <nav className="no-print md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200/70 dark:border-slate-800/70 shadow-[0_-4px_16px_rgba(15,23,42,0.06)] pb-[env(safe-area-inset-bottom)]">
+        <div className="grid grid-cols-5 h-16 px-1">
+          {primary.map(({ id, label, icon }) => tab(id, MOBILE_LABEL[id] || label, icon, view === id && !sheetOpen, badges[id] || 0, () => go(id)))}
+          {tab('more', 'More', MoreHorizontal, moreActive, moreBadge, () => setSheetOpen((o) => !o))}
+        </div>
+      </nav>
+
+      {sheetOpen && createPortal(
+        <div className="md:hidden fixed inset-0 z-[35]">
+          <div className="absolute inset-0 bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-sm animate-fade-in" onClick={() => setSheetOpen(false)} />
+          <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto bg-white dark:bg-slate-900 rounded-t-3xl border-t border-slate-200/70 dark:border-slate-800 shadow-2xl animate-slide-up px-4 pt-3 pb-[calc(5rem+env(safe-area-inset-bottom))]">
+            <div className="mx-auto w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700 mb-4" />
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-1 mb-2">Modules</p>
+            <div className="grid grid-cols-4 gap-1.5 mb-5">
+              {rest.map(({ id, label, icon: Icon }) => {
+                const active = view === id;
+                return (
+                  <button
+                    key={id}
+                    data-nav-sheet={id}
+                    onClick={() => go(id)}
+                    className="relative flex flex-col items-center gap-1.5 py-2 rounded-2xl active:bg-slate-100 dark:active:bg-slate-800 cursor-pointer select-none min-w-0"
+                  >
+                    <span className={`relative w-12 h-12 rounded-2xl flex items-center justify-center ${
+                      active ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                    }`}>
+                      <Icon size={20} />
+                      {badgeEl(badges[id] || 0)}
+                    </span>
+                    <span className={`text-[11px] font-semibold leading-tight text-center truncate max-w-full ${active ? 'text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-300'}`}>
+                      {MOBILE_LABEL[id] || label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-1 mb-2">Tools</p>
+            <div className="grid grid-cols-4 gap-1.5">
+              {tools.map(({ id: tid, label: tlabel, icon: TIcon, gradient }) => {
+                const active = view === 'others' && othersSubTab === tid;
+                return (
+                  <button
+                    key={tid}
+                    data-nav-sheet={tid}
+                    onClick={() => { setSheetOpen(false); setView('others'); onSelectOthersTab && onSelectOthersTab(tid); }}
+                    className="flex flex-col items-center gap-1.5 py-2 rounded-2xl active:bg-slate-100 dark:active:bg-slate-800 cursor-pointer select-none min-w-0"
+                  >
+                    <span className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br ${gradient} text-white shadow-md ${active ? 'ring-2 ring-offset-2 ring-blue-500 ring-offset-white dark:ring-offset-slate-900' : ''}`}>
+                      <TIcon size={20} />
+                    </span>
+                    <span className={`text-[11px] font-semibold leading-tight text-center truncate max-w-full ${active ? 'text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-300'}`}>
+                      {tlabel}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }

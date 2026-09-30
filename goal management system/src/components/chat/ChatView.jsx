@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
-  MessageSquare, Search, Plus, X, Users as UsersIcon, Check, Sparkles
+  MessageSquare, Search, Plus, X, Users as UsersIcon, Check, Sparkles, ArrowLeft
 } from 'lucide-react';
 import { btnPrimary, btnGhost, inputCls, Field } from '../UI';
 import {
@@ -182,9 +182,17 @@ export default function ChatView({ onQuickAction, initialConversationId, initial
     <div className="animate-fade-in w-full h-full flex bg-white dark:bg-slate-900">
       {/* ─── Conversation list ─────────────────────────────────────────── */}
       <div className={`w-full md:w-80 lg:w-96 shrink-0 border-r border-slate-200/70 dark:border-slate-800 flex-col bg-white dark:bg-slate-900 ${active ? 'hidden md:flex' : 'flex'}`}>
-        <div className="shrink-0 p-4 pb-3 space-y-3 border-b border-slate-200/70 dark:border-slate-800">
+        <div className="shrink-0 p-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-4 space-y-3 border-b border-slate-200/70 dark:border-slate-800">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
+              {/* Phones have no chat rail — this is the way back to the CRM. */}
+              <button
+                onClick={() => onQuickAction?.('dash')}
+                title="Back to Dashboard"
+                className="md:hidden -ml-1 w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 dark:text-slate-400 active:bg-slate-100 dark:active:bg-slate-800 cursor-pointer"
+              >
+                <ArrowLeft size={19} />
+              </button>
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/20">
                 <MessageSquare size={17} />
               </div>
@@ -236,7 +244,7 @@ export default function ChatView({ onQuickAction, initialConversationId, initial
               <button
                 key={c.id}
                 onClick={() => openConversation(c.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors cursor-pointer border-l-2 ${
+                className={`w-full flex items-center gap-3 px-4 py-3.5 md:py-3 text-left transition-colors cursor-pointer border-l-2 touch:active:bg-slate-100 dark:touch:active:bg-slate-800/70 ${
                   isActive
                     ? 'bg-blue-50/70 dark:bg-blue-950/25 border-blue-500'
                     : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50'
@@ -245,11 +253,11 @@ export default function ChatView({ onQuickAction, initialConversationId, initial
                 {c.type === 'GROUP' ? <GroupAvatar size={42} photo={c.photo} /> : <ChatAvatar user={other} size={42} online={other ? online.has(other.id) : false} />}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <span className={`text-[13px] truncate ${c.unread ? 'font-black text-slate-900 dark:text-white' : 'font-bold text-slate-800 dark:text-slate-200'}`}>{name}</span>
-                    {lm && <span className={`text-[9px] font-semibold shrink-0 ${c.unread ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>{fmtListStamp(lm.createdAt)}</span>}
+                    <span className={`text-[15px] md:text-[13px] truncate ${c.unread ? 'font-black text-slate-900 dark:text-white' : 'font-bold text-slate-800 dark:text-slate-200'}`}>{name}</span>
+                    {lm && <span className={`text-[11px] md:text-[9px] font-semibold shrink-0 ${c.unread ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>{fmtListStamp(lm.createdAt)}</span>}
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-0.5">
-                    <span className={`text-[11px] truncate ${c.unread ? 'font-bold text-slate-600 dark:text-slate-300' : 'text-slate-450 dark:text-slate-500'}`}>{preview}</span>
+                    <span className={`text-[13px] md:text-[11px] truncate ${c.unread ? 'font-bold text-slate-600 dark:text-slate-300' : 'text-slate-450 dark:text-slate-500'}`}>{preview}</span>
                     {c.unread > 0 && (
                       <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[9px] font-black flex items-center justify-center">
                         {c.unread > 99 ? '99+' : c.unread}

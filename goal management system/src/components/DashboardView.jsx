@@ -641,7 +641,7 @@ export default function DashboardView({
     <div className="space-y-6 animate-fade-in text-slate-800 dark:text-slate-200">
       
       {/* Welcome header banner */}
-      <div className="rounded-2xl border border-slate-200/50 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/60 p-6">
+      <div className="rounded-2xl border border-slate-200/50 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/60 p-4 sm:p-6">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-1.5">
             {greeting}, {firstName} 👋
@@ -663,8 +663,9 @@ export default function DashboardView({
               current financial year, so no period filter anywhere moves them. */}
           <section className="space-y-3.5">
             <SectionHeader icon={Landmark} accent="indigo" title="Managed Portfolio" subtitle="Total assets, SIP book & insurance value under active service" />
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
               <HeroKpi
+                className="col-span-2 sm:col-span-1"
                 icon={Landmark} accent="indigo" label="Total AUM Managed" value={fmtINR(displayAum)}
                 hint={mpOverride?.aumAmount != null ? `As of ${fmtAsOfDate(mpOverride.aumAsOfDate)}` : `${crmClientGroups} client groups · ${crmMappedClients} mapped`}
                 onEdit={canEditAum ? () => setMpEditField('aum') : null}
@@ -699,7 +700,7 @@ export default function DashboardView({
               <SectionHeader icon={TrendingUp} accent="cyan" title="Business Overview" subtitle={`Net new business flow across SIP, lumpsum, insurance & COBR — ${filterLabel(bizFilter)}`} tag={filterLabel(bizFilter)} />
               <PeriodFilter filter={bizFilter} onChange={setBizFilter} defaultMode="year" />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <HeroKpi icon={TrendingUp} accent="blue" label="Net SIP Volume" value={fmtINR(bizInv.netSip)} signed={bizInv.netSip} />
               <HeroKpi icon={Coins} accent="cyan" label="New Lumpsum Flow" value={fmtINR(bizInv.netLump)} signed={bizInv.netLump} />
               <HeroKpi icon={HeartPulse} accent="emerald" label="Net Insurance Flow" value={fmtINR(bizIns.netFlow)} signed={bizIns.netFlow} />
@@ -1094,7 +1095,7 @@ export default function DashboardView({
               <SectionHeader icon={Briefcase} title="Servicing" subtitle={`Renewals, claims, fixed deposits & other policies — ${filterLabel(servicingFilter)}`} />
               <PeriodFilter filter={servicingFilter} onChange={setServicingFilter} defaultMode="month" />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
               <HeroKpi icon={CalendarCheck} accent="blue" label="Renewal Premium" value={fmtINR(servicing.renewal.amount)} hint={`${servicing.renewal.count} of ${servicing.renewal.total} renewal${servicing.renewal.total === 1 ? '' : 's'} paid`} />
               <HeroKpi icon={AlertCircle} accent="cyan" label="Claims Amount" value={fmtINR(servicing.claim.amount)} hint={`${servicing.claim.count} of ${servicing.claim.total} claim${servicing.claim.total === 1 ? '' : 's'} settled`} />
               <HeroKpi icon={Landmark} accent="violet" label="FD Invested Amount" value={fmtINR(servicing.fd.amount)} hint={`${servicing.fd.count} of ${servicing.fd.total} FD${servicing.fd.total === 1 ? '' : 's'} invested with us`} />
@@ -1147,14 +1148,20 @@ export default function DashboardView({
 
         </div>
 
-        {/* Right Side: Command Center / Operations Sidebar (Spans 1 column) */}
-        <div className="xl:sticky xl:top-20 space-y-6 self-start">
+        {/* Right Side: Command Center / Operations Sidebar (Spans 1 column).
+            Below xl the dashboard is one column: this wrapper steps aside
+            (`contents`) so its cards join the grid directly, and the Notice
+            Board + actions move to the top (order-first) instead of landing
+            under every chart. From xl up it's the sticky side column again. */}
+        <div className="contents xl:block xl:sticky xl:top-20 xl:space-y-6 xl:self-start">
 
           {/* Notice Board */}
-          <NoticeBoard />
+          <div className="order-first xl:order-none">
+            <NoticeBoard />
+          </div>
 
           {/* Quick Actions Console */}
-          <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 relative overflow-hidden">
+          <Card className="order-first xl:order-none p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 relative overflow-hidden">
             <h4 className="text-xs font-bold uppercase tracking-widest text-slate-450 dark:text-slate-500 mb-3.5 flex items-center gap-1.5">
               <Sparkles size={13} className="text-blue-500" /> Advisor Actions Console
             </h4>
@@ -1219,7 +1226,7 @@ export default function DashboardView({
                   <div className="min-w-0 flex-1">
                     <h5 className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{m.title || 'Client Briefing'}</h5>
                     <p className="text-xs text-slate-500 dark:text-slate-450 font-medium mt-0.5 truncate">Client: <span className="font-bold text-slate-650 dark:text-slate-350">{m.clientName || 'Unknown'}</span></p>
-                    <div className="flex items-center gap-2 mt-1.5">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
                       <span className={`px-1.5 py-0.5 rounded text-[8px] font-black ${m.mode === 'Online' ? 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400'}`}>{m.mode || 'Offline'}</span>
                       {m.time && <span className="text-[8px] text-slate-400 dark:text-slate-500 font-extrabold flex items-center gap-0.5"><Clock size={10} /> {m.time}</span>}
                       {m.mode === 'Online' && m.link && (
@@ -1480,10 +1487,13 @@ const ICON_THEMES = {
   violet: 'bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400',
 };
 
-function HeroKpi({ icon: Icon, accent, label, value, hint, signed, onEdit }) {
+// The icon sits in the top-right corner beside the label only (pr-9 keeps the
+// label clear of it), so the figure below gets the tile's full width — on
+// phones the tiles are two to a row and the figure's size follows the screen.
+function HeroKpi({ icon: Icon, accent, label, value, hint, signed, onEdit, className = '' }) {
   const trendColor = signed === undefined ? '' : signed < 0 ? 'text-rose-600 dark:text-rose-455' : 'text-emerald-600 dark:text-emerald-455';
   return (
-    <Card className="relative p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 transition-colors shadow-sm shadow-slate-100/50 dark:shadow-none">
+    <Card className={`relative p-4 sm:p-5 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 transition-colors shadow-sm shadow-slate-100/50 dark:shadow-none ${className}`}>
       {onEdit && (
         <button
           onClick={onEdit}
@@ -1493,15 +1503,13 @@ function HeroKpi({ icon: Icon, accent, label, value, hint, signed, onEdit }) {
           <Pencil size={11} />
         </button>
       )}
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-normal leading-tight min-h-[2.5em]">{label}</p>
-          <p className={`text-xl sm:text-2xl font-black tracking-tight tabular-nums mt-2.5 leading-none whitespace-nowrap ${trendColor || 'text-slate-900 dark:text-white'}`}>{value}</p>
-          {hint && <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-2 font-medium leading-snug">{hint}</p>}
-        </div>
-        <span className={`shrink-0 w-7 h-7 rounded-xl flex items-center justify-center ${ICON_THEMES[accent] || 'bg-slate-50 text-slate-500'}`}>
-          <Icon size={13} />
-        </span>
+      <span className={`absolute top-4 right-4 sm:top-5 sm:right-5 w-7 h-7 rounded-xl flex items-center justify-center ${ICON_THEMES[accent] || 'bg-slate-50 text-slate-500'}`}>
+        <Icon size={13} />
+      </span>
+      <div className="min-w-0">
+        <p className="pr-9 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-normal leading-tight min-h-[2.5em]">{label}</p>
+        <p className={`text-[clamp(1rem,4.6vw,1.25rem)] sm:text-2xl font-black tracking-tight tabular-nums mt-2.5 leading-none whitespace-nowrap ${trendColor || 'text-slate-900 dark:text-white'}`}>{value}</p>
+        {hint && <p className="sm:pr-9 text-[11px] text-slate-400 dark:text-slate-500 mt-2 font-medium leading-snug">{hint}</p>}
       </div>
     </Card>
   );

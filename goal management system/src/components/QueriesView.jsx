@@ -114,8 +114,8 @@ export default function QueriesView({ isViewer, activeQueryId, setActiveQueryId,
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 font-medium">Raise a query to any team member and track it to resolution</p>
           </div>
         </div>
-        <div className="flex items-center gap-2.5">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="relative flex-1 min-w-0 md:flex-none">
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search queries…" className={inputCls + ' pl-9 w-full md:w-56'} />
           </div>
@@ -148,7 +148,41 @@ export default function QueriesView({ isViewer, activeQueryId, setActiveQueryId,
           )}
         </Card>
       ) : (
-        <Card className="overflow-hidden border border-slate-200/60 dark:border-slate-800/80 shadow-md">
+        <>
+        {/* Phones: one card per query instead of the 7-column table. */}
+        <div className="md:hidden space-y-2.5 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-3">
+          {filtered.map(q => (
+            <div key={q.id} onClick={() => openEdit(q)} className="bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800/80 rounded-2xl p-4 shadow-sm cursor-pointer active:bg-slate-50 dark:active:bg-slate-800/60 transition-colors">
+              <div className="flex items-start justify-between gap-3">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 pt-1">{q.category || '—'}</div>
+                <span className={`shrink-0 inline-flex items-center px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider rounded-full ring-1 ${STAGE_THEME[q.stage] || STAGE_THEME['Open']}`}>
+                  {q.stage}
+                </span>
+              </div>
+              <p className="text-sm text-slate-800 dark:text-slate-200 font-medium mt-1.5 line-clamp-3 break-words">{q.query || '—'}</p>
+              <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400">
+                <span className="truncate min-w-0">
+                  {(q.createdBy || q.departmentOwner) ? teamName(q.createdBy || q.departmentOwner) : '—'}
+                  <span className="text-slate-300 dark:text-slate-600"> → </span>
+                  {q.assignedTo ? teamName(q.assignedTo) : '—'}
+                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="tabular-nums">{q.createdAt ? fmtQueryStamp(q.createdAt) : '—'}</span>
+                  {!isViewer && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDelete(q.id); }}
+                      className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1 -m-1 rounded-lg"
+                      title="Delete query"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <Card className="hidden md:block overflow-hidden border border-slate-200/60 dark:border-slate-800/80 shadow-md">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50/80 dark:bg-slate-950/80 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
@@ -183,7 +217,7 @@ export default function QueriesView({ isViewer, activeQueryId, setActiveQueryId,
                       {!isViewer && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDelete(q.id); }}
-                          className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100"
+                          className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100 touch:opacity-100"
                           title="Delete query"
                         >
                           <Trash2 size={14} />
@@ -196,10 +230,11 @@ export default function QueriesView({ isViewer, activeQueryId, setActiveQueryId,
             </table>
           </div>
         </Card>
+        </>
       )}
 
       {toast && createPortal(
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold animate-scale-up">
+        <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:bottom-6 left-1/2 -translate-x-1/2 z-[60] w-max md:w-auto max-w-[calc(100vw-2rem)] bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold animate-scale-up">
           {toast}
         </div>,
         document.body

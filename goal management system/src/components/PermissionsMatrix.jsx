@@ -128,7 +128,7 @@ export default function PermissionsMatrix() {
             <p className="text-xs text-slate-400">Set what each role can do per module. Click a cell to cycle None → Assigned → All.</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => setShowGuide((v) => !v)} className={btnGhost + ' text-xs'}>
             <HelpCircle size={13} /> {showGuide ? 'Hide guide' : 'What do these mean?'}
           </button>
@@ -179,14 +179,16 @@ export default function PermissionsMatrix() {
         </Card>
       )}
 
-      <div className="flex gap-4 items-start">
+      {/* Phones: the module list becomes a scrolling chip row above the
+          matrix; from md up it's the left-hand column as before. */}
+      <div className="flex flex-col md:flex-row gap-4 md:items-start">
         {/* Module nav */}
-        <div className="w-40 shrink-0 space-y-1">
+        <div className="w-full md:w-40 shrink-0 flex md:block gap-1 md:space-y-1 overflow-x-auto md:overflow-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {catalog.modules.map((m) => (
             <button
               key={m.key}
               onClick={() => setActiveModule(m.key)}
-              className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+              className={`shrink-0 whitespace-nowrap md:whitespace-normal md:w-full text-left px-3 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
                 activeModule === m.key ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
               }`}
             >
@@ -199,7 +201,7 @@ export default function PermissionsMatrix() {
             role column the same (narrow) width regardless of label length, so
             adding more roles never forces cells to compress/overlap — it just
             scrolls horizontally past the fold. */}
-        <Card className="flex-1 p-0 overflow-hidden">
+        <Card className="flex-1 min-w-0 p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left table-fixed" style={{ minWidth: `${140 + (roles.length + 1) * 84}px` }}>
               <colgroup>

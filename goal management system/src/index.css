@@ -2,6 +2,11 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Screens with no hover (phones, tablets): `touch:` shows what mouse users
+   get on hover — e.g. `opacity-0 group-hover:opacity-100 touch:opacity-100`
+   for row actions that would otherwise be invisible to a finger. */
+@custom-variant touch (@media (hover: none));
+
 @theme {
   --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   --font-heading: 'Outfit', sans-serif;
@@ -42,6 +47,26 @@ body, .theme-transition {
 
 body {
   font-family: var(--font-sans);
+}
+
+/* ── Phones, tablets, foldables ───────────────────────────────────────────
+   Keep iOS from inflating text in landscape, drop the grey tap flash. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+/* iOS Safari zooms the whole page into any field whose text is under 16px
+   and doesn't zoom back out. Touch screens get 16px field text instead
+   (mouse/trackpad devices keep the compact sizes). */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -240,8 +265,11 @@ input[type="number"] {
   transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1), background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.25s;
 }
 
-.dock-item:hover {
-  transform: scale(1.22);
+/* Hover-capable pointers only: on touch screens a tap leaves :hover stuck. */
+@media (hover: hover) {
+  .dock-item:hover {
+    transform: scale(1.22);
+  }
 }
 
 .dock-item:active {

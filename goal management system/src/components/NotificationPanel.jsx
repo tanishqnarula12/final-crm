@@ -99,7 +99,7 @@ export default function NotificationPanel({ notifications = [], onMarkRead, onMa
                 </div>
                 <button
                   onClick={(e) => { e.stopPropagation(); onMarkRead?.(n.id); }}
-                  className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                  className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-all cursor-pointer"
                   title="Mark as read"
                 >
                   <Check size={13} />

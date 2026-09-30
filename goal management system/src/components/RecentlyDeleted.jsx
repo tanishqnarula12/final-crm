@@ -78,7 +78,7 @@ export default function RecentlyDeleted() {
             <p className="text-xs text-slate-400">Tasks, Servicing records, queries, leads and meetings deleted in the last 90 days. Restore brings one back exactly as it was.</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="relative w-44">
             <Filter size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
             <CoolSelect value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={selectCls + ' pl-8 py-2 text-xs'}>
@@ -100,7 +100,40 @@ export default function RecentlyDeleted() {
         ) : shown.length === 0 ? (
           <p className="text-sm text-slate-400 p-6 text-center">Nothing deleted in the last 90 days.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phones: one record per card instead of the 760px table. */}
+          <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+            {shown.map((i) => {
+              const done = restored.has(i.id);
+              return (
+                <div key={`${i.kind}:${i.id}`} className="p-3.5">
+                  <div className="flex items-start gap-2">
+                    <span className={`inline-flex shrink-0 items-center px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ring-1 rounded-full ${TYPE_THEME[i.type] || 'bg-slate-100 text-slate-600 ring-slate-200/60 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700/50'}`}>{i.type}</span>
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 min-w-0 break-words">{i.title}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
+                    {i.who && <span>{i.who}</span>}
+                    {i.state && <span>· {i.state}</span>}
+                    {i.files > 0 && <span className="inline-flex items-center gap-0.5">· <Paperclip size={10} /> {i.files} file{i.files === 1 ? '' : 's'}</span>}
+                  </div>
+                  <div className="flex items-end justify-between gap-3 mt-2">
+                    <div className="text-[10px] text-slate-400 leading-relaxed min-w-0">
+                      <div>Deleted by <span className="font-semibold text-slate-600 dark:text-slate-300">{i.deletedBy || '—'}</span> · <span className="tabular-nums">{fmt(i.deletedAt)}</span></div>
+                      <div>Created by {i.createdBy || '—'} · <span className="tabular-nums">{fmt(i.createdAt)}</span></div>
+                    </div>
+                    {done ? (
+                      <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 shrink-0">✓ Restored</span>
+                    ) : (
+                      <button onClick={() => restore(i)} disabled={!!restoring} className={btnGhost + ' text-xs shrink-0'}>
+                        <RotateCcw size={13} className={restoring === i.id ? 'animate-spin' : ''} /> {restoring === i.id ? 'Restoring…' : 'Restore'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left min-w-[760px]">
               <thead>
                 <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800">
@@ -149,6 +182,7 @@ export default function RecentlyDeleted() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Card>
     </div>

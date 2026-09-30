@@ -143,11 +143,11 @@ export default function UsersAdmin() {
                         )}
                       </td>
                       <td className="px-6 py-4 text-right whitespace-nowrap">
-                        <button onClick={() => openEdit(u)} className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 p-1.5 rounded-lg hover:bg-blue-50/50 dark:hover:bg-blue-950/30 transition-all opacity-0 group-hover:opacity-100" title="Edit user">
+                        <button onClick={() => openEdit(u)} className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 p-1.5 rounded-lg hover:bg-blue-50/50 dark:hover:bg-blue-950/30 transition-all opacity-0 group-hover:opacity-100 touch:opacity-100" title="Edit user">
                           <Pencil size={14} />
                         </button>
                         {u.id !== me?.id && (
-                          <button onClick={() => handleDelete(u)} className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100" title="Delete user">
+                          <button onClick={() => handleDelete(u)} className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100 touch:opacity-100" title="Delete user">
                             <Trash2 size={14} />
                           </button>
                         )}

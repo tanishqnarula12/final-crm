@@ -122,7 +122,7 @@ export default function RecordTable({
           />
         </div>
 
-        <div className="w-52">
+        <div className="w-full sm:w-52">
           <CoolSelect value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} className={selectCls + ' py-2 text-xs'}>
             <option value="all">All Statuses ({counts.all})</option>
             {stages.map((s) => <option key={s} value={s}>{s} ({counts[s] || 0})</option>)}
@@ -130,14 +130,14 @@ export default function RecordTable({
         </div>
 
         {dateField && (
-          <div className="flex items-end gap-2">
-            <div>
+          <div className="flex flex-wrap items-end gap-2 w-full sm:w-auto">
+            <div className="flex-1 min-w-[120px] sm:flex-none">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{dateField.label} from</label>
-              <input type="date" value={fromInput} onChange={(e) => setFromInput(e.target.value)} className={inputCls + ' py-1.5 text-xs w-[150px]'} />
+              <input type="date" value={fromInput} onChange={(e) => setFromInput(e.target.value)} className={inputCls + ' py-1.5 text-xs w-full sm:w-[150px]'} />
             </div>
-            <div>
+            <div className="flex-1 min-w-[120px] sm:flex-none">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">to</label>
-              <input type="date" value={toInput} onChange={(e) => setToInput(e.target.value)} className={inputCls + ' py-1.5 text-xs w-[150px]'} />
+              <input type="date" value={toInput} onChange={(e) => setToInput(e.target.value)} className={inputCls + ' py-1.5 text-xs w-full sm:w-[150px]'} />
             </div>
             <button
               onClick={applyDateFilter}
@@ -181,7 +181,50 @@ export default function RecordTable({
         {filtered.length === 0 ? (
           <p className="text-sm text-slate-400 p-8 text-center">{filtersActive ? 'No records match these filters.' : emptyText}</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phones: one card per record — the first column as its title,
+              the status badge, then every other column as label / value. */}
+          <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+            {filtered.map((r, i) => {
+              const [first, ...rest] = columns;
+              const val = (c) => (c.render ? c.render(r) : (r[c.key] || '—'));
+              return (
+                <div key={r.id} onClick={() => onOpen && onOpen(r)} className="p-4 cursor-pointer active:bg-slate-50 dark:active:bg-slate-800/40 transition-colors">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-bold text-slate-400 tabular-nums">#{i + 1}</div>
+                      <div className="text-sm font-bold text-slate-900 dark:text-slate-100 break-words">{first ? val(first) : '—'}</div>
+                    </div>
+                    <span className={`shrink-0 inline-flex items-center leading-none px-2 py-1 text-[9px] font-bold uppercase tracking-wider ring-1 rounded-full ${stageBadgeCls(type, r.stage)}`}>
+                      {r.stage || '—'}
+                    </span>
+                  </div>
+                  {rest.length > 0 && (
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 mt-3">
+                      {rest.map((c) => (
+                        <div key={c.key} className="min-w-0">
+                          <dt className="text-[9px] font-bold uppercase tracking-wider text-slate-400">{c.label}</dt>
+                          <dd className={`text-xs mt-0.5 break-words ${c.cls || 'text-slate-600 dark:text-slate-300'}`}>{val(c)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                  {onDelete && (!canDelete || canDelete(r)) && (
+                    <div className="flex justify-end mt-2 -mb-1">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onDelete(r); }}
+                        className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 -mr-1.5 rounded-lg cursor-pointer"
+                        title="Delete"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left" style={{ minWidth: `${minWidth}px` }}>
               <thead>
                 {/* whitespace-nowrap on every header keeps the bold/tracked-out
@@ -237,7 +280,7 @@ export default function RecordTable({
                         {(!canDelete || canDelete(r)) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); onDelete(r); }}
-                            className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+                            className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100 touch:opacity-100 cursor-pointer"
                             title="Delete"
                           >
                             <Trash2 size={14} />
@@ -250,6 +293,7 @@ export default function RecordTable({
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Card>
     </div>

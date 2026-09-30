@@ -183,7 +183,7 @@ export default function NoticeBoard() {
                     {canDelete(n) && (
                       <button
                         onClick={() => handleDelete(n.id)}
-                        className="opacity-0 group-hover:opacity-100 text-slate-350 hover:text-rose-600 transition-all shrink-0 cursor-pointer"
+                        className="opacity-0 group-hover:opacity-100 touch:opacity-100 text-slate-350 hover:text-rose-600 transition-all shrink-0 cursor-pointer"
                         title="Remove notice"
                       >
                         <Trash2 size={12} />
@@ -230,7 +230,7 @@ export default function NoticeBoard() {
                       title="React"
                       className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
                         myEmoji
-                          ? 'opacity-0 group-hover:opacity-100 border-transparent text-slate-400 hover:text-amber-500'
+                          ? 'opacity-0 group-hover:opacity-100 touch:opacity-100 border-transparent text-slate-400 hover:text-amber-500'
                           : 'border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-500 hover:border-amber-300 dark:hover:border-amber-800'
                       }`}
                     >

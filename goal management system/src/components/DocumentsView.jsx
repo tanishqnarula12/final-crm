@@ -336,8 +336,8 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 font-medium">All generated client documents, securely sourced from your live data</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 self-end md:self-auto w-full md:w-auto">
-          <div className="relative flex-1 md:flex-none">
+        <div className="flex flex-wrap lg:flex-nowrap md:justify-end lg:justify-start items-center gap-3 self-end md:self-auto w-full md:w-auto">
+          <div className="relative flex-1 min-w-0 lg:min-w-auto md:flex-none">
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search client or document…" className={inputCls + ' pl-9 w-full md:w-64'} />
           </div>
@@ -420,13 +420,13 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
                     {doc.deletable !== false && ((doc.type === 'mom' && can('mom', 'delete', momRecord(doc.mom, doc.client))) || (doc.type === 'custom' && can('documents', 'delete', doc.client))) && (
                       <button
                         onClick={(e) => handleDeleteDoc(e, doc)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-455 hover:bg-rose-50 dark:hover:bg-rose-955/20 rounded-xl transition-all cursor-pointer opacity-0 group-hover:opacity-100 shrink-0"
+                        className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-455 hover:bg-rose-50 dark:hover:bg-rose-955/20 rounded-xl transition-all cursor-pointer opacity-0 group-hover:opacity-100 touch:opacity-100 shrink-0"
                         title="Delete Document"
                       >
                         <Trash2 size={13} />
                       </button>
                     )}
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity">
                       <Eye size={12} /> View
                     </span>
                   </div>

@@ -38,13 +38,13 @@ export default function ProposalWorkspace({ client, subTab, setSubTab, isViewer 
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Tab Switcher */}
-      <div className="no-print flex items-center gap-2 p-1 bg-slate-100/80 dark:bg-slate-950/40 rounded-xl max-w-2xl shadow-inner border border-slate-200/20 dark:border-slate-800/40">
+      <div className="no-print flex items-center gap-1 sm:gap-2 p-1 bg-slate-100/80 dark:bg-slate-950/40 rounded-xl max-w-2xl shadow-inner border border-slate-200/20 dark:border-slate-800/40">
         {tabs.map(t => (
           <button
             key={t.id}
             type="button"
             onClick={() => setSubTab(t.id)}
-            className={`flex-1 py-2 px-3 text-xs font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+            className={`flex-1 min-w-0 py-2 px-1.5 sm:px-3 text-[11px] sm:text-xs font-bold uppercase tracking-normal sm:tracking-wider rounded-lg transition-all cursor-pointer ${
               activeTab === t.id
                 ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-white shadow-sm font-extrabold'
                 : 'text-slate-400 dark:text-slate-505 hover:text-slate-700 dark:hover:text-slate-300'

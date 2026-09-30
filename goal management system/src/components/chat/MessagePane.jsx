@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   Search, X, Pin, Pencil, Trash2, Copy, CornerUpLeft, Download, ChevronUp,
   CheckCheck, Check, Users as UsersIcon, MessageSquare, ExternalLink, ArrowLeft,
-  ChevronDown, Smile, Plus, BarChart3, MoreVertical, Info, Eraser, Clock, RotateCw,
+  ChevronDown, Smile, Plus, BarChart3, MoreVertical, Info, Eraser, Clock, RotateCw, TextSelect,
 } from 'lucide-react';
 import {
   fetchMessages, sendMessage, editMessage, deleteMessage, pinMessage,
@@ -51,6 +51,18 @@ export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAct
   const [deletingChat, setDeletingChat] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  // Phones: press-and-hold action sheet, its "Select text" view, and a
+  // short "Copied" confirmation.
+  const [sheetMsg, setSheetMsg] = useState(null);
+  const [selectMsg, setSelectMsg] = useState(null);
+  const [copiedAt, setCopiedAt] = useState(0);
+  const meIsAdmin = (me.roles || []).includes('ADMIN');
+  const copyMessage = async (m) => {
+    if (m?.content && await copyText(m.content)) {
+      setCopiedAt(Date.now());
+      setTimeout(() => setCopiedAt(0), 1400);
+    }
+  };
 
   const scrollRef = useRef(null);
   const composerRef = useRef(null);
@@ -77,6 +89,23 @@ export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAct
     const el = scrollRef.current;
     return el ? el.scrollHeight - el.scrollTop - el.clientHeight < 140 : true;
   };
+
+  // When the message area shrinks — the phone keyboard opening, the composer
+  // growing a line — keep the latest message in view if it was in view.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    let atBottom = true;
+    let lastHeight = el.clientHeight;
+    const onScroll = () => { atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 140; };
+    const ro = new ResizeObserver(() => {
+      if (el.clientHeight < lastHeight && atBottom) el.scrollTop = el.scrollHeight;
+      lastHeight = el.clientHeight;
+    });
+    el.addEventListener('scroll', onScroll, { passive: true });
+    ro.observe(el);
+    return () => { el.removeEventListener('scroll', onScroll); ro.disconnect(); };
+  }, []);
 
   // ---- Initial load & conversation switches --------------------------------
   useEffect(() => {
@@ -361,14 +390,14 @@ export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAct
       )}
 
       {/* Header */}
-      <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-slate-200/70 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md">
+      <div className="shrink-0 flex items-center gap-2.5 md:gap-3 px-2.5 md:px-4 py-2.5 md:py-3 pt-[calc(0.625rem+env(safe-area-inset-top))] md:pt-3 border-b border-slate-200/70 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md">
         {onBackToList && (
           <button
             onClick={onBackToList}
-            className="md:hidden p-1.5 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-805 cursor-pointer transition-all active:scale-95 border border-slate-200/40 dark:border-slate-800/40"
+            className="md:hidden w-9 h-9 -mr-1 rounded-full flex items-center justify-center text-slate-600 dark:text-slate-300 active:bg-slate-100 dark:active:bg-slate-800 cursor-pointer transition-all shrink-0"
             title="Back to chats"
           >
-            <ArrowLeft size={16} />
+            <ArrowLeft size={20} />
           </button>
         )}
         {/* Clickable header → profile (DM) or group info (GROUP) */}
@@ -465,7 +494,7 @@ export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAct
       )}
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-1 chat-doodle-bg">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain px-2.5 md:px-4 py-3 space-y-1 chat-doodle-bg">
         {loading ? (
           <div className="h-full flex items-center justify-center">
             <span className="text-xs font-semibold text-slate-400 animate-pulse">Loading messages…</span>
@@ -507,8 +536,9 @@ export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAct
                   <MessageBubble
                     m={m} mine={mine} meId={me.id} sender={sender} grouped={grouped}
                     isGroup={isGroup}
-                    isAdmin={(me.roles || []).includes('ADMIN')}
+                    isAdmin={meIsAdmin}
                     highlighted={highlightId === m.id}
+                    onLongPress={() => setSheetMsg(m)}
                     read={mine && readByAll(m)}
                     onReply={() => { setEditing(null); setReplyTo(m); }}
                     onEdit={() => { setReplyTo(null); setEditing(m); }}
@@ -585,6 +615,33 @@ export default function MessagePane({ conv, me, usersById, onlineSet, onQuickAct
         document.body
       )}
 
+      {/* Phone press-and-hold sheet + its "Select text" view */}
+      {sheetMsg && (
+        <MessageActionSheet
+          m={sheetMsg}
+          mine={sheetMsg.senderId === me.id}
+          sender={usersById.get(sheetMsg.senderId)}
+          meId={me.id}
+          rights={messageRights(sheetMsg, sheetMsg.senderId === me.id, meIsAdmin)}
+          onClose={() => setSheetMsg(null)}
+          onReact={(emoji) => handleReact(sheetMsg, emoji)}
+          onReply={() => { setEditing(null); setReplyTo(sheetMsg); }}
+          onCopy={() => copyMessage(sheetMsg)}
+          onSelectText={() => setSelectMsg(sheetMsg)}
+          onPin={() => handlePin(sheetMsg)}
+          onEdit={() => { setReplyTo(null); setEditing(sheetMsg); }}
+          onDelete={() => handleDelete(sheetMsg)}
+        />
+      )}
+      {selectMsg && (
+        <SelectTextSheet m={selectMsg} onCopyAll={() => copyMessage(selectMsg)} onClose={() => setSelectMsg(null)} />
+      )}
+      {copiedAt > 0 && (
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-24 z-40 px-4 py-2 rounded-full bg-slate-900/90 dark:bg-white/90 text-white dark:text-slate-900 text-xs font-bold shadow-xl animate-pop-in pointer-events-none">
+          Copied
+        </div>
+      )}
+
       {/* Profile card */}
       {profileUser && (
         <ProfileCard
@@ -657,19 +714,108 @@ function AnchoredPopover({ anchorRef, onClose, placement = 'bottom', children })
 // A single message bubble
 // ---------------------------------------------------------------------------
 
+// Who may edit / delete a message — shared by the desktop hover menu and the
+// phone long-press sheet.
+const messageRights = (m, mine, isAdmin) => ({
+  canEdit: mine && !m.deleted && !m.pending && (m.content || '').length > 0 && m.type !== 'poll'
+    && (Date.now() - new Date(m.createdAt).getTime() < EDIT_WINDOW_MS),
+  canDelete: (mine || isAdmin) && !m.deleted,
+});
+
+// Copies text even where the async Clipboard API is unavailable.
+const copyText = async (text) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  }
+};
+
+// Touch gestures on a message (phones/tablets), WhatsApp-style:
+// swipe right → reply, press and hold → action sheet. Mouse input never
+// reaches these handlers, so desktop keeps its hover controls unchanged.
+const SWIPE_REPLY_AT = 64; // px of drag that triggers a reply
+const LONG_PRESS_MS = 450;
+
 function MessageBubble({
   m, mine, meId, sender, grouped, isGroup, isAdmin, highlighted, read,
-  onReply, onEdit, onDelete, onRetry, onPin, onReact, onVote, onJumpToReply, onOpenImage, onOpenProfile, usersById,
+  onReply, onEdit, onDelete, onRetry, onPin, onReact, onVote, onJumpToReply, onOpenImage, onOpenProfile, onLongPress, usersById,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reactOpen, setReactOpen] = useState(false);
   const [reactFull, setReactFull] = useState(false);
   const caretRef = useRef(null);
   const smileyRef = useRef(null);
+  const rowRef = useRef(null);
+  const iconRef = useRef(null);
+  const gesture = useRef(null);
 
-  const canEdit = mine && !m.deleted && !m.pending && (m.content || '').length > 0 && m.type !== 'poll'
-    && (Date.now() - new Date(m.createdAt).getTime() < EDIT_WINDOW_MS);
-  const canDelete = (mine || isAdmin) && !m.deleted;
+  const { canEdit, canDelete } = messageRights(m, mine, isAdmin);
+
+  const setSwipe = (px, animate) => {
+    const row = rowRef.current, icon = iconRef.current;
+    if (!row || !icon) return;
+    const eased = px < SWIPE_REPLY_AT ? px : SWIPE_REPLY_AT + (px - SWIPE_REPLY_AT) * 0.3;
+    const p = Math.min(1, px / SWIPE_REPLY_AT);
+    row.style.transition = icon.style.transition = animate ? 'transform 0.22s cubic-bezier(0.2,0.8,0.2,1), opacity 0.22s' : 'none';
+    row.style.transform = px ? `translateX(${eased}px)` : '';
+    icon.style.opacity = String(p);
+    icon.style.transform = `translateY(-50%) scale(${0.5 + p * 0.5})`;
+  };
+  const onTouchStart = (e) => {
+    if (m.deleted || m.pending || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const g = { x: t.clientX, y: t.clientY, dx: 0, mode: null, buzzed: false };
+    g.timer = setTimeout(() => {
+      if (gesture.current === g && !g.mode) {
+        g.mode = 'press';
+        navigator.vibrate?.(12);
+        onLongPress?.();
+      }
+    }, LONG_PRESS_MS);
+    gesture.current = g;
+  };
+  const onTouchMove = (e) => {
+    const g = gesture.current;
+    if (!g || g.mode === 'press' || g.mode === 'scroll') return;
+    const t = e.touches[0];
+    const dx = t.clientX - g.x, dy = t.clientY - g.y;
+    if (!g.mode) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      clearTimeout(g.timer);
+      g.mode = dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.3 ? 'swipe' : 'scroll';
+      if (g.mode === 'scroll') return;
+    }
+    g.dx = Math.max(0, Math.min(dx, 110));
+    setSwipe(g.dx, false);
+    if (g.dx >= SWIPE_REPLY_AT && !g.buzzed) { g.buzzed = true; navigator.vibrate?.(10); }
+  };
+  const onTouchEnd = (e) => {
+    const g = gesture.current;
+    gesture.current = null;
+    if (!g) return;
+    clearTimeout(g.timer);
+    if (g.mode === 'swipe') {
+      setSwipe(0, true);
+      if (g.dx >= SWIPE_REPLY_AT) onReply();
+    } else if (g.mode === 'press' && e.cancelable) {
+      e.preventDefault(); // no click (image lightbox, link) after the sheet opened
+    }
+  };
+  // Android fires contextmenu on a long press; the sheet replaces it there.
+  // A mouse right-click on desktop is left alone.
+  const onContextMenu = (e) => {
+    if (window.matchMedia && window.matchMedia('(hover: none)').matches) e.preventDefault();
+  };
 
   const bubbleCls = mine
     ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-2xl rounded-br-md shadow-lg shadow-blue-500/15'
@@ -684,7 +830,23 @@ function MessageBubble({
   const doReact = (emoji) => { onReact(emoji); setReactOpen(false); setReactFull(false); };
 
   return (
-    <div id={`msg-${m.id}`} className={`group flex gap-2 animate-msg-in ${mine ? 'justify-end' : 'justify-start'} ${grouped ? 'mt-0.5' : 'mt-2.5'} ${highlighted ? 'animate-pulse' : ''} ${m.pending ? 'opacity-60' : ''}`}>
+    <div
+      id={`msg-${m.id}`}
+      className={`group relative animate-msg-in ${grouped ? 'mt-0.5' : 'mt-2.5'} ${highlighted ? 'animate-pulse' : ''} ${m.pending ? 'opacity-60' : ''}`}
+      style={{ touchAction: 'pan-y pinch-zoom' }}
+      onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd}
+      onContextMenu={onContextMenu}
+    >
+      {/* Swipe-to-reply arrow, revealed behind the message as it slides. */}
+      <div
+        ref={iconRef}
+        aria-hidden="true"
+        className="md:hidden absolute left-1 top-1/2 w-8 h-8 rounded-full bg-white/95 dark:bg-slate-800 shadow-md text-slate-500 dark:text-slate-300 flex items-center justify-center pointer-events-none"
+        style={{ opacity: 0, transform: 'translateY(-50%) scale(0.5)' }}
+      >
+        <CornerUpLeft size={16} />
+      </div>
+      <div ref={rowRef} className={`flex gap-2 ${mine ? 'justify-end' : 'justify-start'}`}>
       {!mine && (
         <div className="w-8 shrink-0 self-end">
           {!grouped && (
@@ -695,10 +857,11 @@ function MessageBubble({
         </div>
       )}
 
-      <div className={`relative max-w-[78%] md:max-w-[64%] ${highlighted ? 'ring-2 ring-amber-400 rounded-2xl' : ''}`}>
-        {/* Hover controls: react (smiley) + menu (caret) */}
+      <div className={`relative max-w-[84%] md:max-w-[64%] touch:[-webkit-touch-callout:none] ${highlighted ? 'ring-2 ring-amber-400 rounded-2xl' : ''}`}>
+        {/* Hover controls: react (smiley) + menu (caret). Touch screens use
+            press-and-hold instead (the sheet), so they're removed there. */}
         {!m.deleted && (
-          <div className={`absolute -top-3.5 ${mine ? 'left-1' : 'right-1'} flex items-center gap-0.5 z-10 transition-opacity ${menuOpen || reactOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+          <div className={`absolute -top-3.5 ${mine ? 'left-1' : 'right-1'} flex items-center gap-0.5 z-10 transition-opacity touch:hidden ${menuOpen || reactOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
             <button
               ref={smileyRef}
               onClick={() => { setReactOpen((o) => !o); setReactFull(false); setMenuOpen(false); }}
@@ -826,8 +989,11 @@ function MessageBubble({
               })}
 
               {/* Text */}
+              {/* Selectable with the mouse (the chat screen is otherwise
+                  select-none); on touch, press-and-hold opens the sheet,
+                  whose "Select text" gives free selection instead. */}
               {m.content && (
-                <p className="text-[13px] leading-relaxed whitespace-pre-wrap break-words">
+                <p className="text-[15px] md:text-[13px] leading-relaxed whitespace-pre-wrap break-words select-text touch:select-none cursor-text">
                   {renderContent(m.content, m.mentions, mine)}
                 </p>
               )}
@@ -909,7 +1075,117 @@ function MessageBubble({
           </div>
         )}
       </div>
+      </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Phone press-and-hold sheet: reactions on top, the message, then actions.
+// ---------------------------------------------------------------------------
+function MessageActionSheet({ m, mine, sender, meId, rights, onClose, onReact, onReply, onCopy, onSelectText, onPin, onEdit, onDelete }) {
+  const [full, setFull] = useState(false);
+  const myEmoji = Object.entries(m.reactions || {}).find(([, ids]) => (ids || []).includes(meId))?.[0] || null;
+  const act = (fn) => () => { onClose(); fn(); };
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const preview = m.deleted ? 'This message was deleted'
+    : m.content || (m.type === 'poll' ? `📊 ${m.poll?.question || 'Poll'}` : '📎 Attachment');
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9995] flex flex-col justify-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[2px] animate-fade-in" />
+      <div
+        className="relative w-full max-w-lg mx-auto bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl animate-slide-up pb-[calc(0.75rem+env(safe-area-inset-bottom))] select-none"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mx-auto mt-2.5 mb-3 w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700" />
+        {!m.deleted && (full ? (
+          <div className="px-3 pb-3 flex justify-center">
+            <EmojiPicker onPick={(e) => { onClose(); onReact(e); }} className="!w-full !max-w-none !shadow-none" />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center gap-1 px-3 pb-3">
+            {QUICK_REACTIONS.map((e) => (
+              <button
+                key={e}
+                onClick={act(() => onReact(e))}
+                className={`w-11 h-11 text-2xl leading-none rounded-full flex items-center justify-center active:scale-90 transition-transform cursor-pointer ${myEmoji === e ? 'bg-blue-50 dark:bg-blue-950/50' : ''}`}
+              >
+                {e}
+              </button>
+            ))}
+            <button onClick={() => setFull(true)} title="More emojis" className="w-11 h-11 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center cursor-pointer">
+              <Plus size={18} />
+            </button>
+          </div>
+        ))}
+        <div className="mx-4 mb-2 px-3 py-2 rounded-2xl bg-slate-50 dark:bg-slate-950/50 border-l-2 border-blue-500">
+          <div className="text-[10px] font-black text-blue-600 dark:text-blue-400">{mine ? 'You' : (sender?.name || '—')}</div>
+          <div className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2 break-words">{preview}</div>
+        </div>
+        <div className="px-2">
+          {!m.deleted && <SheetItem icon={CornerUpLeft} label="Reply" onClick={act(onReply)} />}
+          {m.content && !m.deleted && <SheetItem icon={Copy} label="Copy" onClick={act(onCopy)} />}
+          {m.content && !m.deleted && <SheetItem icon={TextSelect} label="Select text" onClick={act(onSelectText)} />}
+          {!m.deleted && <SheetItem icon={Pin} label={m.pinned ? 'Unpin' : 'Pin'} onClick={act(onPin)} />}
+          {rights.canEdit && <SheetItem icon={Pencil} label="Edit" onClick={act(onEdit)} />}
+          {rights.canDelete && <SheetItem icon={Trash2} label="Delete" danger onClick={act(onDelete)} />}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function SheetItem({ icon: Icon, label, onClick, danger }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl text-left text-[15px] font-semibold active:bg-slate-100 dark:active:bg-slate-800 transition-colors cursor-pointer ${
+        danger ? 'text-rose-600 dark:text-rose-400' : 'text-slate-700 dark:text-slate-200'
+      }`}
+    >
+      <Icon size={19} className="shrink-0 opacity-80" /> {label}
+    </button>
+  );
+}
+
+// "Select text": the message in a sheet where the phone's own text selection
+// works, so any part of it can be copied (the bubble itself reserves
+// press-and-hold for the action sheet).
+function SelectTextSheet({ m, onCopyAll, onClose }) {
+  return createPortal(
+    <div className="fixed inset-0 z-[9995] flex flex-col justify-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[2px] animate-fade-in" />
+      <div
+        className="relative w-full max-w-lg mx-auto bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl animate-slide-up flex flex-col max-h-[80dvh] pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 pt-4 pb-1 shrink-0">
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">Select text</h3>
+          <button onClick={onClose} title="Close" className="w-9 h-9 -mr-1.5 rounded-full flex items-center justify-center text-slate-500 active:bg-slate-100 dark:active:bg-slate-800 cursor-pointer">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="px-4 text-[11px] text-slate-400 dark:text-slate-500 mb-2 shrink-0">Press and hold a word, then drag the handles to choose what to copy.</p>
+        <div className="mx-4 mb-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/50 overflow-y-auto text-[15px] leading-relaxed whitespace-pre-wrap break-words select-text [-webkit-touch-callout:default] text-slate-800 dark:text-slate-100">
+          {m.content}
+        </div>
+        <div className="px-4 shrink-0">
+          <button
+            onClick={() => { onCopyAll(); onClose(); }}
+            className="w-full py-3 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white text-sm font-bold inline-flex items-center justify-center gap-2 active:scale-[0.98] transition-transform cursor-pointer"
+          >
+            <Copy size={15} /> Copy all
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 

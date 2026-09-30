@@ -11,6 +11,7 @@ import {
 import { Card, Avatar, Field, inputCls, selectCls, btnPrimary, btnSecondary, btnGhost, CoolSelect, MultiSelect } from './UI';
 import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
+import { isPhoneViewport } from '../utils/viewport';
 import { canAssignLead, canConvertLead, canCreateLead, canDeleteLead, canEditLead, isAdmin } from '../utils/permissions';
 import {
   loadLeads, intakeLead, updateLead, addNote, addFollowUp, completeFollowUp, deleteLead,
@@ -66,7 +67,8 @@ export default function LeadsView({
   const [statusFilter, setStatusFilter] = useState(savedFilters.status);
   const [sourceFilter, setSourceFilter] = useState(savedFilters.source);
   const [rmFilters, setRmFilters] = useState(savedFilters.rms);
-  const [viewMode, setViewMode] = useState('table');
+  // Phones open on the card list (the table needs ~900px); the toggle still works.
+  const [viewMode, setViewMode] = useState(() => (isPhoneViewport() ? 'card' : 'table'));
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [openLeadId, setOpenLeadId] = useState(null);
@@ -196,8 +198,8 @@ export default function LeadsView({
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 font-medium">Capture, qualify &amp; convert — the front door to every client</p>
           </div>
         </div>
-        <div className="flex items-center gap-2.5">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="relative w-full md:w-auto">
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, mobile, email, PAN…" className={inputCls + ' pl-9 w-full md:w-64'} />
           </div>
@@ -207,10 +209,10 @@ export default function LeadsView({
           </div>
           {mayCreateLead && (
             <>
-              <button onClick={handleSimulate} title="Simulate an inbound website lead (demo)" className={btnSecondary + ' shrink-0'}>
+              <button onClick={handleSimulate} title="Simulate an inbound website lead (demo)" className={btnSecondary + ' shrink-0 flex-1 md:flex-none'}>
                 <Zap size={14} /> Simulate Web Lead
               </button>
-              <button onClick={() => { setEditing(null); setShowForm(true); }} className={btnPrimary + ' shrink-0'}>
+              <button onClick={() => { setEditing(null); setShowForm(true); }} className={btnPrimary + ' shrink-0 flex-1 md:flex-none'}>
                 <Plus size={14} /> New Lead
               </button>
             </>
@@ -237,6 +239,26 @@ export default function LeadsView({
             {LEAD_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
           </CoolSelect>
         </div>
+        {/* The card list has no column headers to hold the Stage / RM
+            filters, so they sit in this row instead while it's showing. */}
+        {viewMode === 'card' && (
+          <>
+            <div className="w-40">
+              <MultiSelect
+                label="stages" allLabel="All Stages" className="text-xs py-1.5"
+                options={LEAD_STAGES.map(s => ({ value: s, label: s, count: counts[s] }))}
+                selected={stageFilters} onChange={setStageFilters}
+              />
+            </div>
+            <div className="w-40">
+              <MultiSelect
+                label="RMs" allLabel="All RMs" className="text-xs py-1.5"
+                options={[{ value: 'unassigned', label: 'Unassigned' }, ...loadTeam().map(m => ({ value: m.id, label: m.name }))]}
+                selected={rmFilters} onChange={setRmFilters}
+              />
+            </div>
+          </>
+        )}
         {filtersActive && (
           <button onClick={clearFilters} title="Reset every filter to its default"
             className="px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer inline-flex items-center gap-1.5">
@@ -317,7 +339,7 @@ export default function LeadsView({
                       </td>
                       <td className="px-6 py-4 text-right">
                         {canDeleteLead(me, l) && (
-                          <button onClick={(e) => { e.stopPropagation(); handleDelete(l.id); }} className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100" title="Delete lead">
+                          <button onClick={(e) => { e.stopPropagation(); handleDelete(l.id); }} className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100 touch:opacity-100" title="Delete lead">
                             <Trash2 size={14} />
                           </button>
                         )}
@@ -379,7 +401,7 @@ export default function LeadsView({
       )}
 
       {toast && createPortal(
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold animate-scale-up">
+        <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:bottom-6 left-1/2 -translate-x-1/2 z-[60] w-max md:w-auto max-w-[calc(100vw-2rem)] bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold animate-scale-up">
           {toast}
         </div>, document.body
       )}

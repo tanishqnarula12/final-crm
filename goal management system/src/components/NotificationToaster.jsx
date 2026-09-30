@@ -87,7 +87,7 @@ export default function NotificationToaster({ view, onOpen, onOpenChat, onBellSh
   if (!toasts.length) return null;
 
   return createPortal(
-    <div className="fixed top-16 right-4 z-[9998] flex flex-col gap-2.5 w-80 max-w-[calc(100vw-2rem)] pointer-events-none">
+    <div className="fixed top-[calc(4rem+env(safe-area-inset-top))] md:top-16 right-4 z-[9998] flex flex-col gap-2.5 w-80 max-w-[calc(100vw-2rem)] pointer-events-none">
       {toasts.map((t) => {
         const meta = t.kind === 'chat'
           ? { icon: MessageSquare, ring: 'ring-blue-500/30', dot: 'bg-blue-500' }

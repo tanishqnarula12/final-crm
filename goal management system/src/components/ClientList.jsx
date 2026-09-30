@@ -350,7 +350,7 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
               (unchanged), AND — while focused with a query typed — shows a
               richer live dropdown that also reaches into family members
               (Applicants) and matches on mobile/email/PAN too. */}
-          <div className="relative">
+          <div className="relative w-full md:w-auto">
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
             <input
               value={query}
@@ -358,7 +358,7 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
               onFocus={() => { clearTimeout(searchBlurTimer.current); setSearchFocused(true); }}
               onBlur={() => { searchBlurTimer.current = setTimeout(() => setSearchFocused(false), 150); }}
               placeholder="Search name, mobile, email or PAN…"
-              className={inputCls + ' pl-9 w-56 md:w-72'}
+              className={inputCls + ' pl-9 w-full md:w-72'}
             />
             {searchFocused && query.trim() && (
               <ClientSearchDropdown
@@ -494,7 +494,56 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
         </Card>
       )}
 
-      <Card className="overflow-hidden border border-slate-200/60 dark:border-slate-800/80 shadow-md">
+      {/* Phones: one card per client instead of the column table. */}
+      <div className="md:hidden space-y-2.5 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-3">
+        {filtered.map(c => {
+          const city = clientCity(c);
+          const type = clientTypeOf(c);
+          const goals = c.goals ? c.goals.length : 0;
+          return (
+            <div
+              key={c.id}
+              onClick={() => onSelect(c.id)}
+              className="bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800/80 rounded-2xl p-4 shadow-sm cursor-pointer active:bg-slate-50 dark:active:bg-slate-800/60 transition-colors"
+            >
+              <div className="flex items-start gap-3">
+                <Avatar name={c.name} />
+                <div className="min-w-0 flex-1">
+                  <div className="font-bold text-slate-900 dark:text-slate-100 leading-snug break-words">{c.name}</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    <span className="font-mono tracking-wider">{c.pan}</span>
+                    {c.age ? <span> · {c.age} yrs</span> : null}
+                  </div>
+                </div>
+                {canDeleteClient(me, c) && onDelete && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onDelete(c.id); }}
+                    className="shrink-0 p-1.5 -m-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg"
+                    title="Delete Client"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 mt-3 pl-12">
+                <ClientStatusPill status={clientStatusOf(c)} />
+                {type && <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">{type}</span>}
+                {city && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400"><MapPin size={10} /> {city}</span>}
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400"><Target size={10} /> {goals} goal{goals === 1 ? '' : 's'}</span>
+              </div>
+            </div>
+          );
+        })}
+        {filtered.length === 0 && (
+          <Card className="sm:col-span-2 p-10 text-center text-slate-400 dark:text-slate-500">
+            <span className="font-semibold text-slate-500 dark:text-slate-400">{clients.length === 0 ? 'No Clients Registered' : 'No results found'}</span>
+            <p className="text-xs mt-1">{clients.length === 0 ? 'Tap "Add client" to create the first profile.' : 'Adjust your filters to see more profiles'}</p>
+          </Card>
+        )}
+      </div>
+
+      <Card className="hidden md:block overflow-hidden border border-slate-200/60 dark:border-slate-800/80 shadow-md">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50/80 dark:bg-slate-950/80 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
@@ -559,7 +608,7 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
                       <button
                         type="button"
                         onClick={() => onDelete(c.id)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200 opacity-0 group-hover:opacity-100 cursor-pointer inline-flex items-center justify-center"
+                        className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200 opacity-0 group-hover:opacity-100 touch:opacity-100 cursor-pointer inline-flex items-center justify-center"
                         title="Delete Client"
                       >
                         <Trash2 size={13} />

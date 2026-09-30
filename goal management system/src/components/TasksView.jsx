@@ -111,7 +111,7 @@ export default function TasksView({ clients = [], isViewer, activeTaskId, setAct
           </div>
         </div>
         <div className="flex items-center gap-2.5">
-          <div className="relative">
+          <div className="relative flex-1 min-w-0 md:flex-none">
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search tasks…" className={inputCls + ' pl-9 w-full md:w-56'} />
           </div>
@@ -143,7 +143,58 @@ export default function TasksView({ clients = [], isViewer, activeTaskId, setAct
           )}
         </Card>
       ) : (
-        <Card className="overflow-hidden border border-slate-200/60 dark:border-slate-800/80 shadow-md">
+        <>
+        {/* Phones: one card per task instead of the 7-column table. */}
+        <div className="md:hidden space-y-2.5 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-3">
+          {filtered.map(t => {
+            const overdue = t.dueDate && !['Completed', 'Lost'].includes(t.stage) && new Date(t.dueDate) < new Date(new Date().toDateString());
+            return (
+              <div key={t.id} onClick={() => openEdit(t)} className="bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800/80 rounded-2xl p-4 shadow-sm cursor-pointer active:bg-slate-50 dark:active:bg-slate-800/60 transition-colors">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="font-bold text-slate-900 dark:text-slate-100 leading-snug min-w-0 break-words">{t.taskName || 'Untitled task'}</div>
+                  <span className={`shrink-0 inline-flex items-center px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider rounded-full ring-1 ${STAGE_THEME[t.stage] || STAGE_THEME['Open']}`}>
+                    {t.stage}
+                  </span>
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1 truncate">
+                  {t.relatedTo === 'NFT' ? (t.nftType || 'NFT') : (t.otherSpecify || t.relatedTo || '—')}
+                  {t.relatedTo === 'NFT' && Array.isArray(t.amcs) && t.amcs.length > 0 && <span className="text-slate-400 dark:text-slate-500"> · {t.amcs.join(', ')}</span>}
+                </div>
+                {(t.applicant || t.groupLeader) && (
+                  <div className="mt-2.5 text-xs">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">{t.applicant || '—'}</span>
+                    {t.pan && <span className="font-mono text-[10px] text-slate-400 dark:text-slate-500"> · {t.pan}</span>}
+                    {t.groupLeader && t.groupLeader !== t.applicant && (
+                      <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 flex items-center gap-1">
+                        <Crown size={10} className="text-amber-500 shrink-0" /> <span className="truncate">{t.groupLeader}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px]">
+                  <span className="text-slate-500 dark:text-slate-400 truncate">{t.assignedTo ? teamName(t.assignedTo) : 'Unassigned'}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {t.dueDate && (
+                      <span className={`tabular-nums font-semibold ${overdue ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                        Due {new Date(t.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                    )}
+                    {!isViewer && canDeleteTask(me, t) && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}
+                        className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1 -m-1 rounded-lg"
+                        title="Delete task"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <Card className="hidden md:block overflow-hidden border border-slate-200/60 dark:border-slate-800/80 shadow-md">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50/80 dark:bg-slate-950/80 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
@@ -193,7 +244,7 @@ export default function TasksView({ clients = [], isViewer, activeTaskId, setAct
                       {!isViewer && canDeleteTask(me, t) && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}
-                          className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100"
+                          className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all opacity-0 group-hover:opacity-100 touch:opacity-100"
                           title="Delete task"
                         >
                           <Trash2 size={14} />
@@ -206,10 +257,11 @@ export default function TasksView({ clients = [], isViewer, activeTaskId, setAct
             </table>
           </div>
         </Card>
+        </>
       )}
 
       {toast && createPortal(
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold animate-scale-up">
+        <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:bottom-6 left-1/2 -translate-x-1/2 z-[60] w-max md:w-auto max-w-[calc(100vw-2rem)] bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold animate-scale-up">
           {toast}
         </div>,
         document.body
@@ -429,7 +481,7 @@ function DocUploadGroup({ label, required, files, onAdd, onRemove, existingDocs 
                       hideTooltip();
                       onRemove(f.id);
                     }}
-                    className="ml-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer"
+                    className="ml-0.5 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer"
                   >
                     <X size={10} />
                   </button>

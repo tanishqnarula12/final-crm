@@ -535,7 +535,7 @@ export default function ClientProfileView({
       </Card>
 
       {/* Client Profile & Business Details */}
-      <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-xl rounded-3xl space-y-5">
+      <Card className="p-4 sm:p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-xl rounded-3xl space-y-5">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/20">
             <User size={20} />
@@ -646,7 +646,7 @@ export default function ClientProfileView({
       </Card>
 
       {/* Activities Card */}
-      <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-xl rounded-3xl space-y-5">
+      <Card className="p-4 sm:p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-xl rounded-3xl space-y-5">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20">
             <Activity size={20} />
@@ -706,8 +706,8 @@ export default function ClientProfileView({
       </Card>
 
       {/* Meeting Setup History */}
-      <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-xl rounded-3xl space-y-5">
-        <div className="flex items-center justify-between gap-3">
+      <Card className="p-4 sm:p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-xl rounded-3xl space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-500 text-white flex items-center justify-center shadow-lg shadow-cyan-500/20">
               <CalendarDays size={20} />
@@ -759,8 +759,8 @@ export default function ClientProfileView({
       </Card>
 
       {/* Business Prospects */}
-      <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-xl rounded-3xl space-y-5">
-        <div className="flex items-center justify-between gap-3">
+      <Card className="p-4 sm:p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-xl rounded-3xl space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20">
               <TrendingUp size={20} />
@@ -799,8 +799,8 @@ export default function ClientProfileView({
       </Card>
 
       {/* Change of Broker (COBR) */}
-      <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-xl rounded-3xl space-y-5">
-        <div className="flex items-center justify-between gap-3">
+      <Card className="p-4 sm:p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-xl rounded-3xl space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-violet-500/20">
               <ArrowLeftRight size={20} />
@@ -860,8 +860,8 @@ export default function ClientProfileView({
       </Card>
 
       {/* Attachments */}
-      <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-xl rounded-3xl space-y-5">
-        <div className="flex items-center justify-between gap-3">
+      <Card className="p-4 sm:p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-xl rounded-3xl space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-purple-500 to-fuchsia-500 text-white flex items-center justify-center shadow-lg shadow-purple-500/20">
               <Paperclip size={20} />
@@ -926,7 +926,7 @@ export default function ClientProfileView({
       </Card>
 
       {/* Notes */}
-      <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-xl rounded-3xl space-y-5">
+      <Card className="p-4 sm:p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-xl rounded-3xl space-y-5">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white flex items-center justify-center shadow-lg shadow-cyan-500/20">
             <FileText size={20} />
@@ -1154,7 +1154,7 @@ const SECTION_THEMES = {
 function SectionBox({ accent, icon: Icon, title, children }) {
   const t = SECTION_THEMES[accent] || SECTION_THEMES.blue;
   return (
-    <div className={`p-5 rounded-2xl bg-gradient-to-br ${t.box} border space-y-4`}>
+    <div className={`p-3.5 sm:p-5 rounded-2xl bg-gradient-to-br ${t.box} border space-y-4`}>
       <h4 className="flex items-center gap-2.5">
         <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 shadow-md ${t.chip}`}>
           <Icon size={15} />
@@ -1357,13 +1357,13 @@ function AttachmentsBox({ staticItems = [], dynamicItems = [], onPreview, onDele
               {!isViewer && isDeletable && onDeleteDoc && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onDeleteDoc(e, doc); }}
-                  className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-455 hover:bg-rose-50 dark:hover:bg-rose-955/20 rounded-xl transition-all cursor-pointer opacity-0 group-hover:opacity-100 shrink-0"
+                  className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-455 hover:bg-rose-50 dark:hover:bg-rose-955/20 rounded-xl transition-all cursor-pointer opacity-0 group-hover:opacity-100 touch:opacity-100 shrink-0"
                   title="Delete Document"
                 >
                   <Trash2 size={13} />
                 </button>
               )}
-              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity">
                 <Eye size={12} /> View
               </span>
             </div>
@@ -1406,7 +1406,7 @@ function AttachmentsBox({ staticItems = [], dynamicItems = [], onPreview, onDele
               {!isViewer && onEditDoc && mayRenameDocs && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onEditDoc(doc); }}
-                  className="p-1.5 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-955/20 rounded-xl transition-all cursor-pointer opacity-0 group-hover:opacity-100 shrink-0"
+                  className="p-1.5 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-955/20 rounded-xl transition-all cursor-pointer opacity-0 group-hover:opacity-100 touch:opacity-100 shrink-0"
                   title="Edit Document"
                 >
                   <Pencil size={13} />
@@ -1415,13 +1415,13 @@ function AttachmentsBox({ staticItems = [], dynamicItems = [], onPreview, onDele
               {!isViewer && onDeleteDoc && mayDeleteDocs && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onDeleteDoc(e, doc); }}
-                  className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-455 hover:bg-rose-50 dark:hover:bg-rose-955/20 rounded-xl transition-all cursor-pointer opacity-0 group-hover:opacity-100 shrink-0"
+                  className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-455 hover:bg-rose-50 dark:hover:bg-rose-955/20 rounded-xl transition-all cursor-pointer opacity-0 group-hover:opacity-100 touch:opacity-100 shrink-0"
                   title="Delete Document"
                 >
                   <Trash2 size={13} />
                 </button>
               )}
-              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity">
                 <Eye size={12} /> View
               </span>
             </div>
@@ -1625,7 +1625,7 @@ function NotesFeed({ client, details, isViewer }) {
                       {deletingId === note.id ? (
                         <span className="text-[10px] font-bold text-rose-500 dark:text-rose-400">Deleting…</span>
                       ) : !isViewer && (
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity">
                           <button
                             onClick={() => startEdit(note)}
                             disabled={!!deletingId}
@@ -1659,17 +1659,56 @@ function NotesFeed({ client, details, isViewer }) {
   );
 }
 
+const taskStageCls = (stage) => (
+  stage === 'Open' ? 'bg-blue-50 text-blue-700 ring-blue-200/40 dark:bg-blue-950/20 dark:text-blue-400 dark:ring-blue-900/40' :
+  stage === 'In Process' ? 'bg-amber-50 text-amber-700 ring-amber-200/40 dark:bg-amber-950/20 dark:text-amber-400 dark:ring-amber-900/40' :
+  stage === 'Waiting For Client' ? 'bg-violet-50 text-violet-700 ring-violet-200/40 dark:bg-violet-950/20 dark:text-violet-400 dark:ring-violet-900/40' :
+  stage === 'Completed' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200/60 dark:bg-emerald-950/20 dark:text-emerald-400 dark:ring-emerald-900/40' :
+  stage === 'Lost' ? 'bg-rose-50 text-rose-700 ring-rose-200/60 dark:bg-rose-950/20 dark:text-rose-400 dark:ring-rose-900/40' :
+  'bg-slate-50 text-slate-700 ring-slate-200/40 dark:bg-slate-955/20 dark:text-slate-450 dark:ring-slate-900/40'
+);
+
+// Phones: the three record boxes below (tasks / prospects / meetings) show
+// one tappable row per record instead of a table whose right-hand columns
+// were clipped off by the box.
+function PhoneRow({ onClick, title, badge, left, right }) {
+  return (
+    <button type="button" onClick={onClick} className="w-full text-left px-3.5 py-3 active:bg-slate-50 dark:active:bg-slate-800/40 transition-colors cursor-pointer">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 min-w-0 break-words">{title}</span>
+        {badge}
+      </div>
+      <div className="flex items-center justify-between gap-2 mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+        <span className="min-w-0 truncate">{left}</span>
+        <span className="shrink-0 tabular-nums">{right}</span>
+      </div>
+    </button>
+  );
+}
+
 function OpenTasksBox({ tasks, onSelectTask, emptyText }) {
   if (!tasks || tasks.length === 0) {
     return <p className="text-xs text-slate-450 dark:text-slate-500 italic font-medium">{emptyText}</p>;
   }
-  
+
   // Limit to 5 tasks
   const displayedTasks = tasks.slice(0, 5);
 
   return (
     <div className="overflow-hidden border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-950 shadow-sm">
-      <table className="w-full text-xs text-left">
+      <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+        {displayedTasks.map((task) => (
+          <PhoneRow
+            key={task.id}
+            onClick={() => onSelectTask && onSelectTask(task)}
+            title={task.taskName}
+            badge={<span className={`inline-flex px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider rounded-md ring-1 shrink-0 ${taskStageCls(task.stage)}`}>{task.stage}</span>}
+            left={task.assignedTo ? teamName(task.assignedTo) : 'Unassigned'}
+            right={task.dueDate ? `Due ${new Date(task.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+          />
+        ))}
+      </div>
+      <table className="hidden md:table w-full text-xs text-left">
         <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
           <tr>
             <th className="px-4 py-3 text-[10px]">Task Name</th>
@@ -1692,21 +1731,15 @@ function OpenTasksBox({ tasks, onSelectTask, emptyText }) {
               </td>
               <td className="px-4 py-3">
                 <span className="text-slate-700 dark:text-slate-300 font-medium">
-                  {task.assignedTo ? task.assignedTo : 'Unassigned'}
+                  {/* assignedTo holds a user id (older tasks a name) — teamName resolves either */}
+                  {task.assignedTo ? teamName(task.assignedTo) : 'Unassigned'}
                 </span>
               </td>
               <td className="px-4 py-3 text-center text-slate-600 dark:text-slate-400 tabular-nums">
                 {task.dueDate ? new Date(task.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
               </td>
               <td className="px-4 py-3 text-center">
-                <span className={`inline-flex px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider rounded-md ring-1 shrink-0 ${
-                  task.stage === 'Open' ? 'bg-blue-50 text-blue-700 ring-blue-200/40 dark:bg-blue-950/20 dark:text-blue-400 dark:ring-blue-900/40' :
-                  task.stage === 'In Process' ? 'bg-amber-50 text-amber-700 ring-amber-200/40 dark:bg-amber-950/20 dark:text-amber-400 dark:ring-amber-900/40' :
-                  task.stage === 'Waiting For Client' ? 'bg-violet-50 text-violet-700 ring-violet-200/40 dark:bg-violet-950/20 dark:text-violet-400 dark:ring-violet-900/40' :
-                  task.stage === 'Completed' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200/60 dark:bg-emerald-950/20 dark:text-emerald-400 dark:ring-emerald-900/40' :
-                  task.stage === 'Lost' ? 'bg-rose-50 text-rose-700 ring-rose-200/60 dark:bg-rose-950/20 dark:text-rose-400 dark:ring-rose-900/40' :
-                  'bg-slate-50 text-slate-700 ring-slate-200/40 dark:bg-slate-955/20 dark:text-slate-450 dark:ring-slate-900/40'
-                }`}>
+                <span className={`inline-flex px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider rounded-md ring-1 shrink-0 ${taskStageCls(task.stage)}`}>
                   {task.stage}
                 </span>
               </td>
@@ -1733,7 +1766,19 @@ function ProspectsBox({ prospects, onSelectProspect, emptyText }) {
 
   return (
     <div className="overflow-hidden border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-950 shadow-sm">
-      <table className="w-full text-xs text-left">
+      <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+        {pageProspects.map((p) => (
+          <PhoneRow
+            key={p.id}
+            onClick={() => onSelectProspect && onSelectProspect(p)}
+            title={p.proposalType}
+            badge={<span className={`inline-flex px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md ring-1 shrink-0 ${ALL_STAGE_THEME[p.stage || 'Qualified']}`}>{p.stage || 'Qualified'}</span>}
+            left={`${p.applicant || '—'}${(p.closedAt || p.closingDate) ? ` · ${p.closedAt ? 'Closed' : 'Closing'} ${new Date(p.closedAt || p.closingDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}`}
+            right={<span className="font-bold text-slate-800 dark:text-slate-200">{fmtAmountINR(p.amount)}</span>}
+          />
+        ))}
+      </div>
+      <table className="hidden md:table w-full text-xs text-left">
         <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
           <tr>
             <th className="px-4 py-3 text-[10px]">Proposal Type</th>
@@ -1848,7 +1893,19 @@ function MeetingsBox({ meetings, onSelectMeeting, emptyText }) {
 
   return (
     <div className="overflow-hidden border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-950 shadow-sm">
-      <table className="w-full text-xs text-left">
+      <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+        {displayed.map((m) => (
+          <PhoneRow
+            key={m.id}
+            onClick={() => onSelectMeeting && onSelectMeeting(m)}
+            title={m.title || 'Untitled meeting'}
+            badge={<span className={`inline-flex px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md ring-1 shrink-0 ${MEETING_STATUS_THEME[m.status] || MEETING_STATUS_THEME.Scheduled}`}>{m.status || 'Scheduled'}</span>}
+            left={`${m.mode || 'Online'}${m.assignedTo ? ` · with ${m.assignedTo}` : ''}`}
+            right={fmtMeetingWhen(m)}
+          />
+        ))}
+      </div>
+      <table className="hidden md:table w-full text-xs text-left">
         <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
           <tr>
             <th className="px-4 py-3 text-[10px]">Meeting</th>

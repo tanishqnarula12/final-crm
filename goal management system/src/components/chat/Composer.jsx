@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, forwardRef, useImperativeHandle, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Send, Paperclip, X, CornerUpLeft, Pencil, Zap, AtSign, Smile, BarChart3, Trash2 } from 'lucide-react';
+import { Send, Paperclip, X, CornerUpLeft, Pencil, Zap, AtSign, Smile, BarChart3, Trash2, Plus } from 'lucide-react';
+import { useIsPhone } from '../../utils/viewport';
 import { emitTyping } from '../../services/chat';
 import { ChatAvatar } from './Avatars';
 import { fileMeta, humanSize, isImageAttachment } from './chatFormat';
@@ -36,8 +37,22 @@ const Composer = forwardRef(function Composer(
   const [slashIndex, setSlashIndex] = useState(0);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [showPoll, setShowPoll] = useState(false);
+  const [trayOpen, setTrayOpen] = useState(false); // phones: the "+" menu (attach / poll / emoji)
+  const isPhone = useIsPhone();
 
   const taRef = useRef(null);
+
+  // The box grows with its text up to 160px — and shrinks back whenever the
+  // text changes by any route: sending (it empties), loading a message to
+  // edit, picking an emoji or a mention, switching chats. Sizing it only in
+  // onChange left it stuck at full height after a long message was sent.
+  useLayoutEffect(() => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    const border = ta.offsetHeight - ta.clientHeight; // box-sizing is border-box
+    ta.style.height = Math.min(ta.scrollHeight + border, 160) + 'px';
+  }, [value]);
   const fileRef = useRef(null);
   const typingRef = useRef({ timer: null, active: false });
   const mentionsRef = useRef([]); // { id, name } picked in this draft
@@ -230,7 +245,9 @@ const Composer = forwardRef(function Composer(
       if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickSlash(slashCandidates[slashIndex]); return; }
       if (e.key === 'Escape') { setSlashOpen(false); return; }
     }
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // Enter sends on a physical keyboard; on a phone's on-screen keyboard it
+    // adds a new line (the Send button sends), like WhatsApp.
+    if (e.key === 'Enter' && !e.shiftKey && !isPhone) {
       e.preventDefault();
       submit();
     }
@@ -244,18 +261,17 @@ const Composer = forwardRef(function Composer(
     setValue(e.target.value);
     signalTyping();
     updatePopups(e.target.value, e.target.selectionStart);
-    const ta = e.target;
-    ta.style.height = 'auto';
-    ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
   };
 
   const replyUser = replyTo ? usersById.get(replyTo.senderId) : null;
 
   return (
-    <div className="relative border-t border-slate-200/70 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-3">
+    // Phones: tighter padding plus room for the iPhone home bar — dropped while
+    // the keyboard is up (App marks the chat wrapper data-keyboard="open").
+    <div className="relative border-t border-slate-200/70 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] in-data-[keyboard=open]:pb-2 md:p-3">
       {/* Mention popup (groups only) */}
       {isGroup && mentionQuery !== null && mentionCandidates.length > 0 && (
-        <div className="absolute bottom-full left-3 mb-1 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden z-30 animate-scale-up">
+        <div className="absolute bottom-full left-3 mb-1 w-72 max-w-[calc(100%-1.5rem)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden z-30 animate-scale-up">
           <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800">
             <AtSign size={11} /> Mention
           </div>
@@ -278,7 +294,7 @@ const Composer = forwardRef(function Composer(
 
       {/* Slash-command popup */}
       {slashOpen && slashCandidates.length > 0 && (
-        <div className="absolute bottom-full left-3 mb-1 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden z-30 animate-scale-up">
+        <div className="absolute bottom-full left-3 mb-1 w-80 max-w-[calc(100%-1.5rem)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden z-30 animate-scale-up">
           <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800">
             <Zap size={11} /> Quick actions
           </div>
@@ -352,27 +368,64 @@ const Composer = forwardRef(function Composer(
 
       {error && <p className="text-[11px] font-bold text-rose-500 mb-1.5">{error}</p>}
 
+      {/* Phones: the "+" menu — attach, poll, emoji — WhatsApp-style. */}
+      {trayOpen && !editing && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setTrayOpen(false)} />
+          <div className="absolute bottom-full left-2 mb-2 z-30 animate-pop-in flex gap-4 px-4 py-3 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl">
+            {[
+              { label: 'File', Icon: Paperclip, tint: 'from-blue-500 to-indigo-600' },
+              { label: 'Poll', Icon: BarChart3, tint: 'from-violet-500 to-purple-600' },
+              { label: 'Emoji', Icon: Smile, tint: 'from-amber-400 to-orange-500' },
+            ].map(({ label, Icon, tint }) => (
+              <button
+                key={label}
+                onClick={() => {
+                  setTrayOpen(false);
+                  if (label === 'File') fileRef.current?.click();
+                  else if (label === 'Poll') setShowPoll(true);
+                  else setEmojiOpen(true);
+                }}
+                className="flex flex-col items-center gap-1.5 cursor-pointer active:scale-95 transition-transform"
+              >
+                <span className={`w-12 h-12 rounded-full bg-gradient-to-br ${tint} text-white flex items-center justify-center shadow-md`}>
+                  <Icon size={20} />
+                </span>
+                <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{label}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
       <div className="flex items-end gap-1.5">
         {!editing && (
           <>
             <button
+              onClick={() => { setTrayOpen((o) => !o); setEmojiOpen(false); }}
+              title="Attach, poll or emoji"
+              className={`md:hidden shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer ${trayOpen ? 'text-blue-600 bg-blue-50 dark:bg-blue-950/40 rotate-45' : 'text-slate-500 dark:text-slate-400 active:bg-slate-100 dark:active:bg-slate-800'}`}
+            >
+              <Plus size={22} />
+            </button>
+            <button
               onClick={() => { setEmojiOpen((o) => !o); }}
               title="Emoji"
-              className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer ${emojiOpen ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/30' : 'text-slate-450 dark:text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30'}`}
+              className={`shrink-0 w-10 h-10 rounded-xl hidden md:flex items-center justify-center transition-all cursor-pointer ${emojiOpen ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/30' : 'text-slate-450 dark:text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30'}`}
             >
               <Smile size={19} />
             </button>
             <button
               onClick={() => fileRef.current?.click()}
               title="Attach files"
-              className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-slate-450 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-all cursor-pointer"
+              className="shrink-0 w-10 h-10 rounded-xl hidden md:flex items-center justify-center text-slate-450 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-all cursor-pointer"
             >
               <Paperclip size={18} />
             </button>
             <button
               onClick={() => setShowPoll(true)}
               title="Create poll"
-              className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-slate-450 dark:text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 transition-all cursor-pointer"
+              className="shrink-0 w-10 h-10 rounded-xl hidden md:flex items-center justify-center text-slate-450 dark:text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 transition-all cursor-pointer"
             >
               <BarChart3 size={18} />
             </button>
@@ -388,16 +441,19 @@ const Composer = forwardRef(function Composer(
           onKeyDown={onKeyDown}
           onPaste={handlePaste}
           onBlur={stopTyping}
-          placeholder={editing ? 'Edit your message…' : (isGroup ? 'Type a message…  ( @ to mention · / for actions )' : 'Type a message…  ( / for quick actions )')}
-          className="flex-1 resize-none px-4 py-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder-slate-400 dark:placeholder-slate-600"
+          placeholder={editing ? 'Edit your message…' : isPhone ? 'Message' : (isGroup ? 'Type a message…  ( @ to mention · / for actions )' : 'Type a message…  ( / for quick actions )')}
+          className="flex-1 min-w-0 resize-none px-4 py-2 md:py-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-3xl md:rounded-2xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder-slate-400 dark:placeholder-slate-600"
           style={{ maxHeight: 160 }}
         />
 
+        {/* preventDefault on mousedown keeps focus in the box, so on a phone
+            the keyboard stays up after tapping Send (no close/reopen flicker). */}
         <button
           onClick={submit}
+          onMouseDown={(e) => e.preventDefault()}
           disabled={sending || (!value.trim() && attachments.length === 0)}
           title={editing ? 'Save' : 'Send'}
-          className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white flex items-center justify-center shadow-lg shadow-blue-500/25 transition-all hover:scale-105 active:scale-95 disabled:opacity-40 disabled:hover:scale-100 cursor-pointer"
+          className="shrink-0 w-10 h-10 rounded-full md:rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white flex items-center justify-center shadow-lg shadow-blue-500/25 transition-all hover:scale-105 active:scale-95 disabled:opacity-40 disabled:hover:scale-100 cursor-pointer"
         >
           {editing ? <Pencil size={16} /> : <Send size={16} />}
         </button>

@@ -2255,4 +2255,31 @@ const POLICY_REVIEW_STYLES = `
   }
 
   .policy-review-container .text-left { text-align: left !important; font-family: inherit !important; font-size: 13px !important; }
+
+  /* Phones (below 768px) — desktop rules above are untouched. The inline
+     gridTemplateColumns on .live-strip needs !important to be overridden. */
+  @media (max-width: 767.98px) {
+    .policy-review-container .grid-2,
+    .policy-review-container .grid-3 { grid-template-columns: 1fr; gap: 14px; }
+    .policy-review-container .fg-3,
+    .policy-review-container .fg-4 { grid-template-columns: 1fr 1fr; }
+    .policy-review-container .live-strip { grid-template-columns: 1fr 1fr !important; }
+    .policy-review-container .metric-row,
+    .policy-review-container .detail-grid { grid-template-columns: 1fr 1fr; }
+    .policy-review-container .card-head { padding: 12px 14px; }
+    .policy-review-container .card-body { padding: 14px; }
+    .policy-review-container .policy-block { padding: 14px; }
+    .policy-review-container .page-hero { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .policy-review-container .hero-title { font-size: 22px; }
+    .policy-review-container .score-section { flex-direction: column; text-align: center; }
+    .policy-review-container .score-tags { justify-content: center; }
+    .policy-review-container .charge-name { width: 96px; }
+    .policy-review-container .ctable-wrap { overflow-x: auto; }
+    .policy-review-container .wg-bar { flex-wrap: wrap; gap: 8px; }
+  }
+  @media (max-width: 400px) {
+    .policy-review-container .fg-2,
+    .policy-review-container .fg-3,
+    .policy-review-container .fg-4 { grid-template-columns: 1fr; }
+  }
 `;

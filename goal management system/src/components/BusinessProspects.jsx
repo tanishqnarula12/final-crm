@@ -16,6 +16,7 @@ import { exportProspectsToExcel, prospectClosingDate, toLocalDay } from '../util
 import { RELATIONS } from '../utils/team';
 import { teamName, loadTeam } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
+import { isPhoneViewport } from '../utils/viewport';
 import { canDo, isAdmin, allowedStageOptions } from '../utils/permissions';
 import { updateClient, applySavedClient } from '../services/db';
 import { useClientWithFiles, slimForSave } from '../services/clientFiles';
@@ -193,7 +194,8 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
   const [toDate, setToDate] = useState(savedFilters.to);
   const [sortDir, setSortDir] = useState(savedFilters.sortDir); // 'asc' | 'desc' — by Closing Date; dateless prospects always float to the top
   const [showFilters, setShowFilters] = useState(false);
-  const [viewMode, setViewMode] = useState('table'); // 'table' | 'card'
+  // 'table' | 'card' — phones open on the cards (the table needs ~800px).
+  const [viewMode, setViewMode] = useState(() => (isPhoneViewport() ? 'card' : 'table'));
   const [editing, setEditing] = useState(null); // local fallback modal when no onOpenProspect is supplied
 
   useEffect(() => {
@@ -392,8 +394,8 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 font-medium">Opportunities generated from Insurance &amp; Investment proposals</p>
           </div>
         </div>
-        <div className="flex items-center gap-2.5">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="relative w-full md:w-auto">
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search prospect…" className={inputCls + ' pl-9 w-full md:w-56'} />
           </div>
@@ -405,14 +407,14 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
           <button
             onClick={() => setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))}
             title={`Sorted by Closing Date, ${sortDir === 'asc' ? 'oldest first' : 'newest first'} (prospects with no closing date always stay on top) — click to flip`}
-            className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold uppercase tracking-wider border rounded-xl transition-all cursor-pointer shrink-0 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-bold uppercase tracking-wider border rounded-xl transition-all cursor-pointer shrink-0 flex-1 md:flex-none bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             {sortDir === 'asc' ? <ArrowUpWideNarrow size={14} /> : <ArrowDownWideNarrow size={14} />}
             {sortDir === 'asc' ? 'Oldest First' : 'Newest First'}
           </button>
           <button
             onClick={() => setShowFilters(s => !s)}
-            className={`relative inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider border rounded-xl transition-all cursor-pointer shrink-0 ${
+            className={`relative inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider border rounded-xl transition-all cursor-pointer shrink-0 flex-1 md:flex-none ${
               showFilters
                 ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-900/60 shadow-sm'
                 : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
@@ -589,7 +591,7 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
                       <span className={`inline-flex items-center px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full ring-1 ${ALL_STAGE_THEME[p.stage || 'Qualified']}`}>{p.stage || 'Qualified'}</span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity">
                         {p.proposalCategory === 'insurance' && (
                           <button onClick={(e) => { e.stopPropagation(); triggerInsuranceProspectDownload(p); }} className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-50/50 dark:hover:bg-violet-950/30 transition-all" title="Download Report"><Download size={14} /></button>
                         )}
@@ -612,11 +614,11 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
           {filtered.map(p => (
             <div key={p.id} className="bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm hover:shadow-lg transition-all group">
               <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
                   <span className={`inline-flex items-center px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider rounded-full ring-1 ${CATEGORY_THEME[p.proposalCategory] || CATEGORY_THEME.investment}`}>{CATEGORY_LABEL[p.proposalCategory] || p.proposalCategory}</span>
                   <span className={`inline-flex items-center px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider rounded-full ring-1 ${ALL_STAGE_THEME[p.stage || 'Qualified']}`}>{p.stage || 'Qualified'}</span>
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity">
                   {p.proposalCategory === 'insurance' && (
                     <button onClick={(e) => { e.stopPropagation(); triggerInsuranceProspectDownload(p); }} className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50/50 dark:hover:bg-violet-950/30" title="Download Report"><Download size={13} /></button>
                   )}
@@ -2152,7 +2154,7 @@ function DocUploadGroup({ label, required, files, onAdd, onRemove, existingDocs 
                       hideTooltip();
                       onRemove(f.id);
                     }}
-                    className="ml-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer"
+                    className="ml-0.5 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer"
                   >
                     <X size={10} />
                   </button>

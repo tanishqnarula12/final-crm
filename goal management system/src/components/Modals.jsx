@@ -32,21 +32,23 @@ const CLIENT_TYPES = [
 // Marital status options for personal details
 const MARITAL_STATUSES = ['Single', 'Married', 'Divorced', 'Widowed'];
 
+// Phones (below sm): a full-width sheet rising from the bottom edge, using
+// the dynamic viewport height so the browser's toolbars don't hide the footer.
 function Modal({ title, onClose, children, footer, maxWidth = 'max-w-md' }) {
   return (
-    <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" onClick={onClose}>
-      <div className={`bg-white dark:bg-slate-900 rounded-2xl w-full flex flex-col max-h-[90vh] ${maxWidth} shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up`} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+    <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-fade-in" onClick={onClose}>
+      <div className={`bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-2xl w-full flex flex-col max-h-[94dvh] sm:max-h-[90vh] ${maxWidth} shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up`} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
+          <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white tracking-tight min-w-0">{title}</h3>
+          <button onClick={onClose} className="shrink-0 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
             <X size={18} />
           </button>
         </div>
-        <div className="p-5 overflow-y-auto">
+        <div className="p-4 sm:p-5 overflow-y-auto">
           {children}
         </div>
         {footer && (
-          <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 rounded-b-2xl shrink-0">
+          <div className="p-4 sm:p-5 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 sm:rounded-b-2xl shrink-0">
             {footer}
           </div>
         )}

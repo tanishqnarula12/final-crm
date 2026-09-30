@@ -135,8 +135,8 @@ export default function MeetingsView({ clients = [], isViewer, onOpenMeeting, on
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 font-medium">Schedule, track, and review client meetings</p>
           </div>
         </div>
-        <div className="flex items-center gap-2.5">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="relative flex-1 min-w-0 md:flex-none">
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search meetings…" className={inputCls + ' pl-9 w-full md:w-56'} />
           </div>
@@ -146,7 +146,7 @@ export default function MeetingsView({ clients = [], isViewer, onOpenMeeting, on
             <button onClick={() => setViewMode('calendar')} title="Calendar view" className={`p-1.5 rounded-lg cursor-pointer transition-colors ${viewMode === 'calendar' ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><LayoutGrid size={15} /></button>
           </div>
           {!isViewer && (
-            <button onClick={openCreate} className={btnPrimary + ' shrink-0'}>
+            <button onClick={openCreate} className={btnPrimary + ' shrink-0 w-full sm:w-auto'}>
               <Plus size={14} /> Schedule Meeting
             </button>
           )}
@@ -192,7 +192,7 @@ export default function MeetingsView({ clients = [], isViewer, onOpenMeeting, on
       )}
 
       {toast && createPortal(
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold animate-scale-up">
+        <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:bottom-6 left-1/2 -translate-x-1/2 z-[60] w-max md:w-auto max-w-[calc(100vw-2rem)] bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold animate-scale-up">
           {toast}
         </div>,
         document.body
@@ -213,7 +213,15 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
         <h3 className={`text-sm font-bold ${highlight ? 'text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-300'}`}>{title}</h3>
         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">{meetings.length}</span>
       </div>
-      <Card className={`overflow-hidden border shadow-md ${highlight ? 'border-blue-200/70 dark:border-blue-900/40' : 'border-slate-200/60 dark:border-slate-800/80'}`}>
+      {/* Phones: one card per meeting instead of the 8-column table. Kept
+          before the table so the table stays the group's last child — the
+          space-y-3 gap goes under every child but the last, hidden or not. */}
+      <div className="md:hidden space-y-2.5 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-3">
+        {meetings.map(m => (
+          <MeetingCard key={m.id} m={m} onOpen={onOpen} onDelete={onDelete} onCreateMom={onCreateMom} isViewer={isViewer} highlight={highlight} />
+        ))}
+      </div>
+      <Card className={`hidden md:block overflow-hidden border shadow-md ${highlight ? 'border-blue-200/70 dark:border-blue-900/40' : 'border-slate-200/60 dark:border-slate-800/80'}`}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50/80 dark:bg-slate-950/80 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
@@ -270,75 +278,11 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
                   </td>
                   <td className="px-5 py-3 text-slate-600 dark:text-slate-400">{m.assignedTo || '—'}</td>
                   <td className="px-5 py-3 text-center">
-                    {isOverdue(m) ? (
-                      <span title="This meeting's date/time has passed with no action taken" className="inline-flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg ring-1 bg-amber-50 text-amber-700 ring-amber-200/60 dark:bg-amber-950/30 dark:text-amber-400 dark:ring-amber-900/40">
-                        <Clock size={11} /> Overdue
-                      </span>
-                    ) : (
-                      <span className={`inline-flex items-center px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg ring-1 ${MEETING_STATUS_THEME[m.status] || MEETING_STATUS_THEME.Scheduled}`}>
-                        {m.status || 'Scheduled'}
-                      </span>
-                    )}
+                    <MeetingStatusBadge m={m} />
                   </td>
                   <td className="px-5 py-3 text-right">
                     <div className="flex items-center justify-end gap-1.5">
-                      {/* Delete is first in DOM order (not last) so that,
-                          with justify-end, revealing it on row-hover only
-                          grows the group leftward — the rightmost (always
-                          visible) button stays pinned to the same edge as
-                          the "Actions" header instead of jumping when
-                          Delete's hidden/inline-flex toggles. Only shows
-                          when the matrix actually grants meeting-delete
-                          (Admin-only by default). */}
-                      {!isViewer && canDeleteMeeting(getCurrentUser(), m) && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onDelete(m.id); }}
-                          className="hidden group-hover:inline-flex items-center text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all"
-                          title="Delete meeting"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                      {isOverdue(m) && !isViewer && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onOpen(m); }}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer shadow-sm hover:shadow-amber-500/25"
-                          title="Reschedule this overdue meeting"
-                        >
-                          <RotateCcw size={13} /> Reschedule
-                        </button>
-                      )}
-                      {m.status === 'Completed' && !m.leadId && onCreateMom && (
-                        m.momId ? (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onCreateMom(m); }}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-900/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer"
-                            title="MOM already created — click to open it"
-                          >
-                            <CheckCircle2 size={13} /> MOM Created
-                          </button>
-                        ) : (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onCreateMom(m); }}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer shadow-sm hover:shadow-cyan-500/25"
-                            title="Create Minutes of Meeting for this client"
-                          >
-                            <FileText size={14} /> Create MOM
-                          </button>
-                        )
-                      )}
-                      {m.mode === 'Online' && m.link && m.status === 'Scheduled' && (
-                        <a
-                          href={normalizeUrl(m.link)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer shadow-sm hover:shadow-blue-500/25"
-                          title="Join the meeting"
-                        >
-                          <Video size={14} /> Join
-                        </a>
-                      )}
+                      <MeetingActions m={m} onOpen={onOpen} onDelete={onDelete} onCreateMom={onCreateMom} isViewer={isViewer} />
                     </div>
                   </td>
                 </tr>
@@ -347,6 +291,131 @@ function MeetingGroupTable({ title, icon: Icon, meetings, onOpen, onDelete, onCr
           </table>
         </div>
       </Card>
+    </div>
+  );
+}
+
+function MeetingStatusBadge({ m }) {
+  return isOverdue(m) ? (
+    <span title="This meeting's date/time has passed with no action taken" className="inline-flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg ring-1 bg-amber-50 text-amber-700 ring-amber-200/60 dark:bg-amber-950/30 dark:text-amber-400 dark:ring-amber-900/40">
+      <Clock size={11} /> Overdue
+    </span>
+  ) : (
+    <span className={`inline-flex items-center px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg ring-1 ${MEETING_STATUS_THEME[m.status] || MEETING_STATUS_THEME.Scheduled}`}>
+      {m.status || 'Scheduled'}
+    </span>
+  );
+}
+
+// A meeting's action buttons, shared by the table row and the phone card.
+// `alwaysShowDelete`: phones have no hover, so the card shows Delete outright.
+function MeetingActions({ m, onOpen, onDelete, onCreateMom, isViewer, alwaysShowDelete = false }) {
+  return (
+    <>
+      {/* Delete is first in DOM order (not last) so that,
+          with justify-end, revealing it on row-hover only
+          grows the group leftward — the rightmost (always
+          visible) button stays pinned to the same edge as
+          the "Actions" header instead of jumping when
+          Delete's hidden/inline-flex toggles. Only shows
+          when the matrix actually grants meeting-delete
+          (Admin-only by default). */}
+      {!isViewer && canDeleteMeeting(getCurrentUser(), m) && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(m.id); }}
+          className={`${alwaysShowDelete ? 'inline-flex' : 'hidden group-hover:inline-flex touch:inline-flex'} items-center text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all`}
+          title="Delete meeting"
+        >
+          <Trash2 size={14} />
+        </button>
+      )}
+      {isOverdue(m) && !isViewer && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onOpen(m); }}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer shadow-sm hover:shadow-amber-500/25"
+          title="Reschedule this overdue meeting"
+        >
+          <RotateCcw size={13} /> Reschedule
+        </button>
+      )}
+      {m.status === 'Completed' && !m.leadId && onCreateMom && (
+        m.momId ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onCreateMom(m); }}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-900/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer"
+            title="MOM already created — click to open it"
+          >
+            <CheckCircle2 size={13} /> MOM Created
+          </button>
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); onCreateMom(m); }}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer shadow-sm hover:shadow-cyan-500/25"
+            title="Create Minutes of Meeting for this client"
+          >
+            <FileText size={14} /> Create MOM
+          </button>
+        )
+      )}
+      {m.mode === 'Online' && m.link && m.status === 'Scheduled' && (
+        <a
+          href={normalizeUrl(m.link)}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer shadow-sm hover:shadow-blue-500/25"
+          title="Join the meeting"
+        >
+          <Video size={14} /> Join
+        </a>
+      )}
+    </>
+  );
+}
+
+function MeetingCard({ m, onOpen, onDelete, onCreateMom, isViewer, highlight }) {
+  return (
+    <div
+      onClick={() => onOpen(m)}
+      className={`bg-white dark:bg-slate-900 border rounded-2xl p-4 shadow-sm cursor-pointer active:bg-slate-50 dark:active:bg-slate-800/60 transition-colors ${
+        highlight ? 'border-blue-200/70 dark:border-blue-900/40' : 'border-slate-200/70 dark:border-slate-800/80'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="font-bold text-slate-900 dark:text-slate-100 leading-snug break-words">{m.title || 'Untitled meeting'}</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 tabular-nums flex items-center gap-1.5">
+            <Clock size={12} className="shrink-0" /> {fmtMeetingWhen(m)}
+          </div>
+        </div>
+        <div className="shrink-0"><MeetingStatusBadge m={m} /></div>
+      </div>
+      <div className="flex items-center gap-2.5 mt-3">
+        <Avatar name={m.clientName || 'Meeting'} size="sm" />
+        <div className="min-w-0 flex-1">
+          <div className="text-sm text-slate-700 dark:text-slate-300 font-medium truncate">{m.clientName || '—'}</div>
+          <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+            {m.pan && <span className="font-mono uppercase">{m.pan} · </span>}with {m.assignedTo || '—'}
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 mt-3">
+        <span className={`inline-flex items-center gap-1 px-2 py-1 text-[9px] font-bold uppercase tracking-wider rounded-md ring-1 ${MODE_THEME[m.mode] || MODE_THEME.Online}`}>
+          {m.mode === 'Offline' ? <Building size={11} /> : <Globe size={11} />} {m.mode || 'Online'}
+        </span>
+        {m.leadId
+          ? <span className="inline-flex items-center px-2 py-1 text-[9px] font-bold uppercase tracking-wider rounded-md ring-1 bg-violet-50 text-violet-700 ring-violet-200/60 dark:bg-violet-950/30 dark:text-violet-400 dark:ring-violet-900/40">Lead</span>
+          : <span className="inline-flex items-center px-2 py-1 text-[9px] font-bold uppercase tracking-wider rounded-md ring-1 bg-blue-50 text-blue-700 ring-blue-200/60 dark:bg-blue-950/30 dark:text-blue-400 dark:ring-blue-900/40">Client</span>}
+        {Array.isArray(m.attendees) && m.attendees.length > 0 && (
+          <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 inline-flex items-center gap-0.5 ml-1">
+            <Users size={11} /> {m.attendees.length}
+          </span>
+        )}
+      </div>
+      {m.agenda && <p className="text-xs text-slate-500 dark:text-slate-400 mt-2.5 line-clamp-2">{m.agenda}</p>}
+      <div className="flex flex-wrap items-center justify-end gap-1.5 mt-3 empty:hidden">
+        <MeetingActions m={m} onOpen={onOpen} onDelete={onDelete} onCreateMom={onCreateMom} isViewer={isViewer} alwaysShowDelete />
+      </div>
     </div>
   );
 }
@@ -389,6 +458,9 @@ function CalendarView({ meetings, onOpenMeeting, statusFilter, query }) {
   const hideTimer = useRef(null);
 
   const showTip = (meeting, e) => {
+    // Touch screens fire mouseenter on tap, which would leave the preview
+    // stuck open under the meeting the tap just opened.
+    if (window.matchMedia && !window.matchMedia('(hover: hover)').matches) return;
     if (hideTimer.current) { clearTimeout(hideTimer.current); hideTimer.current = null; }
     const r = e.currentTarget.getBoundingClientRect();
     const tipWidth = 256;
@@ -457,7 +529,7 @@ function CalendarView({ meetings, onOpenMeeting, statusFilter, query }) {
   return (
     <Card className="overflow-hidden border border-slate-200/60 dark:border-slate-800/80 shadow-md">
       {/* Calendar header */}
-      <div className="flex items-center justify-between gap-3 p-5 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-blue-50/50 to-indigo-50/30 dark:from-slate-900 dark:to-slate-900">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-blue-50/50 to-indigo-50/30 dark:from-slate-900 dark:to-slate-900">
         <div className="flex items-center gap-3">
           <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
             <Calendar size={17} />
@@ -495,7 +567,7 @@ function CalendarView({ meetings, onOpenMeeting, statusFilter, query }) {
           return (
             <div
               key={i}
-              className={`min-h-[104px] border-b border-r border-slate-100 dark:border-slate-800/80 p-1.5 flex flex-col gap-1 ${
+              className={`min-h-[72px] sm:min-h-[104px] border-b border-r border-slate-100 dark:border-slate-800/80 p-1 sm:p-1.5 flex flex-col gap-1 min-w-0 ${
                 inMonth ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-950/30'
               } ${i % 7 === 0 ? 'border-l' : ''}`}
             >
@@ -542,8 +614,8 @@ function CalendarView({ meetings, onOpenMeeting, statusFilter, query }) {
                       >
                         {initials(m.clientName || m.title || 'M')}
                       </span>
-                      <span className="tabular-nums font-bold">{m.time || ''}</span>
-                      <span className={`truncate ${cancelled ? 'line-through' : ''}`}>{m.title || m.clientName || 'Meeting'}</span>
+                      <span className="hidden sm:inline tabular-nums font-bold">{m.time || ''}</span>
+                      <span className={`hidden sm:inline truncate ${cancelled ? 'line-through' : ''}`}>{m.title || m.clientName || 'Meeting'}</span>
                     </button>
                   );
                 })}

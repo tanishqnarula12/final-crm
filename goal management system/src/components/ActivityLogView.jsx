@@ -66,7 +66,7 @@ export default function ActivityLogView() {
             <p className="text-xs text-slate-400">Every create, edit, assignment and deletion — by real user.</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="relative w-44">
             <Filter size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
             <CoolSelect value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)} className={selectCls + ' pl-8 py-2 text-xs'}>
@@ -87,7 +87,28 @@ export default function ActivityLogView() {
         ) : logs.length === 0 ? (
           <p className="text-sm text-slate-400 p-6 text-center">No activity recorded yet.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phones: one entry per card instead of the 720px table. */}
+          <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+            {logs.map((l) => (
+              <div key={l.id} className="p-3.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{l.performedByName}</span>
+                  <span className="text-[10px] text-slate-400 tabular-nums shrink-0">{fmt(l.timestamp)}</span>
+                </div>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className={`inline-flex items-center px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ring-1 rounded-full ${ACTION_THEME[l.action] || 'bg-slate-100 text-slate-600 ring-slate-200/60 dark:bg-slate-800 dark:text-slate-400'}`}>
+                    {l.action.replace('_', ' ')}
+                  </span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 capitalize">{l.module}</span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 line-clamp-2 break-words">
+                  {compact(l.newValue) || compact(l.oldValue) || '—'}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left min-w-[720px]">
               <thead>
                 <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800">
@@ -117,6 +138,7 @@ export default function ActivityLogView() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Card>
     </div>
