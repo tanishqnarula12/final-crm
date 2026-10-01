@@ -19,6 +19,10 @@ import { parseFlexibleDate } from './calc';
 
 const normHeader = (h) => String(h).toLowerCase().replace(/[\s._-]/g, '');
 
+// Dropdown cells match their option ignoring case and spacing, so a typed
+// "Health/ Medical" or "health  /medical" still resolves to "Health / Medical".
+const normOption = (v) => String(v).toLowerCase().replace(/\s*\/\s*/g, '/').replace(/\s+/g, ' ').trim();
+
 export const fieldLabels = (fields) => fields.map((f) => f.label);
 
 function displayValue(f, r) {
@@ -70,7 +74,8 @@ function coerceCell(f, raw, team, errors) {
   if (f.type === 'boolean') return ['yes', 'y', 'true', '1'].includes(s.toLowerCase());
   if (f.type === 'select') {
     if (!s) return '';
-    const hit = (f.options || []).find((o) => o.toLowerCase() === s.toLowerCase());
+    const want = normOption(s);
+    const hit = (f.options || []).find((o) => normOption(o) === want);
     if (!hit) { errors.push(`${f.label} "${s}" is not a valid option`); return s; }
     return hit;
   }
@@ -141,8 +146,11 @@ export function parseExcelFile(file, { fields, clients = [], dedupeKeyFor, exist
           resolved.applicant = matchedApplicant?.name || '';
           resolved.pan = matchedApplicant?.pan || panCell;
 
+          // Fields resolve in spec order, so `appliesWhen` can look at an
+          // earlier column (Sub Types read the Insurance Type before them).
           fields.forEach((f) => {
             if (f.key === 'groupLeader' || f.key === 'applicant' || f.key === 'pan') return;
+            if (f.appliesWhen && !f.appliesWhen(resolved)) { resolved[f.key] = ''; return; }
             const cellKey = keyFor[f.key];
             resolved[f.key] = coerceCell(f, cellKey ? raw[cellKey] : '', team, errors);
           });

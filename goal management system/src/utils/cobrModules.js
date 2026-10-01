@@ -371,13 +371,20 @@ export const policyActionsFor = (stage) => POLICY_ACTIONS[stage] || [];
 // for matching). `assignedTo` (every module's team-member field, via
 // AssignmentFields) is likewise resolved specially by the Excel engine.
 // ---------------------------------------------------------------------------
+//
+// `appliesWhen(row)` marks a field that only exists for some rows: Motor's
+// two Sub Types, which the Renewal/Claim forms show (and require) only when
+// Insurance Type is Motor and clear otherwise. On other rows the import
+// ignores whatever is in those columns ("NA", blank, …).
+const isMotorRow = (r) => r.insuranceType === 'Motor';
+
 export const RENEWAL_EXCEL_FIELDS = [
   { key: 'groupLeader', label: 'Client / Group Leader', type: 'text' },
   { key: 'applicant', label: 'Applicant', type: 'text' },
   { key: 'pan', label: 'Applicant PAN', type: 'text', required: true },
   { key: 'insuranceType', label: 'Insurance Type', type: 'select', options: RENEWAL_CLAIM_INSURANCE_TYPES },
-  { key: 'motorVehicleType', label: 'Sub Type (Vehicle)', type: 'select', options: MOTOR_VEHICLE_TYPES },
-  { key: 'motorCoverageType', label: 'Sub Type (Coverage)', type: 'select', options: MOTOR_COVERAGE_TYPES },
+  { key: 'motorVehicleType', label: 'Sub Type (Vehicle)', type: 'select', options: MOTOR_VEHICLE_TYPES, appliesWhen: isMotorRow, required: isMotorRow },
+  { key: 'motorCoverageType', label: 'Sub Type (Coverage)', type: 'select', options: MOTOR_COVERAGE_TYPES, appliesWhen: isMotorRow, required: isMotorRow },
   { key: 'companyName', label: 'Company Name', type: 'text' },
   { key: 'policyName', label: 'Policy Name', type: 'text' },
   { key: 'policyNumber', label: 'Policy Number', type: 'text' },
@@ -403,8 +410,8 @@ export const CLAIM_EXCEL_FIELDS = [
   { key: 'applicant', label: 'Applicant', type: 'text' },
   { key: 'pan', label: 'Applicant PAN', type: 'text', required: true },
   { key: 'insuranceType', label: 'Insurance Type', type: 'select', options: RENEWAL_CLAIM_INSURANCE_TYPES },
-  { key: 'motorVehicleType', label: 'Sub Type (Vehicle)', type: 'select', options: MOTOR_VEHICLE_TYPES },
-  { key: 'motorCoverageType', label: 'Sub Type (Coverage)', type: 'select', options: MOTOR_COVERAGE_TYPES },
+  { key: 'motorVehicleType', label: 'Sub Type (Vehicle)', type: 'select', options: MOTOR_VEHICLE_TYPES, appliesWhen: isMotorRow, required: isMotorRow },
+  { key: 'motorCoverageType', label: 'Sub Type (Coverage)', type: 'select', options: MOTOR_COVERAGE_TYPES, appliesWhen: isMotorRow, required: isMotorRow },
   { key: 'policyName', label: 'Policy Name', type: 'text' },
   { key: 'policyNumber', label: 'Policy Number', type: 'text' },
   { key: 'sumAssured', label: 'Sum Assured', type: 'number' },
