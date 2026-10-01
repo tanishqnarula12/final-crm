@@ -18,7 +18,10 @@ const parseAmt = (s) => {
   return isFinite(n) && n > 0 ? n : 0;
 };
 
-export default function AssetAllocationModal({ clientName, initial, onClose, onSave }) {
+// `otherAssets`: this client's Servicing → Other Assets. They show here
+// read-only and count in the live Net Worth, but are never saved into the
+// allocation — they are edited in Other Assets (see utils/otherAssets.js).
+export default function AssetAllocationModal({ clientName, initial, onClose, onSave, otherAssets = [] }) {
   useBackLayer(true, onClose); // phone/browser Back closes it
   const norm = useMemo(() => normalizeAllocation(initial), [initial]);
 
@@ -56,7 +59,9 @@ export default function AssetAllocationModal({ clientName, initial, onClose, onS
   const finTotal = sectionSum('financial');
   const phyTotal = sectionSum('physical');
   const liaTotal = sectionSum('liabilities');
-  const netWorth = finTotal + phyTotal - liaTotal;
+  const otherList = otherAssets.filter((a) => Number(a.amount) > 0);
+  const otherTotal = otherList.reduce((s, a) => s + (Number(a.amount) || 0), 0);
+  const netWorth = finTotal + phyTotal + otherTotal - liaTotal;
 
   const handleSave = () => {
     const clean = { values: { financial: {}, physical: {}, liabilities: {} }, custom: { financial: [], physical: [], liabilities: [] }, remark: remark.trim() };
@@ -95,6 +100,28 @@ export default function AssetAllocationModal({ clientName, initial, onClose, onS
 
         {/* Scrollable body */}
         <div className="p-5 overflow-y-auto space-y-8">
+          {otherList.length > 0 && (
+            <section data-other-assets className="rounded-2xl border border-violet-200/70 dark:border-violet-900/40 bg-violet-50/50 dark:bg-violet-950/20 p-4 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest">From Other Assets</h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Added automatically from Servicing → Other Assets and counted below. Change them there, not here.</p>
+                </div>
+                <span className="shrink-0 text-sm font-black text-violet-700 dark:text-violet-300 tabular-nums">{fmtINR(otherTotal)}</span>
+              </div>
+              <ul className="divide-y divide-violet-100 dark:divide-violet-900/30">
+                {otherList.map((a) => (
+                  <li key={a.id} className="flex items-center justify-between gap-3 py-1.5 text-xs">
+                    <span className="min-w-0 text-slate-700 dark:text-slate-300">
+                      <span className="font-semibold">{a.assetSubType}</span>
+                      <span className="text-slate-400"> · {a.applicant}{a.applicantRelation ? ` (${a.applicantRelation})` : ''}</span>
+                    </span>
+                    <span className="shrink-0 font-bold tabular-nums text-slate-800 dark:text-slate-200">{fmtFull(Number(a.amount) || 0)}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           {ASSET_SCHEMA.map(section => {
             const ac = ACCENTS[section.accent] || ACCENTS.indigo;
             const SectionIcon = section.icon;

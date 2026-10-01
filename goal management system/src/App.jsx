@@ -55,6 +55,8 @@ import CobrView from './components/CobrView';
 import CobrFormModal from './components/CobrFormModal';
 import CobrTaskModal from './components/CobrTaskModal';
 import { COBR_WORKSPACE_TYPES, isOpenStage, WORKSPACE_SECTIONS, WORKSPACE_SECTION_VIEW, workspaceSectionOf } from './utils/cobrModules';
+// Servicing → Other Assets feed every client's Asset Allocation and Map Asset.
+import { withEffectiveAllocation, effectiveAllocation, otherAssetsForClient } from './utils/otherAssets';
 import DocumentsView from './components/DocumentsView';
 import ProspectsView, { ProspectModal } from './components/BusinessProspects';
 import ReviewWorkspace from './components/ReviewWorkspace';
@@ -2289,14 +2291,14 @@ export default function App() {
 
         {tab === 'assets' && !assetClientId && (
           <div className="animate-scale-up">
-            <AssetAllocationList clients={clients} onSelect={setAssetClientId} />
+            <AssetAllocationList clients={clients.map(withEffectiveAllocation)} onSelect={setAssetClientId} />
           </div>
         )}
 
         {tab === 'assets' && assetClientId && assetClient && (
           <div className="animate-scale-up">
             <AssetAllocationDetail
-              client={assetClient}
+              client={withEffectiveAllocation(assetClient)}
               onEdit={() => setShowAllocModal(true)}
               onSaveRemark={(remark) => handleSaveAllocation(assetClientId, { remark })}
               // Editing follows the matrix's Asset Allocation → Edit row, the
@@ -2462,6 +2464,7 @@ export default function App() {
         <AssetAllocationModal
           clientName={assetClient.name}
           initial={assetClient.assetAllocation}
+          otherAssets={otherAssetsForClient(assetClient.id)}
           onClose={() => setShowAllocModal(false)}
           onSave={(patch) => {
             handleSaveAllocation(assetClientId, patch);
@@ -2473,7 +2476,7 @@ export default function App() {
       {showGoalForm && selectedClient && (
         <GoalFormModal
           initial={editingGoalId ? selectedClient.goals.find(g => g.id === editingGoalId) : null}
-          assetAllocation={selectedClient.assetAllocation}
+          assetAllocation={effectiveAllocation(selectedClient)}
           clientGoals={selectedClient.goals || []}
           onClose={() => { setShowGoalForm(false); setEditingGoalId(null); }}
           onSave={(g) => {

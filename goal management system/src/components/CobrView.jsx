@@ -11,9 +11,13 @@
 // The COBR tab's behaviour is deliberately unchanged from before the other
 // four tabs existed.
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, ArrowLeftRight, RefreshCw, ShieldAlert, Landmark, FileCheck2 } from 'lucide-react';
-import { Card, btnPrimary, selectCls, CoolSelect } from './UI';
-import { loadTasks, saveTasks } from '../utils/tasks';
+import { createPortal } from 'react-dom';
+import { Plus, Search, ArrowLeftRight, RefreshCw, ShieldAlert, Landmark, FileCheck2, Gem, CheckCircle2 } from 'lucide-react';
+import { Card, btnPrimary, btnGhost, selectCls, CoolSelect } from './UI';
+import { loadTasks, saveTasks, loadOtherAssets, saveOtherAssets } from '../utils/tasks';
+import { assetShortName, fmtRupees } from '../utils/otherAssets';
+import OtherAssetsTab from './cobr/OtherAssetsTab';
+import OtherAssetModal, { AssetAlert } from './cobr/OtherAssetModal';
 import { COBR_STAGES, cobrTotals, isCobrTask } from '../utils/cobr';
 import {
   REC, RENEWAL_STAGES, CLAIM_STAGES, FD_STAGES, POLICY_STAGES,
@@ -37,6 +41,7 @@ const STAGE_THEME = {
 };
 
 const TABS = [
+  { id: REC.ASSET, label: 'Other Assets', icon: Gem },
   { id: REC.COBR, label: 'COBR', icon: ArrowLeftRight },
   { id: REC.RENEWAL, label: 'Renewals', icon: RefreshCw },
   { id: REC.CLAIM, label: 'Claim', icon: ShieldAlert },
@@ -66,13 +71,28 @@ export default function CobrView({
   onSwitchSection,
 }) {
   const sectionTypes = WORKSPACE_SECTIONS[section] || WORKSPACE_SECTIONS.servicing;
-  const tabs = TABS.filter((t) => sectionTypes.includes(t.id));
+  const tabs = sectionTypes.map((id) => TABS.find((t) => t.id === id)).filter(Boolean);
   const [tab, setTab] = useState(sectionTypes[0]);
   const [tasks, setTasks] = useState(() => loadTasks());
-  // Which record editor is open, if any: { type, record|null }
+  // Servicing → Other Assets (kept apart from the task list — utils/tasks.js).
+  const [assets, setAssets] = useState(() => loadOtherAssets());
+  // Which record editor is open, if any: { type, record|null, startEditing? }
   const [editor, setEditor] = useState(null);
+  const [assetToDelete, setAssetToDelete] = useState(null);
+  const [toast, setToast] = useState(null);
 
-  useEffect(() => { setTasks(loadTasks()); }, [tasksChangeCounter]);
+  useEffect(() => { setTasks(loadTasks()); setAssets(loadOtherAssets()); }, [tasksChangeCounter]);
+  // The server's answer to a save (e.g. a duplicate it refused) lands later.
+  useEffect(() => {
+    const sync = () => setAssets(loadOtherAssets());
+    window.addEventListener('crm:tasks-updated', sync);
+    return () => window.removeEventListener('crm:tasks-updated', sync);
+  }, []);
+  useEffect(() => {
+    if (!toast) return undefined;
+    const id = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(id);
+  }, [toast]);
 
   // Excel Upload, Delete AND the New-record button all ride each register's
   // OWN create/delete permission (the four were split into independent
@@ -80,10 +100,31 @@ export default function CobrView({
   // column. A role granted ALL on e.g. otherInsurancePolicies but nothing on
   // 'cobr' itself used to see Import/Delete work but the "+ New Policy"
   // button stay hidden, which read as "the matrix grant isn't respected."
-  const PERMISSION_MODULE = { [REC.RENEWAL]: 'renewals', [REC.CLAIM]: 'claims', [REC.FD]: 'fixedDeposits', [REC.POLICY]: 'otherInsurancePolicies' };
+  const PERMISSION_MODULE = { [REC.RENEWAL]: 'renewals', [REC.CLAIM]: 'claims', [REC.FD]: 'fixedDeposits', [REC.POLICY]: 'otherInsurancePolicies', [REC.ASSET]: 'otherAssets' };
   const mayCreate = !isViewer && canDo(PERMISSION_MODULE[tab] || 'cobr', 'create');
   const canImportFor = (type) => !isViewer && canDo(PERMISSION_MODULE[type], 'create');
   const canDeleteFor = (type, record) => !isViewer && canDo(PERMISSION_MODULE[type], 'delete', record);
+  const canEditAsset = (a) => !isViewer && canDo('otherAssets', 'editDetails', a);
+
+  // Other Assets: save / delete straight into the asset list (saveOtherAssets
+  // carries every task along untouched), then a confirmation message.
+  const handleSaveAsset = (rec, isNew) => {
+    const list = loadOtherAssets();
+    saveOtherAssets(list.some((a) => a.id === rec.id) ? list.map((a) => (a.id === rec.id ? rec : a)) : [rec, ...list]);
+    setAssets(loadOtherAssets());
+    setEditor(null);
+    const what = `${rec.applicant} — ${assetShortName(rec.assetSubType)}`;
+    setToast(isNew
+      ? { title: 'Asset Added Successfully', body: `${what} has been added successfully.` }
+      : { title: 'Asset Updated', body: `${what} has been updated.` });
+  };
+  const handleDeleteAsset = (rec) => {
+    saveOtherAssets(loadOtherAssets().filter((a) => a.id !== rec.id));
+    setAssets(loadOtherAssets());
+    setAssetToDelete(null);
+    setEditor(null);
+    setToast({ title: 'Asset Deleted', body: `${rec.applicant} — ${assetShortName(rec.assetSubType)} was deleted. An admin can restore it from Recently deleted.` });
+  };
 
   const handleDeleteRecord = (type, record) => {
     const label = COBR_EXCEL_SPEC[type]?.label || 'record';
@@ -157,6 +198,7 @@ export default function CobrView({
               {tab === REC.CLAIM && 'Insurance claims — full workflow, including the Ombudsman escalation path.'}
               {tab === REC.FD && 'Fixed deposits nearing maturity — and whether the money comes back to us.'}
               {tab === REC.POLICY && 'Other policies held by clients, tracked outside the renewal and claim flows.'}
+              {tab === REC.ASSET && 'Assets applicants own outside the Mutual Fund and Insurance modules — they flow into Asset Allocation and goal mapping automatically.'}
             </p>
           </div>
         </div>
@@ -165,6 +207,10 @@ export default function CobrView({
           tab === REC.COBR ? (
             <button onClick={onNewCobr} className={btnPrimary + ' text-xs'}>
               <Plus size={14} /> New COBR
+            </button>
+          ) : tab === REC.ASSET ? (
+            <button onClick={() => setEditor({ type: REC.ASSET, record: null })} className={btnPrimary + ' text-xs'}>
+              <Plus size={14} /> Add Asset
             </button>
           ) : (
             <button onClick={() => setEditor({ type: tab, record: null })} className={btnPrimary + ' text-xs'}>
@@ -180,7 +226,8 @@ export default function CobrView({
           const on = t.id === tab;
           const badge = t.id === REC.COBR
             ? cobrTasks.filter((x) => (x.stage || 'Open') !== 'Completed').length
-            : openCount(t.id);
+            : t.id === REC.ASSET ? assets.length // no stages — how many are recorded
+              : openCount(t.id);
           return (
             <button
               key={t.id}
@@ -203,6 +250,17 @@ export default function CobrView({
           );
         })}
       </div>
+
+      {tab === REC.ASSET && (
+        <OtherAssetsTab
+          assets={assets}
+          onOpen={(a) => setEditor({ type: REC.ASSET, record: a })}
+          onEdit={(a) => setEditor({ type: REC.ASSET, record: a, startEditing: true })}
+          onDelete={setAssetToDelete}
+          canEditFor={canEditAsset}
+          canDeleteFor={(a) => canDeleteFor(REC.ASSET, a)}
+        />
+      )}
 
       {tab === REC.COBR && (
         <CobrTab cobrTasks={cobrTasks} onOpenCobr={onOpenCobr} />
@@ -400,6 +458,52 @@ export default function CobrView({
       )}
       {editor?.type === REC.POLICY && (
         <OtherPolicyModal record={editor.record} clients={clients} onClose={() => setEditor(null)} onSave={handleSaved} />
+      )}
+      {editor?.type === REC.ASSET && (
+        <OtherAssetModal
+          key={editor.record?.id || 'new'}
+          record={editor.record}
+          startEditing={!!editor.startEditing}
+          clients={clients}
+          onClose={() => setEditor(null)}
+          onSave={handleSaveAsset}
+          canDelete={!!editor.record && canDeleteFor(REC.ASSET, editor.record)}
+          onDelete={setAssetToDelete}
+          onViewExisting={(a) => setEditor({ type: REC.ASSET, record: a })}
+        />
+      )}
+      {assetToDelete && (
+        <AssetAlert
+          tone="rose"
+          title="Delete this asset?"
+          onClose={() => setAssetToDelete(null)}
+          actions={(
+            <>
+              <button type="button" onClick={() => setAssetToDelete(null)} className={btnGhost}>Cancel</button>
+              <button type="button" onClick={() => handleDeleteAsset(assetToDelete)} className="inline-flex items-center justify-center gap-1.5 px-4.5 py-2.5 text-xs font-bold uppercase tracking-wider bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-lg shadow-rose-500/15 transition-all cursor-pointer">Delete</button>
+            </>
+          )}
+        >
+          <p>Are you sure you want to delete this asset?</p>
+          <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+            <dt className="font-bold text-slate-400 uppercase tracking-wider text-[10px] pt-0.5">Applicant</dt><dd className="font-semibold text-slate-800 dark:text-slate-200">{assetToDelete.applicant || '—'}</dd>
+            <dt className="font-bold text-slate-400 uppercase tracking-wider text-[10px] pt-0.5">Asset</dt><dd className="font-semibold text-slate-800 dark:text-slate-200">{assetToDelete.assetSubType || '—'}</dd>
+            <dt className="font-bold text-slate-400 uppercase tracking-wider text-[10px] pt-0.5">Current Value</dt><dd className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{fmtRupees(assetToDelete.amount)}</dd>
+          </dl>
+          <p className="text-[11px] text-slate-400 mt-3">It disappears for everyone, and from Asset Allocation. An admin can restore it from Recently deleted.</p>
+        </AssetAlert>
+      )}
+      {toast && createPortal(
+        <div role="status" className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:bottom-6 left-1/2 -translate-x-1/2 z-[80] w-[calc(100%-2rem)] max-w-sm md:w-auto animate-scale-up">
+          <div className="flex items-start gap-3 px-4 py-3 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-2xl">
+            <CheckCircle2 size={18} className="text-emerald-400 dark:text-emerald-600 shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-bold">{toast.title}</p>
+              <p className="text-xs opacity-80 mt-0.5">{toast.body}</p>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

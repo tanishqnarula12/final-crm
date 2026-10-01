@@ -9,7 +9,21 @@
 import { api } from '../services/api';
 import { createListSync } from '../services/listSync';
 
+// Everything /tasks returns. That includes Servicing → Other Assets (Task rows
+// with relatedTo 'OTHER_ASSET'), which are NOT tasks: loadTasks() hands out
+// the list without them, so no task screen, count or dashboard ever shows an
+// asset, and loadOtherAssets() hands out just them. Each save carries the
+// other list along untouched — a task save can never drop an asset (or the
+// reverse), since anything missing from a save is sent as deleted.
 let cache = [];
+let taskCache = [];
+let assetCache = [];
+const isAssetRow = (t) => t?.relatedTo === 'OTHER_ASSET';
+const setCache = (next) => {
+  cache = next;
+  taskCache = next.filter((t) => !isAssetRow(t));
+  assetCache = next.filter(isAssetRow);
+};
 // Tasks come "slim": each attachment (Renewal / Claim / FD / Other-Policy
 // records keep their files here) has its details but not its file, marked
 // `fileStripped: true` — the files were ~97% of the list (9.7 MB, Sep 2026).
@@ -21,17 +35,18 @@ const sync = createListSync('/tasks?slim=1', 'tasks');
 const hasSlimAttachments = (t) => [t?.attachments, ...(Array.isArray(t?.stageHistory) ? t.stageHistory.map((h) => h?.attachments) : [])]
   .some((list) => Array.isArray(list) && list.some((a) => a?.fileStripped === true));
 
-export const loadTasks = () => cache;
+export const loadTasks = () => taskCache;
+export const loadOtherAssets = () => assetCache;
 
 // Fetches the tasks from the server (only if they changed since the last
 // fetch — see services/listSync) and populates the cache. Call once on
 // login/app-load (App.jsx `loadData`) before any component reads tasks.
 export async function hydrateTasks(opts) {
   const tasks = await sync.fetch({ force: !!opts?.force });
-  if (!tasks) return cache;
-  cache = tasks;
+  if (!tasks) return taskCache;
+  setCache(tasks);
   window.dispatchEvent(new Event('crm:tasks-updated'));
-  return cache;
+  return taskCache;
 }
 
 // CLOSED tasks (Completed/Lost) for one client, visible to ANYONE who can view
@@ -58,7 +73,7 @@ const mergeSaved = (saved = [], removedIds = []) => {
   const next = cache.filter((t) => !removed.has(t.id)).map((t) => byId.get(t.id) || t);
   const known = new Set(next.map((t) => t.id));
   const added = saved.filter((t) => !known.has(t.id)); // e.g. a delete the server refused
-  cache = added.length ? [...added, ...next] : next;
+  setCache(added.length ? [...added, ...next] : next);
 };
 
 // Callers hand over the whole updated list (the old "rewrite the list"
@@ -67,14 +82,33 @@ const mergeSaved = (saved = [], removedIds = []) => {
 // full list meant every one-task edit uploaded and re-downloaded every task
 // with its attachments (~9 MB in Sep 2026). A server without PATCH (404)
 // gets the whole list via PUT, exactly as before.
+// Saves the task list (everything loadTasks() hands out). Other Assets ride
+// along unchanged; an asset that turns up in `tasks` is treated as an edit of
+// that asset (never a second copy).
 export const saveTasks = (tasks) => {
+  const incomingAssets = tasks.filter(isAssetRow);
+  if (!incomingAssets.length) return persistAll([...tasks, ...assetCache]);
+  const byId = new Map(incomingAssets.map((a) => [a.id, a]));
+  const known = new Set(assetCache.map((a) => a.id));
+  persistAll([
+    ...tasks.filter((t) => !isAssetRow(t)),
+    ...incomingAssets.filter((a) => !known.has(a.id)),
+    ...assetCache.map((a) => byId.get(a.id) || a),
+  ]);
+};
+
+// Saves the Other Assets list (what loadOtherAssets() hands out); the tasks
+// ride along unchanged. An asset left out of `assets` is deleted.
+export const saveOtherAssets = (assets) => persistAll([...taskCache, ...assets.filter(isAssetRow)]);
+
+const persistAll = (tasks) => {
   const before = cache;
   const beforeById = new Map(before.map((t) => [t.id, t]));
   const nextIds = new Set(tasks.map((t) => t.id));
   const changed = tasks.filter((t) => beforeById.get(t.id) !== t);
   const deletedIds = before.filter((t) => !nextIds.has(t.id)).map((t) => t.id);
 
-  cache = tasks;
+  setCache(tasks);
   window.dispatchEvent(new Event('crm:tasks-updated'));
   if (!changed.length && !deletedIds.length) return;
 
@@ -98,7 +132,7 @@ export const saveTasks = (tasks) => {
         mergeSaved(res.tasks, res.removedIds);
         window.dispatchEvent(new Event('crm:tasks-updated'));
       } else if (Array.isArray(res?.tasks)) {
-        cache = res.tasks;
+        setCache(res.tasks);
         window.dispatchEvent(new Event('crm:tasks-updated'));
       }
       if (res?.stats?.rejected > 0) {

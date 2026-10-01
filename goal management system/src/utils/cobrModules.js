@@ -12,7 +12,7 @@
 
 import { useState } from 'react';
 import { uid } from './calc';
-import { loadTasks } from './tasks';
+import { loadTasks, loadOtherAssets } from './tasks';
 import { canDo } from './permissions';
 import { getCurrentUser } from './auth';
 
@@ -22,6 +22,10 @@ export const REC = {
   CLAIM: 'CLAIM',
   FD: 'FD',
   POLICY: 'POLICY',
+  // Servicing → Other Assets (1 Oct 2026) — no stage, no assignee; see
+  // utils/otherAssets.js. Not one of COBR_WORKSPACE_TYPES below: those are the
+  // stage-driven registers, and utils/tasks.js keeps assets out of loadTasks().
+  ASSET: 'OTHER_ASSET',
 };
 
 // Every relatedTo value the COBR workspace owns — the server mirrors this list.
@@ -31,7 +35,7 @@ export const COBR_WORKSPACE_TYPES = [REC.COBR, REC.RENEWAL, REC.CLAIM, REC.FD, R
 // and Renewals & Claims. Each lists the registers it shows, in tab order.
 // The records themselves are unchanged — this only decides where they show.
 export const WORKSPACE_SECTIONS = {
-  servicing: [REC.COBR, REC.FD, REC.POLICY],
+  servicing: [REC.ASSET, REC.COBR, REC.FD, REC.POLICY],
   renewalsClaims: [REC.RENEWAL, REC.CLAIM],
 };
 export const WORKSPACE_SECTION_VIEW = { servicing: 'cobr', renewalsClaims: 'renewals' };
@@ -573,7 +577,7 @@ export const makeHistoryEntry = ({ stage, action, note, attachments, settlementA
 // Task-shaped name, so these rows read sensibly anywhere the generic Tasks
 // module or a notification renders `taskName`.
 export const recordTaskName = (type, applicant, extra) => {
-  const label = { [REC.RENEWAL]: 'Renewal', [REC.CLAIM]: 'Claim', [REC.FD]: 'Fixed Deposit', [REC.POLICY]: 'Policy' }[type] || 'Record';
+  const label = { [REC.RENEWAL]: 'Renewal', [REC.CLAIM]: 'Claim', [REC.FD]: 'Fixed Deposit', [REC.POLICY]: 'Policy', [REC.ASSET]: 'Other Asset' }[type] || 'Record';
   return [label, applicant || 'Unknown', extra].filter(Boolean).join(' - ');
 };
 
@@ -590,9 +594,11 @@ const COBR_RECORD_LABEL = {
   [REC.CLAIM]: (r) => `Claim — ${r.claimType || r.insuranceType || 'Insurance'}${r.policyNumber ? ` (${r.policyNumber})` : ''}`,
   [REC.FD]: (r) => `Fixed Deposit — ${r.bankName || 'Bank'}`,
   [REC.POLICY]: (r) => `Policy — ${r.insuranceType || 'Insurance'}${r.companyName ? ` (${r.companyName})` : ''}`,
+  [REC.ASSET]: (r) => `Other Asset — ${r.assetSubType || 'Asset'}`,
 };
 export function cobrWorkspaceDocuments(clients) {
-  const workspaceTasks = loadTasks().filter((t) => isRenewal(t) || isClaim(t) || isFd(t) || isPolicy(t));
+  // Other Assets' attachments too — they are kept apart from the task list.
+  const workspaceTasks = [...loadTasks().filter((t) => isRenewal(t) || isClaim(t) || isFd(t) || isPolicy(t)), ...loadOtherAssets()];
   const docs = [];
   workspaceTasks.forEach((r) => {
     const client = clients.find((c) => c.id === r.groupLeaderId) || clients.find((c) => c.name === r.groupLeader);
@@ -629,8 +635,10 @@ export function cobrWorkspaceDocuments(clients) {
 // assigner (Assigned By) may unlock full editing (the "Edit" button);
 // Assigned By/Assigned To may change the Stage regardless, since that's a
 // separate right from editing the record's other fields.
-export function useEditGate(module, record, isEdit) {
-  const [isEditingMode, setIsEditingMode] = useState(!isEdit);
+// `startEditing`: open an existing record straight in Edit Mode (still only
+// unlocks the fields when the user may edit it).
+export function useEditGate(module, record, isEdit, startEditing = false) {
+  const [isEditingMode, setIsEditingMode] = useState(!isEdit || startEditing);
   const canEditThis = !isEdit || canDo(module, 'editDetails', record);
   const canChangeStageThis = !isEdit || canDo(module, 'changeStage', record);
   const fieldsUnlocked = isEditingMode && canEditThis;

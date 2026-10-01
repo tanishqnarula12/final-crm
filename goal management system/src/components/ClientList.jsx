@@ -11,6 +11,7 @@ import {
 import { getCurrentUser } from '../utils/auth';
 import { canCreateClient, canDeleteClient } from '../utils/permissions';
 import { hasAllocation } from '../utils/assets';
+import { withEffectiveAllocation } from '../utils/otherAssets';
 import { teamName, loadTeam } from '../services/team';
 import ClientSearchDropdown from './ClientSearchDropdown';
 import { useBackLayer } from '../utils/backNav';
@@ -80,7 +81,7 @@ const OPTIONAL_COLUMNS = [
   },
   {
     key: 'assetAllocationStatus', label: 'Asset Allocation Status', icon: PieChart,
-    cell: (c) => <td className="px-6 py-4"><StatusPill ok={hasAllocation(c)} yesIcon={PieChart} noIcon={Wallet} /></td>,
+    cell: (c) => <td className="px-6 py-4"><StatusPill ok={hasAllocation(withEffectiveAllocation(c))} yesIcon={PieChart} noIcon={Wallet} /></td>,
   },
   {
     key: 'mutualFunds', label: 'Mutual Fund', icon: TrendingUp,
@@ -278,7 +279,7 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
       if (goalSet === 'yes' && gc === 0) return false;
       if (goalSet === 'no' && gc > 0) return false;
       if (allocSet !== 'all') {
-        const allocated = hasAllocation(c);
+        const allocated = hasAllocation(withEffectiveAllocation(c)); // incl. Other Assets
         if (allocSet === 'yes' && !allocated) return false;
         if (allocSet === 'no' && allocated) return false;
       }

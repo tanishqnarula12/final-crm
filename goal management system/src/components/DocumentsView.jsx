@@ -6,6 +6,7 @@ import {
 import { Card, Avatar, btnPrimary, btnSecondary, btnGhost, inputCls, CoolSelect, SaveLabel, saveBtnState } from './UI';
 import { calcGoal, fmtINR, fmtFull, fmtSip, goalEmoji, monthLabel, fmtDate } from '../utils/calc';
 import { hasAllocation, allocationTotals, filledItems } from '../utils/assets';
+import { withEffectiveAllocation } from '../utils/otherAssets';
 import { updateClient, deleteMom, applySavedClient } from '../services/db';
 import { useAttachmentFile } from '../services/clientFiles';
 import { getCurrentUser } from '../utils/auth';
@@ -76,6 +77,7 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
   const documents = useMemo(() => {
     const docs = [...cobrWorkspaceDocuments(clients)];
     clients.forEach(c => {
+      const ac = withEffectiveAllocation(c); // allocation incl. Servicing → Other Assets
       // 1. Custom Uploaded Documents
       const details = c.clientDetails || {};
       const attachments = details.attachments || [];
@@ -129,14 +131,14 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
       }
 
       // 4. Asset Allocation Report
-      if (c.assetAllocation && hasAllocation(c)) {
+      if (ac.assetAllocation && hasAllocation(ac)) {
         docs.push({
           id: `asset-${c.id}`,
           type: 'asset',
           client: c,
           title: `Asset Allocation Report · Current Strategy`,
-          date: c.assetAllocation.updatedAt || '',
-          assetAllocation: c.assetAllocation,
+          date: ac.assetAllocation.updatedAt || '',
+          assetAllocation: ac.assetAllocation,
         });
       }
 
@@ -158,9 +160,9 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
       }
 
       // 6. Portfolio Review Report
-      if ((c.goals && c.goals.length > 0) || (c.assetAllocation && hasAllocation(c))) {
+      if ((c.goals && c.goals.length > 0) || (ac.assetAllocation && hasAllocation(ac))) {
         const latestGoalDate = c.goals?.reduce((acc, g) => (g.createdAt && g.createdAt > acc ? g.createdAt : acc), '') || '';
-        const latestAssetDate = c.assetAllocation?.updatedAt || '';
+        const latestAssetDate = ac.assetAllocation?.updatedAt || '';
         const latestDate = latestGoalDate > latestAssetDate ? latestGoalDate : latestAssetDate;
         docs.push({
           id: `portfolio-${c.id}`,
@@ -169,7 +171,7 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
           title: `Portfolio Review Report`,
           date: latestDate,
           goals: c.goals || [],
-          assetAllocation: c.assetAllocation,
+          assetAllocation: ac.assetAllocation,
         });
       }
     });

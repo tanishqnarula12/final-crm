@@ -22,6 +22,7 @@ import ClientActivityLog from './ClientActivityLog';
 import { uid, calcGoal, fmtINR, fmtFull, fmtSip, goalEmoji, monthLabel, fmtDate } from '../utils/calc';
 import { DOCUMENT_TYPE_GROUPS } from '../utils/documentTypes';
 import { hasAllocation, allocationTotals, filledItems } from '../utils/assets';
+import { withEffectiveAllocation } from '../utils/otherAssets';
 import { cobrTotals } from '../utils/cobr';
 import { cobrWorkspaceDocuments } from '../utils/cobrModules';
 import { printHtmlDocument, printSafeDataUrl, wrapStandaloneHtml, useBlobUrl } from '../utils/documents';
@@ -298,6 +299,8 @@ export default function ClientProfileView({
   };
 
   const dynamicAttachments = React.useMemo(() => {
+    // Includes the client's Servicing → Other Assets (utils/otherAssets.js).
+    const allocClient = withEffectiveAllocation(client);
     const list = [];
     
     // Goal Report
@@ -314,14 +317,14 @@ export default function ClientProfileView({
     }
 
     // Asset Allocation Report
-    if (client.assetAllocation && hasAllocation(client)) {
+    if (allocClient.assetAllocation && hasAllocation(allocClient)) {
       list.push({
         id: `asset-${client.id}`,
         type: 'asset',
         client,
         title: `Asset Allocation Report`,
-        date: client.assetAllocation.updatedAt || '',
-        assetAllocation: client.assetAllocation
+        date: allocClient.assetAllocation.updatedAt || '',
+        assetAllocation: allocClient.assetAllocation
       });
     }
 
@@ -355,9 +358,9 @@ export default function ClientProfileView({
     }
 
     // Portfolio Review Report
-    if ((client.goals && client.goals.length > 0) || (client.assetAllocation && hasAllocation(client))) {
+    if ((client.goals && client.goals.length > 0) || (allocClient.assetAllocation && hasAllocation(allocClient))) {
       const latestGoalDate = client.goals?.reduce((acc, g) => (g.createdAt && g.createdAt > acc ? g.createdAt : acc), '') || '';
-      const latestAssetDate = client.assetAllocation?.updatedAt || '';
+      const latestAssetDate = allocClient.assetAllocation?.updatedAt || '';
       const latestDate = latestGoalDate > latestAssetDate ? latestGoalDate : latestAssetDate;
       list.push({
         id: `portfolio-${client.id}`,
@@ -366,7 +369,7 @@ export default function ClientProfileView({
         title: `Portfolio Review Report`,
         date: latestDate,
         goals: client.goals || [],
-        assetAllocation: client.assetAllocation
+        assetAllocation: allocClient.assetAllocation
       });
     }
 

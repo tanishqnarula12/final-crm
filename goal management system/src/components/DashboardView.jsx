@@ -18,6 +18,7 @@ import { loadTasks, TASK_STAGES, STAGE_THEME } from '../utils/tasks';
 import { loadMeetings, MEETING_STATUSES } from '../utils/meetings';
 import { hasAllocation, allocationTotals } from '../utils/assets';
 import { isPolicy, isRenewal, isClaim, isFd, RENEWAL_STAGES, CLAIM_STAGES, FD_STAGES, POLICY_STAGES, stageReachedAt } from '../utils/cobrModules';
+import { effectiveAllocation, withEffectiveAllocation } from '../utils/otherAssets';
 import { isCobrTask, cobrTotals } from '../utils/cobr';
 import { can } from '../services/permissions';
 import { getManagedPortfolio, setAumOverride, setSipOverride, setInsuranceOverride } from '../services/managedPortfolio';
@@ -419,9 +420,9 @@ export default function DashboardView({
       // Net worth = total assets − liabilities, from the client's Asset
       // Allocation record — a client with none configured contributes 0
       // (allocationTotals normalizes a missing/empty record safely).
-      totalNetWorth += allocationTotals(c.assetAllocation).netWorth;
+      totalNetWorth += allocationTotals(effectiveAllocation(c)).netWorth; // incl. Other Assets
     });
-    const withAlloc = clients.filter(c => hasAllocation(c)).length;
+    const withAlloc = clients.filter(c => hasAllocation(withEffectiveAllocation(c))).length;
     return { aum, totalNetWorth, withAlloc };
   }, [clients]);
 

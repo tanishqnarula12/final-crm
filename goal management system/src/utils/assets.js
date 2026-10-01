@@ -196,7 +196,12 @@ export function normalizeAllocation(a) {
     }
     const c = a.custom && Array.isArray(a.custom[sid]) ? a.custom[sid] : [];
     base.custom[sid] = c
-      .map(x => ({ id: x.id || ('id_' + Math.random().toString(36).slice(2, 9)), label: String(x.label || '').trim(), amount: Number(x.amount) || 0, group: String(x.group || '') }))
+      .map(x => ({
+        id: x.id || ('id_' + Math.random().toString(36).slice(2, 9)), label: String(x.label || '').trim(), amount: Number(x.amount) || 0, group: String(x.group || ''),
+        // Rows fed in from Servicing → Other Assets (utils/otherAssets.js);
+        // they are never part of the stored allocation itself.
+        ...(x.source === 'otherAssets' ? { source: x.source, assetId: x.assetId } : {}),
+      }))
       .filter(x => x.label && x.amount > 0);
   });
   base.remark = typeof a.remark === 'string' ? a.remark : '';
@@ -259,7 +264,14 @@ export function filledItems(alloc, sectionId) {
     });
   });
   a.custom[sectionId].forEach(x => {
-    if (x.amount > 0) items.push({ label: x.label, amount: x.amount, group: 'Custom', groupId: '__custom', color: CUSTOM_COLOR, isCustom: true });
+    if (!(x.amount > 0)) return;
+    if (x.source === 'otherAssets') {
+      // An Other Assets row sits under its real group (e.g. PPF → Debt Assets).
+      const g = section.groups.find(gr => gr.id === x.group);
+      items.push({ label: x.label, amount: x.amount, group: g ? g.title : 'Other Assets', groupId: g ? g.id : '__custom', color: g ? (GROUP_COLORS[g.id] || CUSTOM_COLOR) : CUSTOM_COLOR, isCustom: true, source: x.source });
+      return;
+    }
+    items.push({ label: x.label, amount: x.amount, group: 'Custom', groupId: '__custom', color: CUSTOM_COLOR, isCustom: true });
   });
   return items.sort((x, y) => y.amount - x.amount);
 }

@@ -166,7 +166,7 @@ const TERMINAL_STAGES = {
   insuranceProspects: new Set(['Policy Issued', 'Policy Rejected']),
 };
 // Two-party modules — can()'s overlay settles stage direction for these.
-const TASK_SHAPED = ['tasks', 'cobr', 'queries', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies'];
+const TASK_SHAPED = ['tasks', 'cobr', 'queries', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies', 'otherAssets'];
 export function isBackwardStage(module, from, to) {
   if (!from || !to || from === to) return false;
   const stages = STAGE_ORDER[module] || [];
