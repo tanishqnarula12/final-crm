@@ -52,6 +52,10 @@ export const MODULES = [
   { key: 'claims', label: 'Claims', actions: ['create', 'view', 'editDetails', 'changeStage', 'editLog', 'delete'] },
   { key: 'fixedDeposits', label: 'Fixed Deposits', actions: ['create', 'view', 'editDetails', 'changeStage', 'editLog', 'delete'] },
   { key: 'otherInsurancePolicies', label: 'Other Insurance Policies', actions: ['create', 'view', 'editDetails', 'changeStage', 'editLog', 'delete'] },
+  // Servicing → Other Assets (1 Oct 2026): an applicant's assets that aren't
+  // captured by the MF / Insurance modules. Task rows like the registers above
+  // (relatedTo: 'OTHER_ASSET'), but with no assignee and no stage.
+  { key: 'otherAssets', label: 'Other Assets', actions: ['create', 'view', 'editDetails', 'delete'] },
   { key: 'investmentProspects', label: 'Investment Prospects', actions: ['create', 'view', 'editDetails', 'changeStage', 'changeStageBack'] },
   { key: 'insuranceProspects', label: 'Insurance Prospects', actions: ['create', 'view', 'editDetails', 'changeStage', 'changeStageBack'] },
   { key: 'documents', label: 'Documents', actions: ['upload', 'view', 'delete'] },
@@ -105,7 +109,7 @@ export const ACTION_LABELS = {
 //             belongs to (see isMomOwner() in permissions.js).
 export const OWNERSHIP = {
   leads: 'self', clients: 'self', tasks: 'task', cobr: 'task', queries: 'task', mom: 'mom', meetings: 'meeting',
-  renewals: 'task', claims: 'task', fixedDeposits: 'task', otherInsurancePolicies: 'task',
+  renewals: 'task', claims: 'task', fixedDeposits: 'task', otherInsurancePolicies: 'task', otherAssets: 'task',
   goals: 'client', assetAllocation: 'client', investmentProposal: 'client', insuranceProposal: 'client',
   portfolioReview: 'client', policyReview: 'client', investmentProspects: 'prospect', insuranceProspects: 'prospect',
   documents: 'client', leave: 'creator', managedPortfolio: 'global', topSchemes: 'creator',
@@ -163,6 +167,11 @@ const DEF = {
   claims: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S }, changeStage: { _: S }, editLog: { _: S }, delete: { _: N } },
   fixedDeposits: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S }, changeStage: { _: S }, editLog: { _: S }, delete: { _: N } },
   otherInsurancePolicies: { create: { _: A }, view: { _: S, INTERNAL_MANAGER: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, changeStage: { _: S, INTERNAL_MANAGER: A }, editLog: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
+  // Other Assets feed every client's Asset Allocation and goal Map Asset,
+  // which everyone can view, so everyone views them too. Anyone may record
+  // one; whoever recorded it (the 'task' assigner) edits it, Internal Manager
+  // any of them; delete stays Admin-only like every other register.
+  otherAssets: { create: { _: A }, view: { _: A }, editDetails: { _: S, INTERNAL_MANAGER: A }, delete: { _: N } },
   // Prospects have no separate "create" step in the original spec — a prospect
   // is created as a side effect of building the proposal that spawns it. We
   // still give it its own explicit, independently-editable matrix cell

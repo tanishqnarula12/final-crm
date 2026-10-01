@@ -58,8 +58,8 @@ const taskLabel = (rec) => pick(rec, ['taskName', 'title', 'name']) || 'Untitled
 // "any of them", so the CREATE/STAGE_CHANGE branches below don't need five
 // near-identical conditions. The sidebar has one workspace view for all
 // five, so every one of them still deep-links to `view: 'cobr'`.
-const COBR_WORKSPACE_MODULES = new Set(['cobr', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies']);
-const COBR_KIND = { COBR: 'COBR task', RENEWAL: 'renewal', CLAIM: 'claim', FD: 'fixed deposit', POLICY: 'policy' };
+const COBR_WORKSPACE_MODULES = new Set(['cobr', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies', 'otherAssets']);
+const COBR_KIND = { COBR: 'COBR task', RENEWAL: 'renewal', CLAIM: 'claim', FD: 'fixed deposit', POLICY: 'policy', OTHER_ASSET: 'other asset' };
 const cobrKind = (rec) => COBR_KIND[rec?.relatedTo] || 'COBR task';
 const leadLabel = (rec) => {
   const name = pick(rec, ['name', 'firstName']);

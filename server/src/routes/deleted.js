@@ -20,8 +20,8 @@ const router = Router();
 router.use(requireAuth, requireRole('ADMIN'));
 
 // Servicing records are Task rows too; each register has its own module name.
-const TASK_MODULE = { COBR: 'cobr', RENEWAL: 'renewals', CLAIM: 'claims', FD: 'fixedDeposits', POLICY: 'otherInsurancePolicies' };
-const TASK_LABEL = { COBR: 'COBR', RENEWAL: 'Renewal', CLAIM: 'Claim', FD: 'Fixed Deposit', POLICY: 'Policy' };
+const TASK_MODULE = { COBR: 'cobr', RENEWAL: 'renewals', CLAIM: 'claims', FD: 'fixedDeposits', POLICY: 'otherInsurancePolicies', OTHER_ASSET: 'otherAssets' };
+const TASK_LABEL = { COBR: 'COBR', RENEWAL: 'Renewal', CLAIM: 'Claim', FD: 'Fixed Deposit', POLICY: 'Policy', OTHER_ASSET: 'Other Asset' };
 
 // Table names are fixed here, never taken from the request.
 const KINDS = {
@@ -78,6 +78,20 @@ router.post('/:kind/:id/restore', asyncHandler(async (req, res) => {
   const row = await prisma[k.model].findUnique({ where: { id: req.params.id } });
   if (!row) return res.status(404).json({ error: 'Record not found.' });
   if (!row.deletedAt) return res.status(409).json({ error: 'This record is not deleted.' });
+  // Other Assets allow one entry per applicant per asset type (routes/tasks.js):
+  // don't bring one back if the same asset was recorded again since.
+  const p = row.payload || {};
+  if (p.relatedTo === 'OTHER_ASSET') {
+    const live = await prisma.task.findMany({
+      where: { deletedAt: null, payload: { path: ['relatedTo'], equals: 'OTHER_ASSET' } }, select: { payload: true },
+    });
+    const same = (q) => q.groupLeaderId === p.groupLeaderId && q.assetSubType === p.assetSubType
+      && String(q.applicant || '').trim().toLowerCase() === String(p.applicant || '').trim().toLowerCase()
+      && String(q.referenceNumber || '').trim().toLowerCase() === String(p.referenceNumber || '').trim().toLowerCase();
+    if (live.some((r) => same(r.payload || {}))) {
+      return res.status(409).json({ error: `${p.applicant || 'This applicant'} already has a ${p.assetSubType || 'matching'} asset recorded, so this one can't be restored. Delete or edit that one first.` });
+    }
+  }
   await prisma.$transaction(async (tx) => {
     // Only if it's still deleted — two admins clicking Restore at once is fine.
     const n = await tx[k.model].updateMany({ where: { id: row.id, deletedAt: { not: null } }, data: { deletedAt: null } });

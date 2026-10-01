@@ -41,8 +41,40 @@ const COBR_WORKSPACE_MODULE = {
   CLAIM: 'claims',
   FD: 'fixedDeposits',
   POLICY: 'otherInsurancePolicies',
+  OTHER_ASSET: 'otherAssets', // Servicing → Other Assets (1 Oct 2026)
 };
 const taskModuleFor = (r) => COBR_WORKSPACE_MODULE[r?.relatedTo ?? r?.payload?.relatedTo] || 'tasks';
+
+// Other Assets: one entry per applicant per asset sub-type. The key carries a
+// reference number (account / folio / demat id) so several holdings of one
+// type can be allowed later just by filling it in; it is always empty today.
+// The app checks before saving; this is the backstop for two people saving
+// the same asset at once. A clashing NEW asset is dropped; a clashing EDIT is
+// swapped for the stored version, so it stays as it was (and a whole-list save
+// never mistakes it for a delete).
+const assetKey = (p) => (p?.relatedTo === 'OTHER_ASSET'
+  ? [p.groupLeaderId, String(p.applicant || '').trim().toLowerCase(), p.assetSubType, String(p.referenceNumber || '').trim().toLowerCase()].join('|')
+  : null);
+async function holdDuplicateAssets(incoming, deletedIds = []) {
+  if (!incoming.some((t) => t.relatedTo === 'OTHER_ASSET')) return { tasks: incoming, held: 0, droppedIds: [] };
+  const stored = await prisma.task.findMany({
+    where: { deletedAt: null, payload: { path: ['relatedTo'], equals: 'OTHER_ASSET' } },
+    select: { id: true, payload: true },
+  });
+  const storedById = new Map(stored.map((r) => [r.id, r.payload]));
+  const deleting = new Set(deletedIds);
+  const keyOf = new Map(stored.filter((r) => !deleting.has(r.id)).map((r) => [r.id, assetKey(r.payload)]));
+  const tasks = []; const droppedIds = []; let held = 0;
+  for (const t of incoming) {
+    const k = assetKey(t);
+    const clash = k && [...keyOf].some(([id, key]) => id !== t.id && key === k);
+    if (!clash) { if (k) keyOf.set(t.id, k); tasks.push(t); continue; }
+    held++;
+    if (storedById.has(t.id)) tasks.push(storedById.get(t.id));
+    else droppedIds.push(t.id);
+  }
+  return { tasks, held, droppedIds };
+}
 
 // Tasks are private to the two people on them (assigner + assignee) — Admin
 // sees everything; everyone else only sees tasks where they're involved.
@@ -108,9 +140,11 @@ const syncSpec = {
 
 // Whole-list save — what older browsers still send.
 router.put('/', asyncHandler(async (req, res) => {
-  const { tasks } = parseBody(bulkSchema, req.body);
-  await restoreTaskFiles(prisma, req.user, tasks, taskModuleFor);
+  const { tasks: sent } = parseBody(bulkSchema, req.body);
+  await restoreTaskFiles(prisma, req.user, sent, taskModuleFor);
+  const { tasks, held } = await holdDuplicateAssets(sent);
   const { list, stats, events } = await syncBulk(prisma, { ...syncSpec, incoming: tasks, actor: req.user });
+  stats.rejected += held;
   res.json({ ok: true, tasks: list, stats });
   notifyFromEvents(prisma, events).catch((err) => console.error('[notify] tasks:', err));
 }));
@@ -124,13 +158,15 @@ router.put('/', asyncHandler(async (req, res) => {
 // older server gets a 404 and falls back to the whole-list PUT, instead of
 // that server reading a short list as "delete everything else".
 router.patch('/', asyncHandler(async (req, res) => {
-  const { tasks, deletedIds } = parseBody(partialSchema, req.body);
-  await restoreTaskFiles(prisma, req.user, tasks, taskModuleFor);
+  const { tasks: sent, deletedIds } = parseBody(partialSchema, req.body);
+  await restoreTaskFiles(prisma, req.user, sent, taskModuleFor);
+  const { tasks, held, droppedIds } = await holdDuplicateAssets(sent, deletedIds);
   const { list, stats, events, removedIds } = await syncBulk(prisma, {
     ...syncSpec, incoming: tasks, actor: req.user, partial: true, deleteIds: deletedIds,
   });
+  stats.rejected += held;
   // `?slim=1`: answer in the shape the browser keeps (files stay on the server).
-  res.json({ ok: true, tasks: req.query.slim ? list.map(slimTask) : list, removedIds, stats });
+  res.json({ ok: true, tasks: req.query.slim ? list.map(slimTask) : list, removedIds: [...removedIds, ...droppedIds], stats });
   notifyFromEvents(prisma, events).catch((err) => console.error('[notify] tasks:', err));
 }));
 

@@ -194,7 +194,7 @@ function maxScope(roles, module, action) {
 // Two-party modules (assigner + assignee). For these, can()'s overlay below
 // fully decides stage direction — the assigner may move either way, the
 // assignee forward only unless the matrix grants changeStageBack.
-const TASK_SHAPED = ['tasks', 'cobr', 'queries', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies'];
+const TASK_SHAPED = ['tasks', 'cobr', 'queries', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies', 'otherAssets'];
 
 // "Pre-Qualified" is the private entry stage of an investment prospect — only
 // that prospect's own RM or Portfolio Manager can see a record in it (see the

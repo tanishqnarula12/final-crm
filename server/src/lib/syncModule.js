@@ -51,7 +51,7 @@ const TASK_STAGE_KEYS = new Set(['stage']);
 // branch below) instead of a single flat edit permission. The COBR
 // workspace's Renewals/Claims/Fixed Deposits/Other Insurance Policies use
 // the identical assigner/assignee shape as Tasks/COBR/Queries.
-const TASK_SHAPED_MODULES = new Set(['tasks', 'cobr', 'queries', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies']);
+const TASK_SHAPED_MODULES = new Set(['tasks', 'cobr', 'queries', 'renewals', 'claims', 'fixedDeposits', 'otherInsurancePolicies', 'otherAssets']);
 
 // Keys excluded from the UPDATE field-diff (owner/audit noise + big arrays that
 // have their own in-payload logs). Assignment/stage get their own log entries.
