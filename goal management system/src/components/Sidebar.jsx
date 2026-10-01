@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Users, UserPlus, ListChecks, FolderOpen, UserCheck, LayoutDashboard, Video, TrendingUp, MoreHorizontal, Calculator, FileSpreadsheet, HelpCircle, Trophy, Target, PieChart } from 'lucide-react';
+import { Users, UserPlus, ListChecks, FolderOpen, UserCheck, LayoutDashboard, Video, TrendingUp, MoreHorizontal, Calculator, FileSpreadsheet, HelpCircle, Trophy, Target, PieChart, ShieldCheck } from 'lucide-react';
 import logoImg from '../assets/logo.png';
 import { canTopSchemes } from '../utils/permissions';
 import { BottomSheet } from './UI';
@@ -17,6 +17,9 @@ const NAV = [
   // the post-sale client-servicing workspace, not just Change of Broker
   // requests, so the label reflects the whole thing rather than one tab.
   { id: 'cobr', label: 'Servicing', icon: FileSpreadsheet },
+  // Renewals & Claims — the same workspace records, moved out of Servicing
+  // into their own module (1 Oct 2026). Rail label kept short to fit.
+  { id: 'renewals', label: 'Renewals', icon: ShieldCheck },
   { id: 'queries', label: 'Queries', icon: HelpCircle },
   { id: 'documents', label: 'Docs', icon: FolderOpen },
   { id: 'reports', label: 'Reports', icon: TrendingUp },

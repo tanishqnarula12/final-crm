@@ -27,6 +27,17 @@ export const REC = {
 // Every relatedTo value the COBR workspace owns — the server mirrors this list.
 export const COBR_WORKSPACE_TYPES = [REC.COBR, REC.RENEWAL, REC.CLAIM, REC.FD, REC.POLICY];
 
+// The workspace is split across two sidebar modules (1 Oct 2026): Servicing
+// and Renewals & Claims. Each lists the registers it shows, in tab order.
+// The records themselves are unchanged — this only decides where they show.
+export const WORKSPACE_SECTIONS = {
+  servicing: [REC.COBR, REC.FD, REC.POLICY],
+  renewalsClaims: [REC.RENEWAL, REC.CLAIM],
+};
+export const WORKSPACE_SECTION_VIEW = { servicing: 'cobr', renewalsClaims: 'renewals' };
+export const workspaceSectionOf = (relatedTo) =>
+  Object.keys(WORKSPACE_SECTIONS).find((s) => WORKSPACE_SECTIONS[s].includes(relatedTo)) || null;
+
 export const isRenewal = (t) => t?.relatedTo === REC.RENEWAL;
 export const isClaim = (t) => t?.relatedTo === REC.CLAIM;
 export const isFd = (t) => t?.relatedTo === REC.FD;

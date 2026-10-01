@@ -1,6 +1,8 @@
-// COBR workspace — its own top-level sidebar section, now with five tabs:
-// COBR (Change of Broker), Renewals, Claim, Fixed Deposit and Other Insurance
-// Policies.
+// COBR workspace — five registers: COBR (Change of Broker), Renewals, Claim,
+// Fixed Deposit and Other Insurance Policies. Since 1 Oct 2026 they are split
+// across two sidebar modules (`section`): Servicing (COBR, Fixed Deposit,
+// Other Insurance Policies) and Renewals & Claims. Same records, editors and
+// permissions either way — only which tabs a module shows differs.
 //
 // Every record in every tab IS a Task row, distinguished by `relatedTo`
 // (see utils/cobrModules.js) — same sync/save pipeline as the Tasks module
@@ -16,6 +18,7 @@ import { COBR_STAGES, cobrTotals, isCobrTask } from '../utils/cobr';
 import {
   REC, RENEWAL_STAGES, CLAIM_STAGES, FD_STAGES, POLICY_STAGES,
   isRenewal, isClaim, isFd, isPolicy, isOpenStage, claimSettlementDisplay, COBR_EXCEL_SPEC, stageReachedAt,
+  WORKSPACE_SECTIONS, workspaceSectionOf,
 } from '../utils/cobrModules';
 import { teamName } from '../services/team';
 import { fmtINR } from '../utils/calc';
@@ -59,8 +62,12 @@ export default function CobrView({
   activeCobrId,
   setActiveCobrId,
   onSaveRecord,
+  section = 'servicing',
+  onSwitchSection,
 }) {
-  const [tab, setTab] = useState(REC.COBR);
+  const sectionTypes = WORKSPACE_SECTIONS[section] || WORKSPACE_SECTIONS.servicing;
+  const tabs = TABS.filter((t) => sectionTypes.includes(t.id));
+  const [tab, setTab] = useState(sectionTypes[0]);
   const [tasks, setTasks] = useState(() => loadTasks());
   // Which record editor is open, if any: { type, record|null }
   const [editor, setEditor] = useState(null);
@@ -97,25 +104,28 @@ export default function CobrView({
   // the five registers, since they all deep-link to this one workspace view)
   // once its row is available, switching to its tab first, then reset so it
   // doesn't re-trigger on re-render.
+  // A record that lives in the OTHER module (every notification still links
+  // to Servicing) is handed over with its id kept, so that module opens it.
   useEffect(() => {
     if (!activeCobrId) return;
     const foundCobr = cobrTasks.find((t) => t.id === activeCobrId);
+    const foundType = foundCobr ? REC.COBR
+      : [REC.RENEWAL, REC.CLAIM, REC.FD, REC.POLICY].find((type) => (rowsFor[type] || []).some((t) => t.id === activeCobrId));
+    if (!foundType) return;
+    if (!sectionTypes.includes(foundType)) {
+      if (onSwitchSection) onSwitchSection(workspaceSectionOf(foundType));
+      return;
+    }
     if (foundCobr) {
       setTab(REC.COBR);
       onOpenCobr(foundCobr, true);
       if (setActiveCobrId) setActiveCobrId(null);
       return;
     }
-    for (const type of [REC.RENEWAL, REC.CLAIM, REC.FD, REC.POLICY]) {
-      const found = (rowsFor[type] || []).find((t) => t.id === activeCobrId);
-      if (found) {
-        setTab(type);
-        setEditor({ type, record: found });
-        if (setActiveCobrId) setActiveCobrId(null);
-        return;
-      }
-    }
-  }, [activeCobrId, cobrTasks, rowsFor, setActiveCobrId, onOpenCobr]);
+    setTab(foundType);
+    setEditor({ type: foundType, record: rowsFor[foundType].find((t) => t.id === activeCobrId) });
+    if (setActiveCobrId) setActiveCobrId(null);
+  }, [activeCobrId, cobrTasks, rowsFor, setActiveCobrId, onOpenCobr, sectionTypes, onSwitchSection]);
 
   const openCount = (type) => (rowsFor[type] || []).filter((r) => isOpenStage(type, r.stage)).length;
 
@@ -166,7 +176,7 @@ export default function CobrView({
 
       {/* Tabs */}
       <div className="flex items-center gap-1.5 flex-wrap border-b border-slate-100 dark:border-slate-800 pb-px">
-        {TABS.map((t) => {
+        {tabs.map((t) => {
           const on = t.id === tab;
           const badge = t.id === REC.COBR
             ? cobrTasks.filter((x) => (x.stage || 'Open') !== 'Completed').length

@@ -54,7 +54,7 @@ import LeaveView from './components/LeaveView';
 import CobrView from './components/CobrView';
 import CobrFormModal from './components/CobrFormModal';
 import CobrTaskModal from './components/CobrTaskModal';
-import { COBR_WORKSPACE_TYPES, isOpenStage } from './utils/cobrModules';
+import { COBR_WORKSPACE_TYPES, isOpenStage, WORKSPACE_SECTIONS, WORKSPACE_SECTION_VIEW, workspaceSectionOf } from './utils/cobrModules';
 import DocumentsView from './components/DocumentsView';
 import ProspectsView, { ProspectModal } from './components/BusinessProspects';
 import ReviewWorkspace from './components/ReviewWorkspace';
@@ -88,7 +88,7 @@ const MAIN_CLS = 'max-w-7xl w-full mx-auto px-3 sm:px-6 pt-4 pb-8';
 // bottom tab bar and there's no other "where am I" cue).
 const MOBILE_TITLES = {
   dashboard: 'Dashboard', leads: 'Leads', clients: 'Clients', tasks: 'Tasks', meetings: 'Meetings',
-  prospects: 'Prospects', cobr: 'Servicing', queries: 'Queries', documents: 'Documents', reports: 'Reports',
+  prospects: 'Prospects', cobr: 'Servicing', renewals: 'Renewals & Claims', queries: 'Queries', documents: 'Documents', reports: 'Reports',
   myprofile: 'My Profile', leave: 'Leave', users: 'User Management', permissions: 'Permission Matrix',
   'activity-log': 'Activity Log', 'recently-deleted': 'Recently Deleted',
 };
@@ -229,7 +229,7 @@ export default function App() {
   const [leadsChangeCounter, setLeadsChangeCounter] = useState(0);
   const [leadsBadge, setLeadsBadge] = useState(0);
   // Sidebar "pending" count badges per module (tasks/cobr/meetings/prospects/queries).
-  const [moduleBadges, setModuleBadges] = useState({ tasks: 0, cobr: 0, meetings: 0, prospects: 0, queries: 0 });
+  const [moduleBadges, setModuleBadges] = useState({ tasks: 0, cobr: 0, renewals: 0, meetings: 0, prospects: 0, queries: 0 });
   // Pending-leave-requests-awaiting-my-decision count (Admin / Internal Manager
   // only) — shown next to the "Leave" item in the Account Settings dropdown,
   // since Leave has no sidebar nav icon to badge instead.
@@ -994,15 +994,16 @@ export default function App() {
     const QUERY_DONE = new Set(['Resolved', 'Closed']);
     const recompute = () => {
       const tasks = loadTasks();
+      // Open items in one workspace module (Servicing, or Renewals & Claims).
+      const openInSection = (section) => tasks.filter(t => WORKSPACE_SECTIONS[section].includes(t.relatedTo) && (
+        t.relatedTo === 'COBR' ? (t.stage || 'Open') !== 'Completed' : isOpenStage(t.relatedTo, t.stage)
+      )).length;
       setModuleBadges({
         // Every COBR-workspace register (COBR, Renewals, Claims, FDs, Policies)
         // is a Task row too — split them out so each badge counts its own.
         tasks: tasks.filter(t => !COBR_WORKSPACE_TYPES.includes(t.relatedTo) && !TASK_DONE.has(t.stage || 'Open')).length,
-        cobr: tasks.filter(t => (
-          t.relatedTo === 'COBR'
-            ? (t.stage || 'Open') !== 'Completed'
-            : COBR_WORKSPACE_TYPES.includes(t.relatedTo) && isOpenStage(t.relatedTo, t.stage)
-        )).length,
+        cobr: openInSection('servicing'),
+        renewals: openInSection('renewalsClaims'),
         meetings: loadMeetings().filter(m => (m.status || 'Scheduled') === 'Scheduled').length,
         prospects: loadProspects().filter(p => !PROSPECT_DONE.has(p.stage)).length,
         queries: loadQueries().filter(q => !QUERY_DONE.has(q.stage || 'Open')).length,
@@ -1360,6 +1361,7 @@ export default function App() {
     documents: refreshClients,
     tasks: hydrateTasks,
     cobr: hydrateTasks,
+    renewals: hydrateTasks,
     queries: hydrateQueries,
     leave: hydrateLeave,
     meetings: hydrateMeetings,
@@ -1451,6 +1453,7 @@ export default function App() {
   const ACTIVE_ID_SETTERS = {
     tasks: setActiveTaskId,
     cobr: setActiveCobrId,
+    renewals: setActiveCobrId,
     queries: setActiveQueryId,
     meetings: setActiveMeetingId,
     prospects: setActiveProspectId,
@@ -1475,7 +1478,16 @@ export default function App() {
     if (!link?.view) return;
     const setActiveId = ACTIVE_ID_SETTERS[link.view];
     if (link.id && setActiveId) setActiveId(link.id);
-    handleSetView(link.view);
+    // The server links every workspace record to Servicing ('cobr'), including
+    // notifications from before Renewals & Claims got their own module — open
+    // the module the record now lives in. (If it isn't loaded yet, Servicing
+    // hands it over once it is — see CobrView's onSwitchSection.)
+    let target = link.view;
+    if (target === 'cobr' && link.id) {
+      const section = workspaceSectionOf(loadTasks().find(t => t.id === link.id)?.relatedTo);
+      if (section) target = WORKSPACE_SECTION_VIEW[section];
+    }
+    handleSetView(target);
   };
 
   const handleNavDoubleClick = async (id) => {
@@ -1567,14 +1579,14 @@ export default function App() {
             view={view}
             setView={handleSetView}
             onNavDoubleClick={handleNavDoubleClick}
-            badges={{ leads: leadsBadge, chat: chatUnread, tasks: moduleBadges.tasks, cobr: moduleBadges.cobr, meetings: moduleBadges.meetings, prospects: moduleBadges.prospects, queries: moduleBadges.queries }}
+            badges={{ leads: leadsBadge, chat: chatUnread, tasks: moduleBadges.tasks, cobr: moduleBadges.cobr, renewals: moduleBadges.renewals, meetings: moduleBadges.meetings, prospects: moduleBadges.prospects, queries: moduleBadges.queries }}
             othersSubTab={othersSubTab}
             onSelectOthersTab={setOthersSubTab}
           />
           <MobileNav
             view={view}
             setView={handleSetView}
-            badges={{ leads: leadsBadge, tasks: moduleBadges.tasks, cobr: moduleBadges.cobr, meetings: moduleBadges.meetings, prospects: moduleBadges.prospects, queries: moduleBadges.queries }}
+            badges={{ leads: leadsBadge, tasks: moduleBadges.tasks, cobr: moduleBadges.cobr, renewals: moduleBadges.renewals, meetings: moduleBadges.meetings, prospects: moduleBadges.prospects, queries: moduleBadges.queries }}
             othersSubTab={othersSubTab}
             onSelectOthersTab={setOthersSubTab}
           />
@@ -1986,9 +1998,14 @@ export default function App() {
           </main>
         )}
 
-        {view === 'cobr' && (
+        {/* Servicing and Renewals & Claims: one workspace, two modules —
+            each shows its own registers (utils/cobrModules WORKSPACE_SECTIONS). */}
+        {(view === 'cobr' || view === 'renewals') && (
           <main className={MAIN_CLS}>
             <CobrView
+              key={view}
+              section={view === 'renewals' ? 'renewalsClaims' : 'servicing'}
+              onSwitchSection={(s) => handleSetView(WORKSPACE_SECTION_VIEW[s])}
               isViewer={isViewer}
               clients={clients}
               tasksChangeCounter={tasksChangeCounter}
