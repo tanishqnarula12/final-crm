@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Camera, Pencil, Save, X, IdCard, Fingerprint, Calendar, CalendarClock,
   Phone, Mail, MapPin, Users, Landmark, Banknote, Building2, KeyRound,
@@ -368,7 +369,7 @@ export default function MyProfileView() {
 
 function Modal({ title, onClose, children, footer, maxWidth = 'max-w-3xl' }) {
   useBackLayer(true, onClose); // phone/browser Back closes it
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in" onClick={onClose}>
       <div className={`bg-white dark:bg-slate-900 rounded-2xl w-full ${maxWidth} shadow-2xl my-8 border border-slate-200/50 dark:border-slate-800/80 animate-scale-up`} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800">
@@ -380,7 +381,8 @@ function Modal({ title, onClose, children, footer, maxWidth = 'max-w-3xl' }) {
         <div className="p-5 max-h-[70vh] overflow-y-auto">{children}</div>
         {footer && <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 rounded-b-2xl">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Plus, Trash2, Wallet, MessageSquare, Check, BarChart2 } from 'lucide-react';
 import { inputCls, btnPrimary, btnGhost } from './UI';
 import { fmtFull, fmtINR, uid } from '../utils/calc';
@@ -73,9 +74,9 @@ export default function AssetAllocationModal({ clientName, initial, onClose, onS
     onSave(clean);
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" onClick={onClose}>
-      <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-4xl shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up flex flex-col max-h-[92vh]" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-4xl shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up flex flex-col max-h-[88dvh] sm:max-h-[92vh]" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
@@ -239,6 +240,7 @@ export default function AssetAllocationModal({ clientName, initial, onClose, onS
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

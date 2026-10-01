@@ -6,6 +6,7 @@
 // ({ id, fileName, fileType, dataUrl, date, uploadedBy }) so anything that
 // already knows how to render a task attachment can render these too.
 import React, { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Upload, X, Paperclip, Download, Lock, FileText } from 'lucide-react';
 import { btnGhost } from '../UI';
 import { getCurrentUser } from '../../utils/auth';
@@ -73,7 +74,7 @@ export function AttachmentChips({ files = [], onRemove, compact = false, taskId 
         ))}
       </div>
 
-      {preview && (
+      {preview && createPortal(
         <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4" onClick={() => setPreview(null)}>
           <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
@@ -107,7 +108,8 @@ export function AttachmentChips({ files = [], onRemove, compact = false, taskId 
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

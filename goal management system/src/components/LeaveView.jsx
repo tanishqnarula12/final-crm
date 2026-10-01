@@ -3,6 +3,7 @@
 // leave and see its status; only Admin / Internal Manager see the "Team
 // Approvals" section and can approve or reject.
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { CalendarDays, Plus, X, CheckCircle2, XCircle, RefreshCw, Pencil } from 'lucide-react';
 import { Card, btnPrimary, btnSecondary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
 import { teamName } from '../services/team';
@@ -238,7 +239,7 @@ function LeaveFormModal({ initial, onClose, onSaved }) {
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in" onClick={onClose}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800">
@@ -310,7 +311,8 @@ function LeaveFormModal({ initial, onClose, onSaved }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -332,7 +334,7 @@ function LeaveRespondModal({ leave, onClose, onResponded }) {
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in" onClick={onClose}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800">
@@ -370,6 +372,7 @@ function LeaveRespondModal({ leave, onClose, onResponded }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

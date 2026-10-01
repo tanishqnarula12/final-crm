@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Users as UsersIcon, Plus, X, Pencil, Trash2, ShieldCheck, ShieldAlert, Eye, KeyRound, Check,
   Briefcase, PieChart, Shield, Headphones, Settings, Crown,
@@ -316,7 +317,7 @@ function UserFormModal({ initial, isSelf, onClose, onSaved }) {
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in" onClick={onClose}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-3xl shadow-2xl my-8 border border-slate-200/50 dark:border-slate-800/80 animate-scale-up" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800">
@@ -552,6 +553,7 @@ function UserFormModal({ initial, isSelf, onClose, onSaved }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

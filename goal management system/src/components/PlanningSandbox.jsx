@@ -21,6 +21,7 @@
 // reload, switching modules or closing the browser mid-meeting loses nothing.
 // "Refresh" wipes it back to a blank demo in one click.
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Presentation, RefreshCw, X } from 'lucide-react';
 import ClientDetail from './ClientDetail';
 import GoalDetail from './GoalDetail';
@@ -268,7 +269,7 @@ function DemoDetailsModal({ initial, onClose, onSave }) {
     age: age === '' ? '' : Number(age),
   });
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" onClick={onClose}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl w-full flex flex-col max-h-[90vh] max-w-md shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
@@ -293,6 +294,7 @@ function DemoDetailsModal({ initial, onClose, onSave }) {
           <button onClick={submit} className={btnPrimary}>Save</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

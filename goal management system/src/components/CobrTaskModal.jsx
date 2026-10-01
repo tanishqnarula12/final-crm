@@ -7,6 +7,7 @@
 // through the identical save pipeline via `onSave` (App.jsx's
 // handleSaveTaskGlobal, shared with the plain Task module).
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Check, XCircle, RotateCcw, Lock, MessageSquare } from 'lucide-react';
 import { Avatar, btnPrimary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
 import { STAGE_THEME, fmtTaskStamp, readSubPersons } from '../utils/tasks';
@@ -131,8 +132,8 @@ export default function CobrTaskModal({ task, interactive = true, allowReopen = 
     });
   };
 
-  return (
-    <div className="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-50 flex items-center justify-center p-0 md:p-6 overflow-hidden animate-fade-in" onClick={onClose}>
+  return createPortal(
+    <div className="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-50 flex items-center justify-center p-0 md:p-6 max-md:pt-[env(safe-area-inset-top)] max-md:pb-[env(safe-area-inset-bottom)] overflow-hidden animate-fade-in" onClick={onClose}>
       <div
         className="bg-white dark:bg-slate-900 rounded-none md:rounded-2xl w-full max-w-3xl shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up flex flex-col h-full md:h-auto md:max-h-[92vh]"
         onClick={(e) => e.stopPropagation()}
@@ -407,6 +408,7 @@ export default function CobrTaskModal({ task, interactive = true, allowReopen = 
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

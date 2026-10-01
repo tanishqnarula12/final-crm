@@ -441,7 +441,7 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
 
       {/* Upload Document Modal */}
       {isUploadModalOpen && createPortal(
-        <div className="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-50 flex items-center justify-center p-0 md:p-6 overflow-hidden animate-fade-in" onClick={() => setIsUploadModalOpen(false)}>
+        <div className="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-50 flex items-center justify-center p-0 md:p-6 max-md:pt-[env(safe-area-inset-top)] max-md:pb-[env(safe-area-inset-bottom)] overflow-hidden animate-fade-in" onClick={() => setIsUploadModalOpen(false)}>
           <div className="bg-white dark:bg-slate-900 rounded-none md:rounded-2xl w-full max-w-md shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up flex flex-col h-full md:h-auto max-h-screen" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
               <div className="flex items-center gap-2.5">
@@ -615,7 +615,7 @@ function DocPreviewModal({ doc: listedDoc, onClose }) {
   const meta = TYPE_META[doc.type];
 
   return createPortal(
-    <div className="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-50 flex items-center justify-center p-0 md:p-6 overflow-hidden animate-fade-in" onClick={onClose}>
+    <div className="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-50 flex items-center justify-center p-0 md:p-6 max-md:pt-[env(safe-area-inset-top)] max-md:pb-[env(safe-area-inset-bottom)] overflow-hidden animate-fade-in" onClick={onClose}>
       <style dangerouslySetInnerHTML={{ __html: DOC_PRINT_STYLES }} />
       <div className="bg-white dark:bg-slate-900 rounded-none md:rounded-2xl w-full max-w-3xl shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up flex flex-col h-full md:h-[90vh] max-h-screen" onClick={(e) => e.stopPropagation()}>
         {/* Header */}

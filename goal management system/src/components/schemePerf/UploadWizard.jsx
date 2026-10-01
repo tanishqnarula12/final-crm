@@ -7,6 +7,7 @@
 // column, Average Median — is shown and editable BEFORE anything is stored.
 // A misread sheet is a two-click fix here rather than a code change later.
 import { useState, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X, Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, Loader2, Info, ChevronRight,
 } from 'lucide-react';
@@ -152,7 +153,7 @@ export default function UploadWizard({ existingMonths = [], onClose, onSaved }) 
   const years = Array.from({ length: 8 }, (_, i) => now.getFullYear() - 5 + i);
   const [my, mm] = month ? month.split('-') : ['', ''];
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in"
       onClick={onClose}
@@ -463,6 +464,7 @@ export default function UploadWizard({ existingMonths = [], onClose, onSaved }) 
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

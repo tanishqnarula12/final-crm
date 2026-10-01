@@ -6,6 +6,7 @@
 // (handleSaveTaskGlobal), so creation goes through the exact same
 // syncBulk → RBAC → activity-log → notification pipeline as any other task.
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Check, ArrowRight } from 'lucide-react';
 import { Avatar, btnPrimary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
 import { GroupLeaderSelect, AmcRepeatableFields } from './TasksView';
@@ -107,18 +108,19 @@ export default function CobrFormModal({ clients = [], onClose, onSave }) {
   };
 
   if (!canDo('cobr', 'create')) {
-    return (
+    return createPortal(
       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
         <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm p-6 text-center space-y-3" onClick={(e) => e.stopPropagation()}>
           <p className="text-sm font-bold text-slate-700 dark:text-slate-300">You don't have permission to create a COBR request.</p>
           <button onClick={onClose} className={btnGhost + ' w-full justify-center'}>Close</button>
         </div>
-      </div>
+      </div>,
+      document.body
     );
   }
 
-  return (
-    <div className="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-50 flex items-center justify-center p-0 md:p-6 overflow-hidden animate-fade-in" onClick={onClose}>
+  return createPortal(
+    <div className="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-50 flex items-center justify-center p-0 md:p-6 max-md:pt-[env(safe-area-inset-top)] max-md:pb-[env(safe-area-inset-bottom)] overflow-hidden animate-fade-in" onClick={onClose}>
       <div
         className="bg-white dark:bg-slate-900 rounded-none md:rounded-2xl w-full max-w-3xl shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up flex flex-col h-full md:h-auto md:max-h-[92vh]"
         onClick={(e) => e.stopPropagation()}
@@ -279,6 +281,7 @@ export default function CobrFormModal({ clients = [], onClose, onSave }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -859,7 +859,7 @@ export function MeetingFormModal({ initial, clients = [], isViewer, lockClient =
     onSave(buildMeeting({ date: newDate, time: newTime, status: 'Scheduled', history: [...history, log] }));
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in" onClick={onClose}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-2xl shadow-2xl my-8 border border-slate-200/50 dark:border-slate-800/80 animate-scale-up" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
@@ -1138,6 +1138,7 @@ export function MeetingFormModal({ initial, clients = [], isViewer, lockClient =
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

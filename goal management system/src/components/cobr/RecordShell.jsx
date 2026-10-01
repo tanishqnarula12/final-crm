@@ -4,6 +4,7 @@
 // (they're plain functions/hooks, not components — react-refresh requires a
 // component-only file to keep hot reload working).
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { X, MessageSquare, ArrowRight, Pencil } from 'lucide-react';
 import { Avatar, inputCls, selectCls, Field, CoolSelect, btnPrimary, btnGhost } from '../UI';
 import { fmtTaskStamp } from '../../utils/tasks';
@@ -58,8 +59,8 @@ export function ViewEditFooter({ isEditingMode, canEditThis, canSave, stageDirty
 
 export function RecordModal({ title, subtitle, onClose, children, footer, maxWidth = 'max-w-3xl' }) {
   useBackLayer(true, onClose); // phone/browser Back closes it
-  return (
-    <div className="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-50 flex items-center justify-center p-0 md:p-6 overflow-hidden animate-fade-in" onClick={onClose}>
+  return createPortal(
+    <div className="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-50 flex items-center justify-center p-0 md:p-6 max-md:pt-[env(safe-area-inset-top)] max-md:pb-[env(safe-area-inset-bottom)] overflow-hidden animate-fade-in" onClick={onClose}>
       <div
         className={`bg-white dark:bg-slate-900 rounded-none md:rounded-2xl w-full ${maxWidth} shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up flex flex-col h-full md:h-auto md:max-h-[92vh]`}
         onClick={(e) => e.stopPropagation()}
@@ -80,7 +81,8 @@ export function RecordModal({ title, subtitle, onClose, children, footer, maxWid
           {footer}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

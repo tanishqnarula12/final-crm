@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, CheckCircle2, Upload, AlertCircle, FileSpreadsheet, ChevronDown, ChevronUp, UserCog, Download, Link2, Wallet, Plus } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Field, inputCls, selectCls, btnPrimary, btnSecondary, btnGhost, CoolSelect } from './UI';
@@ -33,13 +34,16 @@ const CLIENT_TYPES = [
 // Marital status options for personal details
 const MARITAL_STATUSES = ['Single', 'Married', 'Divorced', 'Widowed'];
 
-// Phones (below sm): a full-width sheet rising from the bottom edge, using
-// the dynamic viewport height so the browser's toolbars don't hide the footer.
+// Portaled to <body> so it always covers the top bar and the phone tab bar,
+// whichever screen opens it (a parent with an entrance animation would
+// otherwise trap it underneath them). Phones: the same centred card as the
+// task form, capped by the dynamic viewport height so the footer stays on
+// screen and the body scrolls.
 function Modal({ title, onClose, children, footer, maxWidth = 'max-w-md' }) {
   useBackLayer(true, onClose); // phone/browser Back closes it
-  return (
-    <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-fade-in" onClick={onClose}>
-      <div className={`bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-2xl w-full flex flex-col max-h-[94dvh] sm:max-h-[90vh] ${maxWidth} shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up`} onClick={(e) => e.stopPropagation()}>
+  return createPortal(
+    <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" onClick={onClose}>
+      <div className={`bg-white dark:bg-slate-900 rounded-2xl w-full flex flex-col max-h-[88dvh] sm:max-h-[90vh] ${maxWidth} shadow-2xl border border-slate-200/50 dark:border-slate-800/80 animate-scale-up`} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-3 p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
           <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white tracking-tight min-w-0">{title}</h3>
           <button onClick={onClose} className="shrink-0 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
@@ -50,12 +54,13 @@ function Modal({ title, onClose, children, footer, maxWidth = 'max-w-md' }) {
           {children}
         </div>
         {footer && (
-          <div className="p-4 sm:p-5 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 sm:rounded-b-2xl shrink-0">
+          <div className="p-4 sm:p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 rounded-b-2xl shrink-0">
             {footer}
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
