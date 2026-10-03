@@ -172,6 +172,53 @@ router.post('/', asyncHandler(async (req, res) => {
 }));
 
 // ---------------------------------------------------------------------------
+// POST /duplicates — read-only. Of the prospects about to be created, which
+// match one that already exists: same client, applicant, proposal type and
+// amount? The app asks "already created — create a duplicate?" before
+// creating, so an accidental second Create Prospect can't quietly make two.
+// Every existing prospect counts, including ones this user can't open (an
+// investment prospect in Pre-Qualified is visible only to its RM / Portfolio
+// Manager, so a creator who is neither would never see their own first
+// copy); for those, the stage isn't reported. Only drafts the user may
+// create are checked, so this can't be used to look into other clients.
+// ---------------------------------------------------------------------------
+const norm = (s) => String(s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+const amountOf = (v) => Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
+const sameProspect = (a, b) => norm(a.applicant) === norm(b.applicant)
+  && (a.proposalCategory || '') === (b.proposalCategory || '')
+  && norm(a.proposalType) === norm(b.proposalType)
+  && amountOf(a.amount) === amountOf(b.amount);
+
+router.post('/duplicates', asyncHandler(async (req, res) => {
+  const { prospects } = parseBody(bulkSchema, req.body);
+  const drafts = [];
+  for (const rec of prospects) {
+    if (rec.groupLeaderId && (await mayCreateProspect(req.user, rec))) drafts.push(rec);
+  }
+  const leaderIds = [...new Set(drafts.map((d) => String(d.groupLeaderId)))];
+  const rows = leaderIds.length
+    ? await prisma.prospect.findMany({ where: { deletedAt: null, groupLeaderId: { in: leaderIds } } })
+    : [];
+  const duplicates = drafts.map((d) => ({
+    id: d.id,
+    matches: rows
+      .filter((r) => r.id !== d.id && String(r.groupLeaderId) === String(d.groupLeaderId) && sameProspect(r.payload || {}, d))
+      .map((r) => {
+        const p = r.payload || {};
+        return {
+          id: r.id,
+          proposalType: p.proposalType || '',
+          applicant: p.applicant || '',
+          amount: p.amount ?? '',
+          createdAt: p.createdAt || '',
+          stage: can(req.user, prospectModuleFor(r), 'view', r) ? (r.stage || p.stage || '') : '',
+        };
+      }),
+  })).filter((x) => x.matches.length);
+  res.json({ duplicates });
+}));
+
+// ---------------------------------------------------------------------------
 // PATCH /:id — update ONE prospect (stage move, detail edit, or both in one
 // save). Fetches and writes that single row by id; never touches any other
 // prospect. Mirrors syncModule.js's non-task-shaped UPDATE branch exactly —
