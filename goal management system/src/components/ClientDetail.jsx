@@ -330,7 +330,10 @@ function AssumptionsSection({ client, onSave, isViewer }) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200/50 dark:divide-slate-800/50">
-                    {client.goals.map(g => (
+                    {/* Soonest target first — same order as the goal cards above and the Goal Report */}
+                    {[...client.goals].sort((a, b) =>
+                      (a.targetYear * 12 + (a.targetMonth || 1)) - (b.targetYear * 12 + (b.targetMonth || 1))
+                    ).map(g => (
                       <tr key={g.id} className="hover:bg-slate-50/40 dark:hover:bg-slate-900/20 transition-colors">
                         <td className="px-5 py-3 align-top">
                           <div className="flex items-center gap-2.5">
