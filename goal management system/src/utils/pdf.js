@@ -3,6 +3,7 @@ import logoUrl from '../assets/logo.png';
 import { buildGoalReportHtml } from './goalReportHtml';
 import { buildAssetReportHtml } from './assetReportHtml';
 import { buildPolicyReportHtml } from './policyReportHtml';
+import { layoutPortfolioReport, PORTFOLIO_REPORT_FONTS } from './portfolioReportHtml';
 
 function escHtml(str) {
   return String(str)
@@ -696,6 +697,67 @@ export function exportPolicyReportPdf(data) {
   };
   win.onload = doPrint;
   setTimeout(doPrint, 1200);
+}
+
+// Page setup shared by the Portfolio Review Report's print window and the
+// copy saved to the client's Documents, so both print the same pages.
+export const PORTFOLIO_REPORT_PAGE_CSS = `
+    @page { size: A4; margin: 14mm 16mm; }
+    @media print {
+      html, body { background: #ffffff !important; padding: 0 !important; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    }`;
+
+// Dedicated Portfolio Review Report — same pattern as exportPolicyReportPdf
+// above (see portfolioReportHtml.js for the template). The window opens
+// straight away (inside the click, so pop-up blockers allow it) while the
+// report is laid out, then prints once its stylesheet and fonts are in.
+export function exportPortfolioReportPdf(data, title) {
+  const win = window.open('', '_blank', 'width=820,height=1000');
+  if (!win) {
+    alert('Please allow pop-ups to export the report.');
+    return;
+  }
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escHtml(title)}</title></head><body style="font-family:system-ui,sans-serif;color:#64748b;padding:40px;">Preparing report…</body></html>`);
+  win.document.close();
+
+  layoutPortfolioReport(data).then((bodyHtml) => {
+    if (win.closed) return;
+    win.document.open();
+    win.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${escHtml(title)}</title>
+  <link href="${PORTFOLIO_REPORT_FONTS}" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #f1f5f9; }
+    ${PORTFOLIO_REPORT_PAGE_CSS}
+  </style>
+</head>
+<body>${bodyHtml}</body>
+</html>`);
+    win.document.close();
+
+    let printed = false;
+    const doPrint = () => {
+      if (printed || win.closed) return;
+      printed = true;
+      win.focus();
+      win.print();
+    };
+    const link = win.document.querySelector('link[rel="stylesheet"]');
+    const styled = new Promise((resolve) => {
+      if (!link || link.sheet) { resolve(); return; }
+      link.addEventListener('load', resolve);
+      link.addEventListener('error', resolve);
+    });
+    styled.then(() => win.document.fonts?.ready).then(doPrint, doPrint);
+    setTimeout(doPrint, 4000);
+  }).catch(() => {
+    if (!win.closed) win.document.body.textContent = 'Could not prepare the report. Please close this window and try again.';
+  });
 }
 
 // Dedicated Asset Allocation Report — same pattern as exportGoalReportPdf

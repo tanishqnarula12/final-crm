@@ -3,10 +3,11 @@
 // Ported from the standalone "portfolio review" tool (other tools on html/),
 // kept functionally identical on purpose: same extraction logic (server-side
 // now, see server/src/routes/portfolioReview.js), same dashboard rendering,
-// same advisory-alert rules, same charts, same print output. The only
-// changes are integration ones — where the Gemini call goes, and a new
-// "Save to Profile" action that reuses this app's existing generated-document
-// pipeline (see utils/documents.js), the same way Policy Review already does.
+// same advisory-alert rules, same charts. The changes are integration ones —
+// where the Gemini call goes, a "Save to Profile" action that reuses this
+// app's generated-document pipeline (see utils/documents.js), and the printed
+// / saved report, which uses the shared A4 report layout of the Goal / Asset
+// Allocation / Policy Review reports (see utils/portfolioReportHtml.js).
 //
 // Like PolicyReview.jsx, this component keeps the tool's own imperative
 // DOM-driven rendering (element ids, innerHTML template functions, Chart.js
@@ -21,8 +22,11 @@ import React, { useEffect, useRef } from 'react';
 // `new window.Chart(...)` works unchanged once we expose it on window.
 import Chart from 'chart.js/auto';
 import { api } from '../services/api';
-import { saveGeneratedDocument, wrapStandaloneHtml, snapshotElementHtml } from '../utils/documents';
+import { saveGeneratedDocument, wrapStandaloneHtml } from '../utils/documents';
 import { can } from '../utils/permissions';
+import { exportPortfolioReportPdf, PORTFOLIO_REPORT_PAGE_CSS } from '../utils/pdf';
+import { layoutPortfolioReport } from '../utils/portfolioReportHtml';
+import { fmtFileDate } from '../utils/calc';
 
 // ---------------------------------------------------------------------------
 // Styles — copied verbatim from the standalone tool's <style> block.
@@ -1738,6 +1742,10 @@ export default function PortfolioReview({ client }) {
     // down chart instances on the real final unmount.
     const qs = id => document.getElementById(id);
     const charts = chartsRef.current;
+    // What the dashboard is showing right now — each render function below
+    // records the figures it just drew, so the printed/saved Portfolio Review
+    // Report carries exactly the on-screen numbers without recomputing them.
+    const view = {};
 
     function fmt(n) {
       if (n === undefined || n === null || isNaN(n)) return '₹0';
@@ -1972,6 +1980,10 @@ export default function PortfolioReview({ client }) {
         : (data.investmentSince
           ? `<span style="font-size:.7rem;background:rgba(201,168,76,.15);color:#8a6f1e;padding:3px 10px;border-radius:20px;font-family:'DM Mono',monospace;margin-left:.8rem;font-weight:600">📅 Since ${data.investmentSince}</span>`
           : '');
+      view.since = earliest
+        ? earliest.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+        : (data.investmentSince || '');
+      view.memberNames = data.members.map(m => toTitleCase(m.name));
 
       const te = qs('tabs-el'); te.innerHTML = '';
       data.members.forEach((m, i) => {
@@ -1994,6 +2006,8 @@ export default function PortfolioReview({ client }) {
     function switchMember(idx) {
       const m = currentData.members[idx];
       const isAll = idx === 0;
+      view.memberIdx = idx;
+      view.isAll = isAll;
       document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('on', i === idx));
       renderKPI(m);
       renderCharts(m);
@@ -2020,6 +2034,7 @@ export default function PortfolioReview({ client }) {
         else sipL = computedSipTotal.toString();
       }
       const sipSub = computedSipTotal ? ((m.sips || []).length + ' mandates · 3rd Month') : 'No active SIP';
+      view.kpi = { invested: s.invested, current: s.current, gain, gainPct, sipTotal: computedSipTotal, sipCount: (m.sips || []).length, xirr: s.xirr || 0, schemes: (m.holdings || []).length };
       qs('kpi-row').innerHTML =
         kpiCard(0, 'Total Invested', fmt(s.invested), (m.holdings || []).length + ' schemes', 'neu') +
         kpiCard(1, 'Current Value', fmt(s.current), (gainPct >= 0 ? '▲ ' : '▼ ') + Math.abs(gainPct).toFixed(2) + '%', gainPct >= 0 ? 'up' : 'dn') +
@@ -2081,6 +2096,7 @@ export default function PortfolioReview({ client }) {
       if (eqPct > 0) { amLabels.push('Equity'); amData.push(parseFloat(eqPct.toFixed(1))); amColors.push('#2d8a6e'); }
       if (dtPct > 0) { amLabels.push('Debt'); amData.push(parseFloat(dtPct.toFixed(1))); amColors.push('#3d7abf'); }
       if (goldPct > 0) { amLabels.push('Gold'); amData.push(parseFloat(goldPct.toFixed(1))); amColors.push('#c9a84c'); }
+      view.assetMix = { eq: eqPct, dt: dtPct, gold: goldPct };
 
       charts.ca = new Chart(qs('ca'), {
         type: 'doughnut',
@@ -2117,6 +2133,7 @@ export default function PortfolioReview({ client }) {
            ccData = ccLabels.map(k => parseFloat(((catMap[k] / totalVal) * 100).toFixed(1)));
         }
       }
+      view.categories = ccLabels.map((label, i) => ({ label, pct: ccData[i] }));
       charts.cc = new Chart(qs('cc'), {
         type: 'doughnut',
         data: { labels: ccLabels, datasets: [{ data: ccData, backgroundColor: PAL, borderWidth: 2, borderColor: '#fff', hoverOffset: 5 }] },
@@ -2200,7 +2217,8 @@ export default function PortfolioReview({ client }) {
       
       const holdings = Object.values(grouped);
       holdings.sort((a, b) => (b.current || 0) - (a.current || 0));
-      
+      view.holdings = holdings;
+
       const total = holdings.reduce((s, h) => s + (h.current || 0), 0) || 1;
       
       qs('t-body').innerHTML = holdings.map(h => {
@@ -2499,7 +2517,7 @@ export default function PortfolioReview({ client }) {
     // CONSOLIDATED OVERVIEW (All Members only)
     function renderConsolidated(m, isAll) {
       const wrap = qs('consol-overview');
-      if (!isAll) { wrap.style.display = 'none'; return; }
+      if (!isAll) { wrap.style.display = 'none'; view.consol = null; return; }
       wrap.style.display = 'block';
 
       const COLORS = ['#1a5c4a', '#3d7abf', '#6b4fa0', '#c9a84c', '#e05c45', '#2d8a6e', '#88b04b', '#e8912a', '#d4845a', '#5c9bd6', '#b04f6f', '#4f8ab0', '#2196f3', '#9c27b0', '#ff5722'];
@@ -2834,6 +2852,7 @@ export default function PortfolioReview({ client }) {
       </table>
     </div>`;
 
+      view.consol = { amcAllocRows, amcAllocTotalInv, amcAllocTotalCur, catRows, catTotalInv, catTotalCur, sipRows, sipTotal, catSipRows, amcSipRows };
       wrap.innerHTML = `
     <div class="sec-ttl"><span class="dot"></span>Consolidated Overview</div>
     <div class="consol-grid">${amcAllocSection}${catSection}</div>
@@ -2954,37 +2973,53 @@ export default function PortfolioReview({ client }) {
     window.removeUnwanted = removeUnwanted;
     removeUnwantedFnRef.current = removeUnwanted;
 
-    // PRINT FUNCTION
+    // REPORT — the tab on screen, in the same A4 report layout as the Goal /
+    // Asset Allocation / Policy Review reports (see portfolioReportHtml.js).
+    // Advisory notes are read from the sidebar so the advisor's edits to them
+    // are what gets printed and saved.
+    function reportData() {
+      const m = currentData.members[view.memberIdx] || {};
+      const alerts = Array.from(qs('alert-list').querySelectorAll('.alert-box')).map(box => ({
+        type: ['warn', 'info', 'ok'].find(t => box.classList.contains(t)) || 'info',
+        text: (box.querySelector('.alert-editable')?.innerText || '').trim(),
+      })).filter(a => a.text);
+      return {
+        clientName: client?.name || '',
+        title: qs('p-title').textContent,
+        meta: currentData.meta || '',
+        memberName: view.memberNames?.[view.memberIdx] || m.name || '',
+        memberCount: currentData.members.length,
+        isAll: view.isAll,
+        since: view.since,
+        kpi: view.kpi,
+        assetMix: view.assetMix,
+        categories: view.categories,
+        holdings: view.holdings,
+        sips: m.sips || [],
+        consol: view.consol,
+        alerts,
+      };
+    }
+
+    // "<Client> – Portfolio Review Report <DD.MM.YYYY>" (with the member's
+    // name for a single member's tab) — the browser offers it as the PDF's
+    // file name, matching the other reports.
+    function reportTitle(d) {
+      const who = d.clientName || d.title || 'Client';
+      const member = !d.isAll && d.memberName && d.memberName.toLowerCase() !== who.toLowerCase() ? `${d.memberName} ` : '';
+      return `${who} – ${member}Portfolio Review Report ${fmtFileDate()}`;
+    }
+
     function printPortfolio() {
       if (!currentData) return;
-      // Sync editable advisory notes from sidebar to print section
-      const sidebarAlerts = qs('alert-list').querySelectorAll('.alert-box-wrap');
-      const printList = qs('print-alert-list');
-      printList.innerHTML = '';
-      sidebarAlerts.forEach(a => {
-        const clone = a.cloneNode(true);
-        // Remove contenteditable and edit hints for print
-        clone.querySelectorAll('[contenteditable]').forEach(el => {
-          el.removeAttribute('contenteditable');
-          el.classList.remove('alert-editable');
-          el.style.border = 'none';
-          el.style.padding = '0';
-        });
-        clone.querySelectorAll('.alert-edit-hint').forEach(el => el.remove());
-        printList.appendChild(clone);
-      });
-      // Set document title for PDF filename
-      const clientName = (currentData.title || 'Client').replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_');
-      const origTitle = document.title;
-      document.title = 'portfolio_review_' + clientName;
-      window.print();
-      document.title = origTitle;
+      const data = reportData();
+      exportPortfolioReportPdf(data, reportTitle(data));
     }
 
     // SAVE TO CLIENT PROFILE — reuses the app's existing generated-document
-    // pipeline (same one Policy Review uses): snapshot the dashboard's current
-    // DOM (canvases become static images), wrap as a standalone HTML document,
-    // and attach it to this client's profile so it shows up in Documents.
+    // pipeline (same one Policy Review uses): the same Portfolio Review Report
+    // the Print button produces, wrapped as a standalone HTML document and
+    // attached to this client's profile so it shows up in Documents.
     function showDocMsg(text) {
       const toast = qs('doc-msg-toast');
       if (!toast) return;
@@ -3000,18 +3035,16 @@ export default function PortfolioReview({ client }) {
         showDocMsg('⚠️ Not linked to a saved client — cannot save.');
         return;
       }
-      const dashEl = qs('dash-page');
-      if (!dashEl) return;
       const btn = qs('save-profile-btn');
       const btnLabel = qs('save-profile-btn-label');
       btn.disabled = true;
       btnLabel.textContent = 'Saving…';
       try {
-        const inner = snapshotElementHtml(dashEl);
+        const data = reportData();
         const html = wrapStandaloneHtml(
-          `<div class="portfolio-review-widget">${inner}</div>`,
-          `Portfolio Review — ${client.name}`,
-          PORTFOLIO_REVIEW_STYLES
+          await layoutPortfolioReport(data),
+          reportTitle(data).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
+          PORTFOLIO_REPORT_PAGE_CSS
         );
         const name = await saveGeneratedDocument(client, {
           kind: 'portfolioReviewAI',
