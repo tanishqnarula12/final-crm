@@ -982,9 +982,9 @@ export default function InsuranceProposal({ client, isViewer }) {
     if (!previewDocRef.current) return;
     const who = proposer || client?.name || 'Client';
     const html = wrapStandaloneHtml(
-      previewDocRef.current.outerHTML,
+      pagedProposalHtml(),
       escTitle(`${who} – ${getProposalTypesLabel()} Insurance Proposal ${fmtFileDate()}`),
-      INSURANCE_PRINT_STYLES
+      INSURANCE_PRINT_STYLES + INSURANCE_PAGED_STYLES
     );
     const win = window.open('', '_blank', 'width=900,height=1000');
     if (!win) {
@@ -1014,6 +1014,30 @@ export default function InsuranceProposal({ client, isViewer }) {
   };
 
   const previewDocRef = useRef(null);
+
+  // The printed / saved proposal: every page gets the Team Fintness header
+  // at its top edge and the proposal's footer at its bottom edge, like the
+  // Investment Proposal. In print the header and footer are pinned to the
+  // page edges (fixed elements repeat on every printed page), and the empty
+  // header/footer rows of a wrapping table — which the browser repeats on
+  // every page too — keep the proposal's content clear of them. On screen
+  // (a saved document opened in Documents) they simply sit above and below
+  // the proposal. The live preview itself is untouched.
+  const pagedProposalHtml = () => {
+    const doc = previewDocRef.current.cloneNode(true);
+    const footer = doc.querySelector('.prop-footer');
+    const footerHtml = footer ? footer.outerHTML : '';
+    if (footer) footer.remove();
+    const who = escTitle(proposer || client?.name || 'Client');
+    return `<div class="ins-run-head">${insuranceRunningHeader(who)}</div>
+    <table class="ins-pages">
+      <thead><tr><td><div class="ins-head-space"></div></td></tr></thead>
+      <tbody><tr><td>${doc.outerHTML}</td></tr></tbody>
+      <tfoot><tr><td><div class="ins-foot-space"></div></td></tr></tfoot>
+    </table>
+    <div class="ins-run-foot">${footerHtml}</div>`;
+  };
+
   // Save Document → Saving… → Saved; repeat clicks are ignored while it runs
   // (useSaveAction), so a proposal can't be saved twice by a double click.
   const docSave = useSaveAction({ savedMs: 1500 });
@@ -1027,9 +1051,9 @@ export default function InsuranceProposal({ client, isViewer }) {
     docSave.run(async () => {
       try {
         const html = wrapStandaloneHtml(
-          previewDocRef.current.outerHTML,
+          pagedProposalHtml(),
           escTitle(`Insurance Proposal — ${client.name}`),
-          INSURANCE_PRINT_STYLES
+          INSURANCE_PRINT_STYLES + INSURANCE_PAGED_STYLES
         );
         const name = await saveGeneratedDocument(client, {
           kind: 'insurance',
@@ -3292,5 +3316,52 @@ const INSURANCE_PRINT_STYLES = `
     .proposal-doc .badge { padding: 2px 8px; font-size: 9.5px; white-space: nowrap; }
     .proposal-doc .prop-footer { margin-top: 24px; padding-top: 14px; }
     .proposal-doc .prop-footer-note { font-size: 9.5px; }
+  }
+`;
+
+// Header repeated at the top of every printed page of the proposal — the
+// same Team Fintness header the Investment Proposal pages carry.
+const insuranceRunningHeader = (who) => `
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;color:#0d2a5e;letter-spacing:.02em;line-height:1.1;">Team Fintness</div>
+      <div style="font-size:9px;font-weight:700;letter-spacing:2.2px;text-transform:uppercase;color:#1558d6;margin-top:4px;">Insurance Proposal &nbsp;·&nbsp; ${who}</div>
+    </div>
+    <img src="${LOGO_DATA_URI}" alt="" style="max-height:40px;max-width:110px;object-fit:contain;" />
+  </div>
+  <div style="height:2px;background:linear-gradient(90deg,#0d2a5e 0%,#1558d6 60%,#0ea5e9 100%);margin-top:12px;border-radius:2px;"></div>`;
+
+// Page frame for the printed / saved proposal (see pagedProposalHtml).
+// The spacer heights must stay a little taller than the header and footer
+// boxes they make room for.
+const INSURANCE_PAGED_STYLES = `
+  .ins-pages { width: 100%; border-collapse: collapse; }
+  .ins-pages > thead > tr > td, .ins-pages > tbody > tr > td, .ins-pages > tfoot > tr > td { padding: 0; }
+  .ins-head-space, .ins-foot-space { display: none; }
+  .ins-run-head { max-width: 896px; margin: 0 auto 16px; }
+  .ins-run-foot { max-width: 896px; margin: 0 auto; }
+  .ins-run-foot .prop-footer { margin-top: 18px; }
+
+  @media print {
+    @page { size: A4; margin: 0; }
+    @page :first { margin: 0; }
+    .ins-run-head, .ins-run-head *, .ins-run-foot, .ins-run-foot *, .ins-pages, .ins-pages * { visibility: visible !important; }
+    .ins-run-head {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 2;
+      max-width: none; margin: 0; height: 84px; padding: 22px 40px 0; background: #ffffff;
+    }
+    .ins-run-foot {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 2;
+      max-width: none; margin: 0; height: 78px; padding: 0 40px 20px; background: #ffffff;
+      display: flex; flex-direction: column; justify-content: flex-end;
+    }
+    .ins-head-space { display: block; height: 100px; }
+    .ins-foot-space { display: block; height: 92px; }
+    .ins-pages > tbody > tr > td { padding: 0 40px !important; }
+    .ins-pages .proposal-doc .prop-banner { border-radius: 12px; }
+    .ins-pages .proposal-doc .prop-banner-inner { padding: 30px 34px 26px !important; }
+    .ins-pages .proposal-doc .prop-body { padding: 22px 0 0 !important; }
+    .ins-run-foot .prop-footer { margin: 0; padding-top: 10px; break-inside: avoid; }
+    .ins-run-foot .prop-footer-note { font-size: 9px; max-width: 560px; line-height: 1.45; }
   }
 `;
