@@ -14,6 +14,9 @@ import { ProspectModal } from './BusinessProspects';
 // Travel, Marine, Motor and Indemnity graduated to real sections below.
 const COMING_SOON_TYPES = ['Home', 'Fire'];
 
+// Names go into a standalone page's <title> as raw HTML.
+const escTitle = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 // One empty Travel entry — Card layout mirrors the CRM Data Fields spec
 // (Traveller Name / DOB-Age / Passport / Nationality / Mobile / Email /
 // Trip dates / Destination / Trip Type / Purpose / # Travellers / Sum
@@ -581,6 +584,10 @@ export default function InsuranceProposal({ client, isViewer }) {
     const num = parseNum(val);
     return num.toLocaleString('en-IN');
   };
+  // Proposal amount cell: the ₹ sign is joined to its figure with a
+  // non-breaking space so a narrow column can never wrap "₹" onto a line of
+  // its own; an empty amount reads "—", not "₹ —".
+  const money = (val) => (val ? `₹\u00A0${fmtINR(val)}` : '—');
 
   // Live comma formatting for amount inputs (e.g. 50000 -> 50,000)
   const fmtAmt = (v) => {
@@ -965,16 +972,37 @@ export default function InsuranceProposal({ client, isViewer }) {
     setShowProspectModal(true);
   };
 
-  // Browser "Print / Save PDF" defaults its filename to document.title — set
-  // it to "<Client> – Insurance Proposal <DD.MM.YYYY>" right before printing,
-  // matching the Goal/Asset Allocation report naming, then restore the app's
-  // normal title once the print dialog closes.
+  // Prints the proposal from its own window — the same standalone page Save
+  // Document stores — rather than window.print() on the live app, so no app
+  // styling can reach it and its fonts actually load (the app's own font
+  // link fails, which left the printout in fallback Times/Arial). The
+  // window's title, "<Client> – <Types> Insurance Proposal <DD.MM.YYYY>", is
+  // what the browser offers as the PDF's file name.
   const handlePrint = () => {
+    if (!previewDocRef.current) return;
     const who = proposer || client?.name || 'Client';
-    const prevTitle = document.title;
-    document.title = `${who} – ${getProposalTypesLabel()} Insurance Proposal ${fmtFileDate()}`;
-    window.print();
-    document.title = prevTitle;
+    const html = wrapStandaloneHtml(
+      previewDocRef.current.outerHTML,
+      escTitle(`${who} – ${getProposalTypesLabel()} Insurance Proposal ${fmtFileDate()}`),
+      INSURANCE_PRINT_STYLES
+    );
+    const win = window.open('', '_blank', 'width=900,height=1000');
+    if (!win) {
+      alert('Please allow pop-ups to print the proposal.');
+      return;
+    }
+    win.document.write(html);
+    win.document.close();
+    let printed = false;
+    const doPrint = () => {
+      if (printed) return;
+      printed = true;
+      win.focus();
+      win.print();
+    };
+    // Print once the fonts are in, with a fallback in case they never load.
+    win.onload = () => { (win.document.fonts?.ready || Promise.resolve()).then(doPrint, doPrint); };
+    setTimeout(doPrint, 3000);
   };
 
   const handleProspectConfirm = (list) => {
@@ -1000,7 +1028,7 @@ export default function InsuranceProposal({ client, isViewer }) {
       try {
         const html = wrapStandaloneHtml(
           previewDocRef.current.outerHTML,
-          `Insurance Proposal — ${client.name}`,
+          escTitle(`Insurance Proposal — ${client.name}`),
           INSURANCE_PRINT_STYLES
         );
         const name = await saveGeneratedDocument(client, {
@@ -2468,8 +2496,8 @@ export default function InsuranceProposal({ client, isViewer }) {
                               <tr key={i}>
                                 <td>{i + 1}</td>
                                 <td style={{ fontWeight: 600 }}>{fmt(p.name)}</td>
-                                <td>₹ {fmtINR(p.sum)}</td>
-                                <td>₹ {fmtINR(p.premium)}</td>
+                                <td>{money(p.sum)}</td>
+                                <td>{money(p.premium)}</td>
                                 {basePolicies.some(x => x.riders) && <td style={{ fontSize: '12px', color: 'var(--slate)' }}>{p.riders || '—'}</td>}
                               </tr>
                             ))}
@@ -2500,9 +2528,9 @@ export default function InsuranceProposal({ client, isViewer }) {
                                 <td>{i + 1}</td>
                                 <td style={{ fontWeight: 600 }}>{fmt(p.company)}</td>
                                 <td style={{ fontWeight: 600 }}>{fmt(p.name)}</td>
-                                <td>₹ {fmtINR(p.deductible)}</td>
-                                <td>₹ {fmtINR(p.sum)}</td>
-                                <td>₹ {fmtINR(p.premium)}</td>
+                                <td>{money(p.deductible)}</td>
+                                <td>{money(p.sum)}</td>
+                                <td>{money(p.premium)}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -2545,9 +2573,9 @@ export default function InsuranceProposal({ client, isViewer }) {
                                   <tr key={i}>
                                     <td>{i + 1}</td>
                                     <td style={{ fontWeight: 600 }}>{fmt(p.name)}</td>
-                                    <td>₹ {fmtINR(p.sum)}</td>
+                                    <td>{money(p.sum)}</td>
                                     <td>{fmt(p.cover)} yrs</td>
-                                    <td>₹ {fmtINR(p.premium)}</td>
+                                    <td>{money(p.premium)}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -2580,8 +2608,8 @@ export default function InsuranceProposal({ client, isViewer }) {
                             <tr key={i}>
                               <td>{i + 1}</td>
                               <td style={{ fontWeight: 600, color: '#0d2a5e' }}>{fmt(p.name)}</td>
-                              <td>₹ {fmtINR(p.sum)}</td>
-                              <td>₹ {fmtINR(p.premium)}</td>
+                              <td>{money(p.sum)}</td>
+                              <td>{money(p.premium)}</td>
                               {accidentalPolicies.some(x => x.riders) && <td style={{ fontSize: '12px', color: 'var(--slate)' }}>{fmt(p.riders)}</td>}
                             </tr>
                           ))}
@@ -2679,8 +2707,8 @@ export default function InsuranceProposal({ client, isViewer }) {
                               {travelPolicies.filter(p => p.travellerName || p.destination || p.sum || p.premium).map((p, i) => (
                                 <tr key={i}>
                                   <td>{i + 1}</td>
-                                  <td>₹ {fmtINR(p.sum)}</td>
-                                  <td>{p.premium ? '₹ ' + fmtINR(p.premium) : 'Pending quotation'}</td>
+                                  <td>{money(p.sum)}</td>
+                                  <td>{p.premium ? money(p.premium) : 'Pending quotation'}</td>
                                   <td>{p.policyNumber || 'Pending issuance'}</td>
                                   {travelPolicies.some(x => x.pedCondition) && <td style={{ fontSize: '12px', color: 'var(--slate)' }}>{fmt(p.pedCondition)}</td>}
                                   {travelPolicies.some(x => x.nominee) && <td style={{ fontSize: '12px', color: 'var(--slate)' }}>{fmt(p.nominee)}</td>}
@@ -2725,8 +2753,8 @@ export default function InsuranceProposal({ client, isViewer }) {
                                   <td style={{ fontSize: '12px' }}>{fmt(p.natureOfGoods)}</td>
                                   <td style={{ fontSize: '12px' }}>{(p.origin || p.destination) ? `${p.origin || '?'} → ${p.destination || '?'}` : '—'}</td>
                                   <td>{fmt(p.modeOfTransport)}</td>
-                                  <td>₹ {fmtINR(p.invoiceValue)}</td>
-                                  <td>₹ {fmtINR(p.sum)}</td>
+                                  <td>{money(p.invoiceValue)}</td>
+                                  <td>{money(p.sum)}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -2764,7 +2792,7 @@ export default function InsuranceProposal({ client, isViewer }) {
                                       {p.transitEndDuration ? ` – ${p.transitEndDuration}` : ''}
                                     </td>
                                     <td>{fmt(p.shipmentsCount)}</td>
-                                    <td>{p.premium ? '₹ ' + fmtINR(p.premium) : 'Pending issuance'}</td>
+                                    <td>{p.premium ? money(p.premium) : 'Pending issuance'}</td>
                                     <td>{p.policyNumber || 'Pending issuance'}</td>
                                     {marinePolicies.some(x => x.packingDetails || x.conveyanceVessel || x.previousPolicyDetails || x.claimHistory) && (
                                       <td style={{ fontSize: '12px', color: 'var(--slate)' }}>{notes || '—'}</td>
@@ -2812,7 +2840,7 @@ export default function InsuranceProposal({ client, isViewer }) {
                                   <td>{fmt(p.manufacturingYear)}</td>
                                   <td>{fmt(p.vehicleType)}</td>
                                   <td>{fmt(p.fuelType)}</td>
-                                  <td>{p.idv ? '₹ ' + fmtINR(p.idv) : '—'}</td>
+                                  <td>{p.idv ? money(p.idv) : '—'}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -2871,7 +2899,7 @@ export default function InsuranceProposal({ client, isViewer }) {
                                   <td>{i + 1}</td>
                                   <td>{fmt(p.engineNumber)}</td>
                                   <td>{fmt(p.chassisNumber)}</td>
-                                  <td>{p.premium ? '₹ ' + fmtINR(p.premium) : 'Pending issuance'}</td>
+                                  <td>{p.premium ? money(p.premium) : 'Pending issuance'}</td>
                                   <td>{p.policyNumber || 'Pending issuance'}</td>
                                 </tr>
                               ))}
@@ -2910,8 +2938,8 @@ export default function InsuranceProposal({ client, isViewer }) {
                                   <td style={{ fontWeight: 600, color: '#0d2a5e' }}>{fmt(p.insuredName)}</td>
                                   <td style={{ fontSize: '12px' }}>{fmt(p.businessProfession)}</td>
                                   <td style={{ fontSize: '12px' }}>{fmt(p.coverageRequired)}</td>
-                                  <td>{p.annualTurnover ? '₹ ' + fmtINR(p.annualTurnover) : '—'}</td>
-                                  <td>₹ {fmtINR(p.sum)}</td>
+                                  <td>{p.annualTurnover ? money(p.annualTurnover) : '—'}</td>
+                                  <td>{money(p.sum)}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -2946,7 +2974,7 @@ export default function InsuranceProposal({ client, isViewer }) {
                                     <td>{i + 1}</td>
                                     <td>{fmt(p.policyPeriod)}</td>
                                     <td>{p.retroactiveDate ? new Date(p.retroactiveDate).toLocaleDateString('en-IN') : '—'}</td>
-                                    <td>{p.premium ? '₹ ' + fmtINR(p.premium) : 'Pending issuance'}</td>
+                                    <td>{p.premium ? money(p.premium) : 'Pending issuance'}</td>
                                     <td>{p.policyNumber || 'Pending issuance'}</td>
                                     {indemnityPolicies.some(x => x.previousPolicyDetails || x.existingClaims || x.pendingClaims || x.contractualRequirements) && (
                                       <td style={{ fontSize: '12px', color: 'var(--slate)' }}>{notes || '—'}</td>
@@ -3096,18 +3124,23 @@ const INSURANCE_PRINT_STYLES = `
   }
   .prop-prepared strong { color:rgba(255,255,255,0.95); font-weight:600; }
 
+  /* The title column takes the room it needs; the Proposal Type box wraps
+     its "Medical + Term + …" list inside a capped width instead of pushing
+     past the banner's right edge and squeezing the title column. */
+  .prop-banner-inner > div:first-child { flex:1 1 auto; min-width:0; }
   .prop-ref-box {
     background:rgba(255,255,255,0.1);
     border:1px solid rgba(255,255,255,0.18);
     border-radius:10px;
     padding:18px 22px;
     min-width:160px;
+    max-width:44%;
     text-align:center;
-    flex-shrink:0;
+    flex:0 1 auto;
     align-self:center;
   }
   .prop-ref-label { font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:rgba(255,255,255,0.5); margin-bottom:6px; }
-  .prop-ref-value { font-family:'Cormorant Garamond',serif; font-size:22px; font-weight:600; color:#fff; }
+  .prop-ref-value { font-family:'Cormorant Garamond',serif; font-size:22px; font-weight:600; color:#fff; line-height:1.25; }
 
   /* Body */
   .prop-body { padding: 36px 48px 40px; }
@@ -3167,7 +3200,11 @@ const INSURANCE_PRINT_STYLES = `
   .prop-footer-brand { font-family:'Cormorant Garamond',serif; font-size:15px; font-weight:600; color:var(--blue); opacity:.5; }
 
   @media print {
-    @page { size: A4; margin: 0; }
+    /* Page 1 keeps the banner flush with the top of the sheet; every page
+       gets a top/bottom margin so nothing runs into the paper's edge. The
+       side margins come from the document's own 40px padding. */
+    @page { size: A4; margin: 12mm 0 14mm; }
+    @page :first { margin-top: 0; }
     html, body {
       height: auto !important;
       margin: 0 !important;
@@ -3217,12 +3254,43 @@ const INSURANCE_PRINT_STYLES = `
       background: #ffffff !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
-      min-height: 297mm !important;
       box-sizing: border-box !important;
     }
-    .proposal-doc .prop-banner-inner { padding: 40px 48px 36px !important; }
-    .proposal-doc .prop-body { padding: 36px 48px 40px !important; }
+    .proposal-doc .prop-banner-inner { padding: 34px 40px 30px !important; }
+    .proposal-doc .prop-body { padding: 26px 40px 0 !important; }
     .proposal-doc .prop-banner { break-inside: avoid-page; }
-    .proposal-doc .prop-body > div { break-inside: avoid-page; }
+
+    /* Sections flow one after another instead of each jumping to a fresh
+       page (which left pages half empty). What must stay whole: a heading
+       stays with what follows it, a heading + its table stay together when
+       they fit on a page, and a row is never split; a longer table breaks
+       between rows and repeats its column header on the next page. */
+    .proposal-doc .psec-title { break-after: avoid; page-break-after: avoid; }
+    .proposal-doc .psub-label { display: block; width: fit-content; break-after: avoid; page-break-after: avoid; }
+    .proposal-doc .prop-body div:has(> .ptable-wrap) { break-inside: avoid; page-break-inside: avoid; }
+    .proposal-doc .ptable thead { display: table-header-group; }
+    .proposal-doc .ptable tr { break-inside: avoid; page-break-inside: avoid; }
+    .proposal-doc .prop-footer { break-inside: avoid; page-break-inside: avoid; }
+
+    /* Table sizing for a portrait page: the on-screen 13px text and 16px
+       cell padding squeezed 7–8 column tables until words and amounts broke
+       mid-value and the right edge ran off the page. */
+    .proposal-doc .psec-title { font-size: 17px; margin: 22px 0 12px; padding: 8px 14px; }
+    .proposal-doc .psec-title:first-child { margin-top: 0; }
+    .proposal-doc .psub-label { font-size: 9.5px; margin: 14px 0 8px; padding: 5px 10px; }
+    /* Separate borders so the table's own outline and rounded corners
+       actually draw — collapsed borders dropped its right and bottom edge. */
+    .proposal-doc .ptable { width: 100%; table-layout: auto; font-size: 11px; border-collapse: separate; border-spacing: 0; }
+    .proposal-doc .ptable th:first-child { border-top-left-radius: 7px; }
+    .proposal-doc .ptable th:last-child { border-top-right-radius: 7px; }
+    .proposal-doc .ptable tbody tr:last-child td:first-child { border-bottom-left-radius: 7px; }
+    .proposal-doc .ptable tbody tr:last-child td:last-child { border-bottom-right-radius: 7px; }
+    .proposal-doc .ptable th { padding: 8px 9px; font-size: 8.5px; letter-spacing: .06em; line-height: 1.3; }
+    .proposal-doc .ptable td { padding: 8px 9px; font-size: 11px; line-height: 1.4; overflow-wrap: break-word; }
+    .proposal-doc .ptable td[style*="font-size"] { font-size: 10px !important; }
+    .proposal-doc .ptable td:first-child, .proposal-doc .ptable th:first-child { width: 24px; padding-right: 4px; }
+    .proposal-doc .badge { padding: 2px 8px; font-size: 9.5px; white-space: nowrap; }
+    .proposal-doc .prop-footer { margin-top: 24px; padding-top: 14px; }
+    .proposal-doc .prop-footer-note { font-size: 9.5px; }
   }
 `;
