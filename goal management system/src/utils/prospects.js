@@ -112,6 +112,56 @@ export const addProspects = (newOnes) => {
   return cache;
 };
 
+// "Is this prospect already created?" — asked before Create Prospect saves,
+// so an accidental second click can't quietly make the same prospect twice.
+// Same client, applicant, proposal type and amount counts as the same
+// prospect. Checked against this screen's list (which already holds one that
+// is being saved this very moment) and against the server, which also sees
+// prospects this user can't open (an investment prospect in Pre-Qualified is
+// visible only to its RM / Portfolio Manager). Returns
+// [{ draft, matches: [{ id, proposalType, applicant, amount, createdAt, stage }] }]
+// for the drafts that match; never throws — if the server can't be asked,
+// the local list alone decides.
+const normText = (s) => String(s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+const amountOf = (v) => Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
+const sameClient = (a, b) => (a.groupLeaderId && b.groupLeaderId
+  ? String(a.groupLeaderId) === String(b.groupLeaderId)
+  : normText(a.groupLeader) === normText(b.groupLeader));
+const sameProspect = (a, b) => normText(a.applicant) === normText(b.applicant)
+  && (a.proposalCategory || '') === (b.proposalCategory || '')
+  && normText(a.proposalType) === normText(b.proposalType)
+  && amountOf(a.amount) === amountOf(b.amount);
+
+export async function findDuplicateProspects(drafts) {
+  const byDraft = new Map(drafts.map((d) => [d.id, new Map()]));
+  drafts.forEach((d) => {
+    cache.filter((p) => p.id !== d.id && sameClient(p, d) && sameProspect(p, d)).forEach((p) => {
+      byDraft.get(d.id).set(p.id, {
+        id: p.id, proposalType: p.proposalType || '', applicant: p.applicant || '',
+        amount: p.amount ?? '', createdAt: p.createdAt || '', stage: p.stage || '',
+      });
+    });
+  });
+  try {
+    // Only what the check (and the server's may-create test) needs — not the
+    // proposal table, KYC or documents.
+    const FIELDS = ['id', 'groupLeaderId', 'groupLeader', 'applicant', 'pan', 'proposalCategory', 'proposalType', 'amount',
+      'relationshipManager', 'portfolioManager', 'serviceManager', 'insuranceManager', 'owner', 'internalManager'];
+    const slim = drafts.map((d) => Object.fromEntries(FIELDS.filter((k) => d[k] !== undefined).map((k) => [k, d[k]])));
+    const { duplicates } = await api.post('/prospects/duplicates', { prospects: slim });
+    (Array.isArray(duplicates) ? duplicates : []).forEach(({ id, matches }) => {
+      const found = byDraft.get(id);
+      if (!found) return;
+      (matches || []).forEach((m) => { if (!found.has(m.id)) found.set(m.id, m); });
+    });
+  } catch {
+    // Older server (no /duplicates yet) or offline — the local list decides.
+  }
+  return drafts
+    .map((d) => ({ draft: d, matches: [...byDraft.get(d.id).values()] }))
+    .filter((x) => x.matches.length);
+}
+
 export const CATEGORY_THEME = {
   investment: 'bg-emerald-50 text-emerald-700 ring-emerald-200/60 dark:bg-emerald-950/30 dark:text-emerald-400 dark:ring-emerald-900/40',
   insurance: 'bg-amber-50 text-amber-700 ring-amber-200/60 dark:bg-amber-950/30 dark:text-amber-400 dark:ring-amber-900/40',

@@ -9,8 +9,9 @@ import {
 import { Card, Avatar, btnPrimary, btnGhost, inputCls, selectCls, Field, CoolSelect, MultiSelect } from './UI';
 import {
   loadProspects, saveProspect, deleteProspect, addProspects, CATEGORY_THEME, CATEGORY_LABEL, fmtProspectStamp, fmtAmountINR,
-  PROSPECT_STAGES, INSURANCE_PROSPECT_STAGES, ALL_STAGE_THEME, ALL_PROSPECT_STAGES
+  PROSPECT_STAGES, INSURANCE_PROSPECT_STAGES, ALL_STAGE_THEME, ALL_PROSPECT_STAGES, findDuplicateProspects
 } from '../utils/prospects';
+import { AssetAlert } from './cobr/OtherAssetModal';
 import { uid, fmtFileDate } from '../utils/calc';
 import { exportProspectsToExcel, prospectClosingDate, toLocalDay } from '../utils/prospectExcel';
 import { RELATIONS } from '../utils/team';
@@ -703,6 +704,7 @@ export default function ProspectsView({ isViewer, onOpenProspect, prospectsChang
           isViewer={isViewer}
           onClose={() => setDuplicateSeed(null)}
           onConfirm={(list) => { addProspects(list); setDuplicateSeed(null); }}
+          warnIfExists={false}
         />
       )}
     </div>
@@ -744,9 +746,16 @@ const todayDateString = () => {
 //                  each proposal is its own tab with its own table + remarks.
 //   mode "edit":   receives a single `initial` prospect (+ stage management)
 // ===========================================================================
-export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial = null, clients = [], onClose, onConfirm, isViewer = false }) {
+export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial = null, clients = [], onClose, onConfirm, isViewer = false, warnIfExists = true }) {
   useBackLayer(true, onClose); // phone/browser Back closes it
   const isEdit = mode === 'edit';
+  // Create mode asks before making a prospect that already exists (see
+  // findDuplicateProspects) — `warnIfExists={false}` for the prospect list's
+  // own Duplicate action, which already asked "Create a copy?". While the
+  // check runs the button is locked, so a double click can't create twice.
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState(null); // { list, found } | null
+  const createStartedRef = useRef(false);
   const seed = isEdit ? initial : base;
 
   // RBAC: creation itself is already gated upstream (ProposalWorkspace only
@@ -1153,8 +1162,9 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
     }));
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!canSave) return;
+    if (!isEdit && createStartedRef.current) return; // second click while creating
 
     // Strip base64 file data from documents before saving to localStorage.
     // Uploaded files (Aadhaar, PAN, photos etc.) can be several MB each; including
@@ -1300,9 +1310,25 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
       updatedAt: new Date().toISOString(),
     }));
 
-    // Create/save the prospect FIRST so it can never be blocked or lost by a
-    // document-sync hiccup. The KYC document upload to the client's Documents
-    // store then runs as a best-effort background step.
+    if (!isEdit && warnIfExists) {
+      createStartedRef.current = true;
+      setCheckingDuplicates(true);
+      const found = await findDuplicateProspects(list);
+      setCheckingDuplicates(false);
+      if (found.length) {
+        createStartedRef.current = false;
+        setDuplicateWarning({ list, found });
+        return;
+      }
+    }
+    commitProspects(list);
+  };
+
+  // Create/save the prospect FIRST so it can never be blocked or lost by a
+  // document-sync hiccup. The KYC document upload to the client's Documents
+  // store then runs as a best-effort background step.
+  const commitProspects = (list) => {
+    if (!isEdit) createStartedRef.current = true; // the form closes next; ignore further clicks
     onConfirm(list);
     syncDocumentsToClient().catch(err => console.error('Failed to sync KYC documents to client:', err));
   };
@@ -1726,15 +1752,71 @@ export function ProspectModal({ mode = 'create', drafts = [], base = {}, initial
             {/* Someone who can neither edit this prospect nor move its stage has
                 nothing to save — don't show them a button that can never work. */}
             {(!isEdit || canEditDetails || canChangeStage) && (
-              <button onClick={handleConfirm} disabled={!canSave} className={btnPrimary}>
-                <CheckCircle2 size={14} /> {isEdit ? 'Save Changes' : `Confirm & Create${items.length > 1 ? ` ${items.length}` : ''}`}
+              <button onClick={handleConfirm} disabled={!canSave || checkingDuplicates} className={btnPrimary}>
+                <CheckCircle2 size={14} /> {isEdit ? 'Save Changes' : checkingDuplicates ? 'Checking…' : `Confirm & Create${items.length > 1 ? ` ${items.length}` : ''}`}
               </button>
             )}
           </div>
         </div>
       </div>
+      {duplicateWarning && (
+        <DuplicateProspectAlert
+          found={duplicateWarning.found}
+          total={duplicateWarning.list.length}
+          onCancel={() => { setDuplicateWarning(null); onClose(); }}
+          onCreateNewOnly={() => {
+            const dupIds = new Set(duplicateWarning.found.map((f) => f.draft.id));
+            const fresh = duplicateWarning.list.filter((p) => !dupIds.has(p.id));
+            setDuplicateWarning(null);
+            commitProspects(fresh);
+          }}
+          onCreateAnyway={() => { const { list } = duplicateWarning; setDuplicateWarning(null); commitProspects(list); }}
+        />
+      )}
     </div>,
     document.body
+  );
+}
+
+// "Prospect already created" — Yes creates the duplicate, No creates nothing
+// and closes the form. When only some of several prospects already exist, a
+// middle choice creates just the new ones.
+function DuplicateProspectAlert({ found, total, onCancel, onCreateNewOnly, onCreateAnyway }) {
+  const fresh = total - found.length;
+  const single = total === 1;
+  return (
+    <AssetAlert
+      title={found.length === 1 ? 'Prospect already created' : `${found.length} prospects already created`}
+      onClose={onCancel}
+      actions={(
+        <>
+          <button type="button" onClick={onCancel} className={btnGhost}>No, don't create</button>
+          {fresh > 0 && (
+            <button type="button" onClick={onCreateNewOnly} className={btnGhost}>Create only the {fresh} new</button>
+          )}
+          <button type="button" onClick={onCreateAnyway} className={btnPrimary}>
+            {single ? 'Yes, create duplicate' : `Yes, create all ${total}`}
+          </button>
+        </>
+      )}
+    >
+      <p>
+        {found.length === 1 ? 'This prospect is already created.' : 'These prospects are already created.'}
+        {' '}Do you want to create a duplicate prospect?
+      </p>
+      <ul className="mt-3 space-y-2">
+        {found.map(({ draft, matches }) => matches.slice(0, 3).map((m) => (
+          <li key={`${draft.id}-${m.id}`} className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 px-3 py-2">
+            <div className="font-semibold text-slate-800 dark:text-slate-100">{m.proposalType || draft.proposalType} · {m.applicant || draft.applicant}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {fmtAmountINR(m.amount)}
+              {m.createdAt ? ` · created ${fmtProspectStamp(m.createdAt)}` : ''}
+              {m.stage ? ` · ${m.stage}` : ''}
+            </div>
+          </li>
+        )))}
+      </ul>
+    </AssetAlert>
   );
 }
 
