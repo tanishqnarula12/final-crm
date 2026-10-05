@@ -82,12 +82,14 @@ export default function OtherAssetsTab({ assets = [], onOpen, onEdit, onDelete, 
               key={qf.id}
               data-asset-quick={qf.id}
               onClick={() => pickCategory(qf.id)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${
-                on ? 'bg-violet-600 text-white border-violet-600 shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:text-slate-800 dark:hover:text-slate-200'
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer border ${
+                on
+                  ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-900 dark:border-white'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
               {qf.label}
-              <span className={`min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full text-[10px] font-black ${on ? 'bg-white/25' : 'bg-slate-100 dark:bg-slate-800'}`}>{n}</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${on ? 'bg-white/20 dark:bg-slate-900/20' : 'bg-slate-100 dark:bg-slate-800'}`}>{n}</span>
             </button>
           );
         })}

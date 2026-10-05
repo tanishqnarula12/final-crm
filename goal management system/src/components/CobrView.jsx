@@ -12,8 +12,8 @@
 // four tabs existed.
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Search, ArrowLeftRight, RefreshCw, ShieldAlert, Landmark, FileCheck2, Gem, CheckCircle2 } from 'lucide-react';
-import { Card, btnPrimary, btnGhost, selectCls, CoolSelect } from './UI';
+import { Plus, Search, ArrowLeftRight, RefreshCw, ShieldAlert, Landmark, FileCheck2, Gem, CheckCircle2, FileSpreadsheet, ShieldCheck } from 'lucide-react';
+import { Card, btnPrimary, btnGhost, selectCls, CoolSelect, PageTitle } from './UI';
 import { loadTasks, saveTasks, loadOtherAssets, saveOtherAssets } from '../utils/tasks';
 import { assetShortName, fmtRupees } from '../utils/otherAssets';
 import OtherAssetsTab from './cobr/OtherAssetsTab';
@@ -48,6 +48,16 @@ const TABS = [
   { id: REC.FD, label: 'Fixed Deposit', icon: Landmark },
   { id: REC.POLICY, label: 'Other Insurance Policies', icon: FileCheck2 },
 ];
+
+// What each tab tracks — shown under the module title.
+const TAB_DESCRIPTION = {
+  [REC.COBR]: 'Change of Broker (COBR) requests — tracked as tasks, with a per-scheme checklist.',
+  [REC.RENEWAL]: 'Policy renewals — from the first WhatsApp link through to the document being shared.',
+  [REC.CLAIM]: 'Insurance claims — full workflow, including the Ombudsman escalation path.',
+  [REC.FD]: 'Fixed deposits nearing maturity — and whether the money comes back to us.',
+  [REC.POLICY]: 'Other policies held by clients, tracked outside the renewal and claim flows.',
+  [REC.ASSET]: 'Assets applicants own outside the Mutual Fund and Insurance modules — they flow into Asset Allocation and goal mapping automatically.',
+};
 
 const d = (s) => (s ? new Date(s).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
 const money = (v) => (v === '' || v == null ? '—' : fmtINR(Number(v) || 0));
@@ -182,73 +192,66 @@ export default function CobrView({
   const active = TABS.find((t) => t.id === tab);
 
   return (
-    <div className="space-y-5 animate-fade-in">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 flex items-center justify-center">
-            {active?.icon ? <active.icon size={20} /> : <ArrowLeftRight size={20} />}
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">
-              {tab === REC.COBR ? 'Change of Broker (COBR)' : active?.label}
-            </h2>
-            <p className="text-xs text-slate-400">
-              {tab === REC.COBR && 'Broker-change requests — tracked as tasks, with a per-scheme checklist.'}
-              {tab === REC.RENEWAL && 'Policy renewals — from the first WhatsApp link through to the document being shared.'}
-              {tab === REC.CLAIM && 'Insurance claims — full workflow, including the Ombudsman escalation path.'}
-              {tab === REC.FD && 'Fixed deposits nearing maturity — and whether the money comes back to us.'}
-              {tab === REC.POLICY && 'Other policies held by clients, tracked outside the renewal and claim flows.'}
-              {tab === REC.ASSET && 'Assets applicants own outside the Mutual Fund and Insurance modules — they flow into Asset Allocation and goal mapping automatically.'}
-            </p>
-          </div>
-        </div>
+    <div className="space-y-6 animate-fade-in">
+      {/* Header — the same blue icon tile + title as every other module, the
+          module's own sidebar icon, and what the open tab tracks below it. */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <PageTitle
+          icon={section === 'renewalsClaims' ? ShieldCheck : FileSpreadsheet}
+          title={section === 'renewalsClaims' ? 'Renewals & Claims' : 'Servicing'}
+          subtitle={TAB_DESCRIPTION[tab]}
+        />
 
         {mayCreate && (
-          tab === REC.COBR ? (
-            <button onClick={onNewCobr} className={btnPrimary + ' text-xs'}>
-              <Plus size={14} /> New COBR
-            </button>
-          ) : tab === REC.ASSET ? (
-            <button onClick={() => setEditor({ type: REC.ASSET, record: null })} className={btnPrimary + ' text-xs'}>
-              <Plus size={14} /> Add Asset
-            </button>
-          ) : (
-            <button onClick={() => setEditor({ type: tab, record: null })} className={btnPrimary + ' text-xs'}>
-              <Plus size={14} /> New {tab === REC.POLICY ? 'Policy' : active?.label.replace(/s$/, '')}
-            </button>
-          )
+          <div className="shrink-0">
+            {tab === REC.COBR ? (
+              <button onClick={onNewCobr} className={btnPrimary + ' text-xs'}>
+                <Plus size={14} /> New COBR
+              </button>
+            ) : tab === REC.ASSET ? (
+              <button onClick={() => setEditor({ type: REC.ASSET, record: null })} className={btnPrimary + ' text-xs'}>
+                <Plus size={14} /> Add Asset
+              </button>
+            ) : (
+              <button onClick={() => setEditor({ type: tab, record: null })} className={btnPrimary + ' text-xs'}>
+                <Plus size={14} /> New {tab === REC.POLICY ? 'Policy' : active?.label.replace(/s$/, '')}
+              </button>
+            )}
+          </div>
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1.5 flex-wrap border-b border-slate-100 dark:border-slate-800 pb-px">
-        {tabs.map((t) => {
-          const on = t.id === tab;
-          const badge = t.id === REC.COBR
-            ? cobrTasks.filter((x) => (x.stage || 'Open') !== 'Completed').length
-            : t.id === REC.ASSET ? assets.length // no stages — how many are recorded
-              : openCount(t.id);
-          return (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-t-xl text-xs font-bold transition-all cursor-pointer border-b-2 -mb-px ${
-                on
-                  ? 'border-violet-500 text-violet-600 dark:text-violet-400 bg-violet-50/50 dark:bg-violet-950/20'
-                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/40'
-              }`}
-            >
-              <t.icon size={13} /> {t.label}
-              {badge > 0 && (
-                <span className={`ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black ${
-                  on ? 'bg-violet-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                }`}>
-                  {badge > 99 ? '99+' : badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      {/* Tabs — the same pill bar as the Clients module's tabs. */}
+      <div className="max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="inline-flex items-center gap-1.5 p-1.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm transition-colors">
+          {tabs.map((t) => {
+            const on = t.id === tab;
+            const badge = t.id === REC.COBR
+              ? cobrTasks.filter((x) => (x.stage || 'Open') !== 'Completed').length
+              : t.id === REC.ASSET ? assets.length // no stages — how many are recorded
+                : openCount(t.id);
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+                  on
+                    ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/10 dark:shadow-none'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <t.icon size={14} /> {t.label}
+                {badge > 0 && (
+                  <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black normal-case tracking-normal ${
+                    on ? 'bg-white/25 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                  }`}>
+                    {badge > 99 ? '99+' : badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {tab === REC.ASSET && (
