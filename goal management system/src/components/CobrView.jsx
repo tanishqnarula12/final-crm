@@ -12,8 +12,8 @@
 // four tabs existed.
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Search, ArrowLeftRight, RefreshCw, ShieldAlert, Landmark, FileCheck2, Gem, CheckCircle2, FileSpreadsheet, ShieldCheck } from 'lucide-react';
-import { Card, btnPrimary, btnGhost, selectCls, CoolSelect, PageTitle } from './UI';
+import { Plus, Search, ArrowLeftRight, RefreshCw, ShieldAlert, Landmark, FileCheck2, Gem, CheckCircle2, FileSpreadsheet, ShieldCheck, X } from 'lucide-react';
+import { Card, btnPrimary, btnGhost, selectCls, inputCls, CoolSelect, PageTitle, Field, FilterToggle, FilterPanel, ActiveFilterChips } from './UI';
 import { loadTasks, saveTasks, loadOtherAssets, saveOtherAssets } from '../utils/tasks';
 import { assetShortName, fmtRupees } from '../utils/otherAssets';
 import OtherAssetsTab from './cobr/OtherAssetsTab';
@@ -519,18 +519,28 @@ export default function CobrView({
 function CobrTab({ cobrTasks, onOpenCobr }) {
   const [query, setQuery] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
+  const [groupLeader, setGroupLeader] = useState('');
+  const [applicant, setApplicant] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+
+  const leaderOptions = useMemo(() => [...new Set(cobrTasks.map((t) => t.groupLeader).filter(Boolean))].sort(), [cobrTasks]);
+  const applicantOptions = useMemo(() => [...new Set(cobrTasks
+    .filter((t) => !groupLeader || t.groupLeader === groupLeader)
+    .map((t) => t.applicant).filter(Boolean))].sort(), [cobrTasks, groupLeader]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return cobrTasks
       .filter((t) => stageFilter === 'all' || t.stage === stageFilter)
+      .filter((t) => !groupLeader || t.groupLeader === groupLeader)
+      .filter((t) => !applicant || t.applicant === applicant)
       .filter((t) => !q
         || (t.groupLeader || '').toLowerCase().includes(q)
         || (t.applicant || '').toLowerCase().includes(q)
         || (t.pan || '').toLowerCase().includes(q)
         || (teamName(t.assignedTo) || '').toLowerCase().includes(q))
       .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-  }, [cobrTasks, query, stageFilter]);
+  }, [cobrTasks, query, stageFilter, groupLeader, applicant]);
 
   const counts = useMemo(() => {
     const c = { all: cobrTasks.length };
@@ -538,25 +548,62 @@ function CobrTab({ cobrTasks, onOpenCobr }) {
     return c;
   }, [cobrTasks]);
 
+  const clearPanel = () => { setStageFilter('all'); setGroupLeader(''); setApplicant(''); };
+  const chips = [
+    groupLeader && { key: 'gl', label: `Group leader: ${groupLeader}`, onRemove: () => { setGroupLeader(''); setApplicant(''); } },
+    applicant && { key: 'ap', label: `Applicant: ${applicant}`, onRemove: () => setApplicant('') },
+    stageFilter !== 'all' && { key: 'st', label: `Stage: ${stageFilter}`, onRemove: () => setStageFilter('all') },
+  ].filter(Boolean);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* Search + Filter (the filters live in the panel, as in Clients) */}
+      <div className="flex items-center gap-2.5 flex-wrap">
         <div className="relative flex-1 min-w-[220px] max-w-sm">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search group leader, applicant, PAN, assignee…"
-            className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            className={inputCls + ' pl-9'}
           />
         </div>
-        <div className="w-full sm:w-44">
-          <CoolSelect value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} className={selectCls + ' py-2 text-xs'}>
-            <option value="all">All Stages ({counts.all})</option>
-            {COBR_STAGES.map((s) => <option key={s} value={s}>{s} ({counts[s] || 0})</option>)}
-          </CoolSelect>
-        </div>
+        <FilterToggle open={showFilters} onClick={() => setShowFilters((s) => !s)} count={chips.length} />
+        {(query || chips.length > 0) && (
+          <button onClick={() => { setQuery(''); clearPanel(); }} className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer">
+            <X size={12} /> Clear
+          </button>
+        )}
       </div>
+
+      {showFilters ? (
+        <FilterPanel onClear={chips.length ? clearPanel : null}>
+          {leaderOptions.length > 0 && (
+            <Field label="Group Leader">
+              <CoolSelect value={groupLeader} onChange={(e) => { setGroupLeader(e.target.value); setApplicant(''); }} placeholder="All group leaders" className={selectCls}>
+                <option value="">All group leaders</option>
+                {leaderOptions.map((n) => <option key={n} value={n}>{n}</option>)}
+              </CoolSelect>
+            </Field>
+          )}
+          {applicantOptions.length > 0 && (
+            <Field label="Applicant">
+              <CoolSelect value={applicant} onChange={(e) => setApplicant(e.target.value)} placeholder="All applicants" className={selectCls}>
+                <option value="">All applicants</option>
+                {applicantOptions.map((n) => <option key={n} value={n}>{n}</option>)}
+              </CoolSelect>
+            </Field>
+          )}
+          <Field label="Stage">
+            <CoolSelect value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} className={selectCls}>
+              <option value="all">All Stages ({counts.all})</option>
+              {COBR_STAGES.map((s) => <option key={s} value={s}>{s} ({counts[s] || 0})</option>)}
+            </CoolSelect>
+          </Field>
+        </FilterPanel>
+      ) : (
+        <ActiveFilterChips chips={chips} onClearAll={clearPanel} />
+      )}
 
       <Card className="p-0 overflow-hidden">
         {filtered.length === 0 ? (

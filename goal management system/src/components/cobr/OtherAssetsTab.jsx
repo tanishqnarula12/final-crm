@@ -1,11 +1,12 @@
 // Servicing → Other Assets: the list. Quick filters (All / Financial /
-// Physical), search (applicant, PAN, group leader, asset type) and filters
-// for group leader, applicant, category, sub-type and created date. Same look
+// Physical), search (applicant, PAN, group leader, asset type) and a Filter
+// panel (as in Clients) for group leader, applicant, category, sub-type and
+// created date; while it's closed the active filters show as chips. Same look
 // as the other Servicing registers (cobr/RecordTable.jsx): a table on wider
 // screens, one card per asset on phones. Clicking an asset opens it.
 import { useMemo, useState } from 'react';
 import { Search, X, Eye, Pencil, Trash2, Paperclip } from 'lucide-react';
-import { Card, CoolSelect, selectCls, inputCls } from '../UI';
+import { Card, CoolSelect, selectCls, inputCls, Field, FilterToggle, FilterPanel, ActiveFilterChips } from '../UI';
 import { ASSET_CATEGORIES, categoryLabel, subTypesFor, fmtRupees, fmtDmy } from '../../utils/otherAssets';
 
 const QUICK = [{ id: 'all', label: 'All' }, { id: 'financial', label: 'Financial Assets' }, { id: 'physical', label: 'Physical Assets' }];
@@ -18,6 +19,7 @@ export default function OtherAssetsTab({ assets = [], onOpen, onEdit, onDelete, 
   const [subType, setSubType] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
 
   const leaders = useMemo(() => {
     const m = new Map();
@@ -53,6 +55,17 @@ export default function OtherAssetsTab({ assets = [], onOpen, onEdit, onDelete, 
   const total = filtered.reduce((s, a) => s + (Number(a.amount) || 0), 0);
   const filtersActive = query || category !== 'all' || groupLeaderId || applicant || subType || from || to;
   const clearAll = () => { setQuery(''); setCategory('all'); setGroupLeaderId(''); setApplicant(''); setSubType(''); setFrom(''); setTo(''); };
+  // What the Filter panel holds (everything but the search box).
+  const clearPanel = () => { setCategory('all'); setGroupLeaderId(''); setApplicant(''); setSubType(''); setFrom(''); setTo(''); };
+  const leaderName = leaders.find(([id]) => id === groupLeaderId)?.[1] || '';
+  const chips = [
+    groupLeaderId && { key: 'gl', label: `Group leader: ${leaderName}`, onRemove: () => { setGroupLeaderId(''); setApplicant(''); } },
+    applicant && { key: 'ap', label: `Applicant: ${applicant}`, onRemove: () => setApplicant('') },
+    category !== 'all' && { key: 'cat', label: `Category: ${categoryLabel(category)}`, onRemove: () => setCategory('all') },
+    subType && { key: 'st', label: `Sub-type: ${subType}`, onRemove: () => setSubType('') },
+    (from || to) && { key: 'dt', label: `Created: ${from ? fmtDmy(from) : '…'} – ${to ? fmtDmy(to) : '…'}`, onRemove: () => { setFrom(''); setTo(''); } },
+  ].filter(Boolean);
+  const panelCount = chips.length;
   const pickCategory = (c) => { setCategory(c); if (c !== 'all' && subType && !subTypesFor(c).some((s) => s.label === subType)) setSubType(''); };
 
   const actions = (a) => (
@@ -95,57 +108,62 @@ export default function OtherAssetsTab({ assets = [], onOpen, onEdit, onDelete, 
         })}
       </div>
 
-      {/* Search + filters */}
-      <div className="flex items-end gap-3 flex-wrap">
+      {/* Search + Filter (the filters live in the panel, as in Clients) */}
+      <div className="flex items-center gap-2.5 flex-wrap">
         <div className="relative flex-1 min-w-[220px] max-w-sm">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search applicant, PAN, group leader, asset type…"
-            className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            className={inputCls + ' pl-9'}
           />
         </div>
-        <div className="w-full sm:w-48">
-          <CoolSelect value={groupLeaderId} onChange={(e) => { setGroupLeaderId(e.target.value); setApplicant(''); }} placeholder="All group leaders" className={selectCls + ' py-2 text-xs'}>
-            <option value="">All group leaders</option>
-            {leaders.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-          </CoolSelect>
-        </div>
-        <div className="w-full sm:w-44">
-          <CoolSelect value={applicant} onChange={(e) => setApplicant(e.target.value)} placeholder="All applicants" className={selectCls + ' py-2 text-xs'}>
-            <option value="">All applicants</option>
-            {applicants.map((n) => <option key={n} value={n}>{n}</option>)}
-          </CoolSelect>
-        </div>
-        <div className="w-full sm:w-40">
-          <CoolSelect searchable={false} value={category === 'all' ? '' : category} onChange={(e) => pickCategory(e.target.value || 'all')} placeholder="All categories" className={selectCls + ' py-2 text-xs'}>
-            <option value="">All categories</option>
-            {ASSET_CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-          </CoolSelect>
-        </div>
-        <div className="w-full sm:w-52">
-          <CoolSelect value={subType} onChange={(e) => setSubType(e.target.value)} placeholder="All sub-types" className={selectCls + ' py-2 text-xs'}>
-            <option value="">All sub-types</option>
-            {subTypeOptions.map((s) => <option key={s.label} value={s.label}>{s.label}</option>)}
-          </CoolSelect>
-        </div>
-        <div className="flex flex-wrap items-end gap-2 w-full sm:w-auto">
-          <div className="flex-1 min-w-[120px] sm:flex-none">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Created from</label>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputCls + ' py-1.5 text-xs w-full sm:w-[150px]'} />
-          </div>
-          <div className="flex-1 min-w-[120px] sm:flex-none">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">to</label>
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inputCls + ' py-1.5 text-xs w-full sm:w-[150px]'} />
-          </div>
-        </div>
+        <FilterToggle open={showFilters} onClick={() => setShowFilters((s) => !s)} count={panelCount} />
         {filtersActive && (
-          <button onClick={clearAll} className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer pb-2">
+          <button onClick={clearAll} className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer">
             <X size={12} /> Clear
           </button>
         )}
       </div>
+
+      {showFilters ? (
+        <FilterPanel onClear={panelCount ? clearPanel : null}>
+          <Field label="Group Leader">
+            <CoolSelect value={groupLeaderId} onChange={(e) => { setGroupLeaderId(e.target.value); setApplicant(''); }} placeholder="All group leaders" className={selectCls}>
+              <option value="">All group leaders</option>
+              {leaders.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            </CoolSelect>
+          </Field>
+          <Field label="Applicant">
+            <CoolSelect value={applicant} onChange={(e) => setApplicant(e.target.value)} placeholder="All applicants" className={selectCls}>
+              <option value="">All applicants</option>
+              {applicants.map((n) => <option key={n} value={n}>{n}</option>)}
+            </CoolSelect>
+          </Field>
+          <Field label="Asset Category">
+            <CoolSelect searchable={false} value={category === 'all' ? '' : category} onChange={(e) => pickCategory(e.target.value || 'all')} placeholder="All categories" className={selectCls}>
+              <option value="">All categories</option>
+              {ASSET_CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </CoolSelect>
+          </Field>
+          <Field label="Asset Sub-Type">
+            <CoolSelect value={subType} onChange={(e) => setSubType(e.target.value)} placeholder="All sub-types" className={selectCls}>
+              <option value="">All sub-types</option>
+              {subTypeOptions.map((s) => <option key={s.label} value={s.label}>{s.label}</option>)}
+            </CoolSelect>
+          </Field>
+          <Field label="Created Date">
+            <div className="flex items-center gap-2">
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="Created from" className={inputCls + ' min-w-0'} />
+              <span className="text-slate-400 dark:text-slate-600">–</span>
+              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="Created to" className={inputCls + ' min-w-0'} />
+            </div>
+          </Field>
+        </FilterPanel>
+      ) : (
+        <ActiveFilterChips chips={chips} onClearAll={clearPanel} />
+      )}
 
       <Card className="p-0 overflow-hidden">
         {filtered.length === 0 ? (

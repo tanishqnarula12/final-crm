@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, X, Search, Check, Filter, Loader2 } from 'lucide-react';
+import { ChevronDown, X, Search, Check, Filter, Loader2, SlidersHorizontal } from 'lucide-react';
 import { avatarColor, initials } from '../utils/calc';
 import { teamPhoto } from '../services/team';
 import { useBackLayer } from '../utils/backNav';
@@ -165,6 +165,67 @@ export function PageTitle({ icon: Icon, title, subtitle }) {
         <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">{title}</h2>
         {subtitle && <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 font-medium">{subtitle}</p>}
       </div>
+    </div>
+  );
+}
+
+// "Filter" toggle + its panel + the active-filter chips — the Clients
+// directory's filter pattern, shared so other lists filter the same way.
+export function FilterToggle({ open, onClick, count = 0 }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={open}
+      className={`relative inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider border rounded-xl transition-all cursor-pointer shrink-0 ${
+        open
+          ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-900/60 shadow-sm'
+          : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
+      }`}
+    >
+      <SlidersHorizontal size={14} /> Filter
+      {count > 0 && (
+        <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full bg-blue-600 dark:bg-blue-500 text-white">
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+export function FilterPanel({ children, onClear }) {
+  return (
+    <Card className="p-5 sm:p-6 border border-blue-100 dark:border-blue-900/40 bg-blue-50/10 dark:bg-blue-950/5 shadow-md animate-scale-up">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{children}</div>
+      {onClear && (
+        <div className="flex justify-end mt-4">
+          <button type="button" onClick={onClear} className={btnGhost}>
+            <X size={13} /> Clear filters
+          </button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// chips: [{ key, label, onRemove }]
+export function ActiveFilterChips({ chips, onClearAll }) {
+  if (!chips.length) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {chips.map((c) => (
+        <span key={c.key} className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full text-[11px] font-bold bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900/50">
+          {c.label}
+          <button type="button" onClick={c.onRemove} title="Remove this filter" className="p-0.5 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/50 cursor-pointer">
+            <X size={11} />
+          </button>
+        </span>
+      ))}
+      {chips.length > 1 && onClearAll && (
+        <button type="button" onClick={onClearAll} className="text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer px-1">
+          Clear all
+        </button>
+      )}
     </div>
   );
 }
