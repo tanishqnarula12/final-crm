@@ -167,17 +167,6 @@ export default function LeadsView({
     setEditing(null);
   };
 
-  const handleSimulate = () => {
-    const samples = [
-      { name: 'Ananya Rao', mobile: '+91 99' + Math.floor(10000000 + Math.random() * 89999999), email: 'ananya@example.com', clientType: 'HNI', relatedTo: 'Investment Planning', remarks: 'Interested in SIP planning', city: 'Bengaluru' },
-      { name: 'Karthik Menon', mobile: '+91 98' + Math.floor(10000000 + Math.random() * 89999999), email: 'karthik@example.com', clientType: 'Retail', relatedTo: 'Risk Mitigation', remarks: 'Term insurance enquiry', city: 'Kochi' },
-      { name: 'Diya Shah', mobile: '+91 97' + Math.floor(10000000 + Math.random() * 89999999), email: 'diya@example.com', clientType: 'Ultra HNI', relatedTo: 'Wealth Creation', remarks: 'Portfolio review', city: 'Mumbai' },
-    ];
-    const pick = samples[Math.floor(Math.random() * samples.length)];
-    intakeLead(pick, 'Website', 'Website');
-    refresh();
-  };
-
   const handleDelete = (id) => {
     const l = loadLeads().find((x) => x.id === id) || {};
     if (!confirmDelete('lead', leadName(l) || l.mobile, [l.stage && `Stage: ${l.stage}`, l.mobile])) return;
@@ -209,14 +198,9 @@ export default function LeadsView({
             <button onClick={() => setViewMode('card')} title="Card view" className={`p-1.5 rounded-lg cursor-pointer transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><LayoutGrid size={15} /></button>
           </div>
           {mayCreateLead && (
-            <>
-              <button onClick={handleSimulate} title="Simulate an inbound website lead (demo)" className={btnSecondary + ' shrink-0 flex-1 md:flex-none'}>
-                <Zap size={14} /> Simulate Web Lead
-              </button>
-              <button onClick={() => { setEditing(null); setShowForm(true); }} className={btnPrimary + ' shrink-0 flex-1 md:flex-none'}>
-                <Plus size={14} /> New Lead
-              </button>
-            </>
+            <button onClick={() => { setEditing(null); setShowForm(true); }} className={btnPrimary + ' shrink-0 flex-1 md:flex-none'}>
+              <Plus size={14} /> New Lead
+            </button>
           )}
         </div>
       </div>
