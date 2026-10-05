@@ -193,11 +193,22 @@ export function FilterToggle({ open, onClick, count = 0 }) {
   );
 }
 
-export function FilterPanel({ children, onClear }) {
+// `actions` (e.g. a register's Excel Download / Upload) sit along the panel's
+// foot, left of Clear filters, under a divider.
+export function FilterPanel({ children, onClear, actions = null }) {
   return (
     <Card className="p-5 sm:p-6 border border-blue-100 dark:border-blue-900/40 bg-blue-50/10 dark:bg-blue-950/5 shadow-md animate-scale-up">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{children}</div>
-      {onClear && (
+      {actions ? (
+        <div className="flex flex-wrap items-center gap-2 mt-5 pt-4 border-t border-slate-200/70 dark:border-slate-800">
+          {actions}
+          {onClear && (
+            <button type="button" onClick={onClear} className={btnGhost + ' ml-auto'}>
+              <X size={13} /> Clear filters
+            </button>
+          )}
+        </div>
+      ) : onClear && (
         <div className="flex justify-end mt-4">
           <button type="button" onClick={onClear} className={btnGhost}>
             <X size={13} /> Clear filters

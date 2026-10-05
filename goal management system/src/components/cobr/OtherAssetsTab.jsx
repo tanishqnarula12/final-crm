@@ -1,15 +1,46 @@
 // Servicing → Other Assets: the list. Quick filters (All / Financial /
 // Physical), search (applicant, PAN, group leader, asset type) and a Filter
 // panel (as in Clients) for group leader, applicant, category, sub-type and
-// created date; while it's closed the active filters show as chips. Same look
+// created date, with Download Excel of what's shown along its foot; while
+// it's closed the active filters show as chips. Same look
 // as the other Servicing registers (cobr/RecordTable.jsx): a table on wider
 // screens, one card per asset on phones. Clicking an asset opens it.
 import { useMemo, useState } from 'react';
 import { Search, X, Eye, Pencil, Trash2, Paperclip } from 'lucide-react';
 import { Card, CoolSelect, selectCls, inputCls, Field, FilterToggle, FilterPanel, ActiveFilterChips } from '../UI';
 import { ASSET_CATEGORIES, categoryLabel, subTypesFor, fmtRupees, fmtDmy } from '../../utils/otherAssets';
+import { ExcelActions } from './ExcelTools';
 
 const QUICK = [{ id: 'all', label: 'All' }, { id: 'financial', label: 'Financial Assets' }, { id: 'physical', label: 'Physical Assets' }];
+
+// Download Excel (in the Filter panel) — the table's columns plus remarks.
+const EXCEL_EXPORT = {
+  sheetName: 'Other Assets',
+  fields: [
+    { key: 'groupLeader', label: 'Group Leader' },
+    { key: 'applicant', label: 'Applicant' },
+    { key: 'applicantRelation', label: 'Relation' },
+    { key: 'pan', label: 'Applicant PAN' },
+    { key: 'category', label: 'Asset Category' },
+    { key: 'assetSubType', label: 'Asset Sub-Type' },
+    { key: 'amount', label: 'Current Asset Value' },
+    { key: 'assetDate', label: 'Created Date' },
+    { key: 'attachments', label: 'Attachments' },
+    { key: 'remarks', label: 'Remarks' },
+  ],
+};
+const excelRow = (a) => ({
+  groupLeader: a.groupLeader || '',
+  applicant: a.applicant || '',
+  applicantRelation: a.applicantRelation || '',
+  pan: a.pan || '',
+  category: a.assetCategory ? categoryLabel(a.assetCategory) : '',
+  assetSubType: a.assetSubType || '',
+  amount: Number(a.amount) || 0,
+  assetDate: a.assetDate || '',
+  attachments: (a.attachments || []).length,
+  remarks: a.remarks || '',
+});
 
 export default function OtherAssetsTab({ assets = [], onOpen, onEdit, onDelete, canEditFor, canDeleteFor }) {
   const [query, setQuery] = useState('');
@@ -122,7 +153,7 @@ export default function OtherAssetsTab({ assets = [], onOpen, onEdit, onDelete, 
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search applicant, PAN, group leader, asset type…"
-            className={inputCls + ' pl-9 w-full md:w-80'}
+            className={inputCls + ' pl-9 w-full md:w-80 xl:w-96'}
           />
         </div>
         <FilterToggle open={showFilters} onClick={() => setShowFilters((s) => !s)} count={panelCount} />
@@ -130,7 +161,7 @@ export default function OtherAssetsTab({ assets = [], onOpen, onEdit, onDelete, 
       </div>
 
       {showFilters ? (
-        <FilterPanel onClear={panelCount ? clearPanel : null}>
+        <FilterPanel onClear={panelCount ? clearPanel : null} actions={<ExcelActions spec={EXCEL_EXPORT} rows={filtered.map(excelRow)} />}>
           <Field label="Group Leader">
             <CoolSelect value={groupLeaderId} onChange={(e) => { setGroupLeaderId(e.target.value); setApplicant(''); }} placeholder="All group leaders" className={selectCls}>
               <option value="">All group leaders</option>

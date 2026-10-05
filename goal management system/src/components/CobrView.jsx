@@ -29,6 +29,7 @@ import { fmtINR } from '../utils/calc';
 import { canDo } from '../utils/permissions';
 import { confirmDelete, filesNote } from '../utils/confirmDelete';
 import RecordTable from './cobr/RecordTable';
+import { ExcelActions } from './cobr/ExcelTools';
 import RenewalModal from './cobr/RenewalModal';
 import ClaimModal from './cobr/ClaimModal';
 import FixedDepositModal from './cobr/FixedDepositModal';
@@ -191,6 +192,43 @@ export default function CobrView({
 
   const active = TABS.find((t) => t.id === tab);
 
+  // Tabs — the same pill bar as the Clients module's tabs. Renewals & Claims
+  // (two tabs) puts it at the head of its search + Filter row; Servicing's
+  // four tabs keep a row of their own.
+  const tabBar = (
+    <div className="inline-flex items-center gap-1.5 p-1.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm transition-colors">
+      {tabs.map((t) => {
+        const on = t.id === tab;
+        const badge = t.id === REC.COBR
+          ? cobrTasks.filter((x) => (x.stage || 'Open') !== 'Completed').length
+          : t.id === REC.ASSET ? assets.length // no stages — how many are recorded
+            : openCount(t.id);
+        return (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+              on
+                ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/10 dark:shadow-none'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <t.icon size={14} /> {t.label}
+            {badge > 0 && (
+              <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black normal-case tracking-normal ${
+                on ? 'bg-white/25 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+              }`}>
+                {badge > 99 ? '99+' : badge}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+  const tabsInSearchRow = section === 'renewalsClaims';
+  const rowTabs = tabsInSearchRow ? tabBar : null;
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header — the same blue icon tile + title as every other module, the
@@ -221,38 +259,9 @@ export default function CobrView({
         )}
       </div>
 
-      {/* Tabs — the same pill bar as the Clients module's tabs. */}
-      <div className="max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="inline-flex items-center gap-1.5 p-1.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm transition-colors">
-          {tabs.map((t) => {
-            const on = t.id === tab;
-            const badge = t.id === REC.COBR
-              ? cobrTasks.filter((x) => (x.stage || 'Open') !== 'Completed').length
-              : t.id === REC.ASSET ? assets.length // no stages — how many are recorded
-                : openCount(t.id);
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer shrink-0 whitespace-nowrap ${
-                  on
-                    ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/10 dark:shadow-none'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <t.icon size={14} /> {t.label}
-                {badge > 0 && (
-                  <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black normal-case tracking-normal ${
-                    on ? 'bg-white/25 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                  }`}>
-                    {badge > 99 ? '99+' : badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      {!tabsInSearchRow && (
+        <div className="max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{tabBar}</div>
+      )}
 
       {tab === REC.ASSET && (
         <OtherAssetsTab
@@ -272,6 +281,7 @@ export default function CobrView({
       {tab === REC.RENEWAL && (
         <RecordTable
           type={REC.RENEWAL}
+          tabs={rowTabs}
           rows={rowsFor[REC.RENEWAL]}
           stages={RENEWAL_STAGES}
           searchFields={['applicant', 'groupLeader', 'pan', 'policyNumber', 'policyName', 'insuranceType']}
@@ -320,6 +330,7 @@ export default function CobrView({
       {tab === REC.CLAIM && (
         <RecordTable
           type={REC.CLAIM}
+          tabs={rowTabs}
           rows={rowsFor[REC.CLAIM]}
           stages={CLAIM_STAGES}
           searchFields={['applicant', 'groupLeader', 'pan', 'policyNumber', 'claimType', 'insuranceType']}
@@ -365,6 +376,7 @@ export default function CobrView({
       {tab === REC.FD && (
         <RecordTable
           type={REC.FD}
+          tabs={rowTabs}
           rows={rowsFor[REC.FD]}
           stages={FD_STAGES}
           searchFields={['applicant', 'groupLeader', 'pan', 'bankName', 'jointHolderName', 'jointHolderPan']}
@@ -408,6 +420,7 @@ export default function CobrView({
       {tab === REC.POLICY && (
         <RecordTable
           type={REC.POLICY}
+          tabs={rowTabs}
           rows={rowsFor[REC.POLICY]}
           stages={POLICY_STAGES}
           searchFields={['applicant', 'groupLeader', 'pan', 'companyName', 'policyName', 'policyNumber', 'insuranceType']}
@@ -512,6 +525,47 @@ export default function CobrView({
   );
 }
 
+// COBR's Download Excel (in the Filter panel) — one row per request, the
+// table's columns; Done / Rejected / Pending only once Completed, as there.
+const pad2 = (n) => String(n).padStart(2, '0');
+const localDay = (iso) => {
+  const t = iso ? new Date(iso) : null;
+  return t && !Number.isNaN(t.getTime()) ? `${t.getFullYear()}-${pad2(t.getMonth() + 1)}-${pad2(t.getDate())}` : '';
+};
+const COBR_EXCEL_EXPORT = {
+  sheetName: 'COBR',
+  fields: [
+    { key: 'groupLeader', label: 'Group Leader' },
+    { key: 'applicant', label: 'Applicant' },
+    { key: 'pan', label: 'PAN' },
+    { key: 'cobrType', label: 'Type' },
+    { key: 'assignedTo', label: 'Assigned To' },
+    { key: 'stage', label: 'Stage' },
+    { key: 'total', label: 'Total' },
+    { key: 'done', label: 'Done' },
+    { key: 'rejected', label: 'Rejected' },
+    { key: 'pending', label: 'Pending' },
+    { key: 'createdDate', label: 'Created Date' },
+  ],
+};
+const cobrExcelRow = (t) => {
+  const totals = cobrTotals(t.cobrEntries);
+  const completed = t.stage === 'Completed';
+  return {
+    groupLeader: t.groupLeader || '',
+    applicant: t.applicant || '',
+    pan: t.pan || '',
+    cobrType: t.cobrType || '',
+    assignedTo: t.assignedTo,
+    stage: t.stage || 'Open',
+    total: totals.total,
+    done: completed ? totals.done : '',
+    rejected: completed ? totals.rejected : '',
+    pending: completed ? totals.pending : '',
+    createdDate: localDay(t.createdAt),
+  };
+};
+
 // ---------------------------------------------------------------------------
 // The original COBR list — unchanged behaviour, just lifted into its own
 // component so the tab bar can sit above it.
@@ -577,7 +631,7 @@ function CobrTab({ cobrTasks, onOpenCobr }) {
       </div>
 
       {showFilters ? (
-        <FilterPanel onClear={chips.length ? clearPanel : null}>
+        <FilterPanel onClear={chips.length ? clearPanel : null} actions={<ExcelActions spec={COBR_EXCEL_EXPORT} rows={filtered.map(cobrExcelRow)} />}>
           {leaderOptions.length > 0 && (
             <Field label="Group Leader">
               <CoolSelect value={groupLeader} onChange={(e) => { setGroupLeader(e.target.value); setApplicant(''); }} placeholder="All group leaders" className={selectCls}>

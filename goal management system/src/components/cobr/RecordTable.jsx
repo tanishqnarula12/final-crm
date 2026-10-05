@@ -8,7 +8,7 @@ import React, { useMemo, useState } from 'react';
 import { Search, ArrowUp, ArrowDown, X, Trash2, Filter } from 'lucide-react';
 import { Card, selectCls, inputCls, CoolSelect, Field, FilterToggle, FilterPanel, ActiveFilterChips } from '../UI';
 import { stageBadgeCls } from '../../utils/cobrModules';
-import { ExcelToolbar } from './ExcelTools';
+import { ExcelActions } from './ExcelTools';
 
 // First/last day of the current calendar month as YYYY-MM-DD, in local
 // time — never toISOString() (UTC-based; near midnight IST it can land on
@@ -40,6 +40,7 @@ export default function RecordTable({
   canImportExcel = false,
   onDelete = null, // (record) => void — omit to hide the delete column entirely
   canDelete = null, // (record) => boolean
+  tabs = null, // the module's tab bar, to lead the search row
 }) {
   const [query, setQuery] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
@@ -132,34 +133,59 @@ export default function RecordTable({
     dateField && (from || to) && { key: 'dt', label: `${dateField.label}: ${dmy(from)} – ${dmy(to)}`, onRemove: clearDates },
   ].filter(Boolean);
 
+  const clearButton = filtersActive && (
+    <button
+      onClick={() => { setQuery(''); clearPanel(); }}
+      className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer shrink-0"
+    >
+      <X size={12} /> Clear
+    </button>
+  );
+  const filterToggle = <FilterToggle open={showFilters} onClick={() => setShowFilters((s) => !s)} count={chips.length} />;
+
   return (
     <div className="space-y-4">
-      {/* Search + Filter (the filters live in the panel, as in Clients) */}
-      <div className="flex items-center gap-2.5 flex-wrap">
-        <div className="relative flex-1 min-w-[220px] max-w-sm">
-          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={searchPlaceholder}
-            className={inputCls + ' pl-9'}
-          />
+      {/* Search + Filter (the filters and Excel live in the panel, as in
+          Clients). With `tabs` (Renewals & Claims) the module's tabs lead the
+          row and search + Filter sit at its right, as in Clients. */}
+      {tabs ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="min-w-0 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{tabs}</div>
+          <div className="flex items-center gap-2.5 w-full md:w-auto md:ml-auto">
+            {clearButton}
+            <div className="relative flex-1 min-w-0 md:flex-none">
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={searchPlaceholder}
+                className={inputCls + ' pl-9 w-full md:w-80 xl:w-96'}
+              />
+            </div>
+            {filterToggle}
+          </div>
         </div>
+      ) : (
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="relative flex-1 min-w-[220px] max-w-sm">
+            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={searchPlaceholder}
+              className={inputCls + ' pl-9'}
+            />
+          </div>
+          {filterToggle}
+          {clearButton}
+        </div>
+      )}
 
-        <FilterToggle open={showFilters} onClick={() => setShowFilters((s) => !s)} count={chips.length} />
-
-        {filtersActive && (
-          <button
-            onClick={() => { setQuery(''); clearPanel(); }}
-            className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
-          >
-            <X size={12} /> Clear
-          </button>
-        )}
-
-        {excelSpec && (
-          <div className="ml-auto">
-            <ExcelToolbar
+      {showFilters ? (
+        <FilterPanel
+          onClear={chips.length || fromInput || toInput ? clearPanel : null}
+          actions={excelSpec && (
+            <ExcelActions
               spec={excelSpec}
               rows={filtered}
               allRows={rows}
@@ -167,12 +193,8 @@ export default function RecordTable({
               onImport={onImportRecords}
               canImport={canImportExcel}
             />
-          </div>
-        )}
-      </div>
-
-      {showFilters ? (
-        <FilterPanel onClear={chips.length || fromInput || toInput ? clearPanel : null}>
+          )}
+        >
           {leaderOptions.length > 0 && (
             <Field label="Group Leader">
               <CoolSelect value={groupLeader} onChange={(e) => { setGroupLeader(e.target.value); setApplicant(''); }} placeholder="All group leaders" className={selectCls}>
