@@ -19,10 +19,10 @@
 // autosaves on every change to this browser's localStorage (kept per signed-in
 // user, so two people sharing a machine don't see each other's demo) — a
 // reload, switching modules or closing the browser mid-meeting loses nothing.
-// "Refresh" wipes it back to a blank demo in one click.
+// "Reset" wipes it back to a blank demo in one click.
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Presentation, RefreshCw, X } from 'lucide-react';
+import { Presentation, RotateCcw, X } from 'lucide-react';
 import ClientDetail from './ClientDetail';
 import GoalDetail from './GoalDetail';
 import { GoalFormModal } from './Modals';
@@ -126,7 +126,7 @@ export default function PlanningSandbox({ mode }) {
 
   // Back to a blank demo — goals, assumptions, asset allocation and name all
   // cleared, plus any open form or goal page closed.
-  const refresh = () => {
+  const reset = () => {
     clearSandbox();
     setSelectedGoalId(null);
     setShowGoalForm(false);
@@ -146,7 +146,7 @@ export default function PlanningSandbox({ mode }) {
               {mode === 'assets' ? 'Asset Allocation' : 'Goal Planner'} — demo mode
             </p>
             <p className="text-xs text-amber-800/80 dark:text-amber-300/70 mt-0.5">
-              For showing the calculations in a meeting. Autosaved on this device as you go; never saved to any client or lead. Refresh clears it for the next demo.
+              For showing the calculations in a meeting. Autosaved on this device as you go; never saved to any client or lead. Reset clears it for the next demo.
             </p>
             <p className="text-xs text-amber-800/80 dark:text-amber-300/70 mt-0.5">
               {mode === 'assets'
@@ -157,8 +157,8 @@ export default function PlanningSandbox({ mode }) {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button onClick={() => setShowDetailsForm(true)} className={btnSecondary}>Edit name</button>
-          <button onClick={refresh} className={btnSecondary} title="Clear everything in this demo and start fresh">
-            <RefreshCw size={14} /> Refresh
+          <button onClick={reset} className={btnSecondary} title="Clear everything in this demo and start fresh">
+            <RotateCcw size={14} /> Reset
           </button>
         </div>
       </div>
