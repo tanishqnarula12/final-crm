@@ -1735,7 +1735,7 @@ export default function App() {
                 title="Advisor Profile"
               >
                 {advisorProfile.photo ? (
-                  <img src={advisorProfile.photo} alt={advisorProfile.name} className="w-full h-full object-cover" />
+                  <img src={advisorProfile.photo} alt={advisorProfile.name} className="block w-full h-full aspect-square rounded-full object-cover" />
                 ) : (
                   initials(advisorProfile.name || 'NL')
                 )}
@@ -1785,7 +1785,7 @@ export default function App() {
                 <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-3 mb-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0 overflow-hidden">
                     {advisorProfile.photo ? (
-                      <img src={advisorProfile.photo} alt={advisorProfile.name} className="w-full h-full object-cover" />
+                      <img src={advisorProfile.photo} alt={advisorProfile.name} className="block w-full h-full aspect-square rounded-full object-cover" />
                     ) : (
                       initials(advisorProfile.name || 'NL')
                     )}
@@ -2670,7 +2670,7 @@ function ChatSidebar({
             title="Advisor Profile"
           >
             {advisorProfile.photo ? (
-              <img src={advisorProfile.photo} alt={advisorProfile.name} className="w-full h-full object-cover" />
+              <img src={advisorProfile.photo} alt={advisorProfile.name} className="block w-full h-full aspect-square rounded-full object-cover" />
             ) : (
               advisorProfile.name ? advisorProfile.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : 'NL'
             )}
@@ -2725,7 +2725,7 @@ function ChatSidebar({
           <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-3 mb-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0 overflow-hidden">
               {advisorProfile.photo ? (
-                <img src={advisorProfile.photo} alt={advisorProfile.name} className="w-full h-full object-cover" />
+                <img src={advisorProfile.photo} alt={advisorProfile.name} className="block w-full h-full aspect-square rounded-full object-cover" />
               ) : (
                 advisorProfile.name ? advisorProfile.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : 'NL'
               )}

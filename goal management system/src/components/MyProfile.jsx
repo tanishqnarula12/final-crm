@@ -24,7 +24,7 @@ function ProfileAvatar({ name, photo, size = 80 }) {
         src={photo}
         alt={name}
         style={{ width: size, height: size }}
-        className="rounded-full object-cover shrink-0"
+        className="block aspect-square rounded-full object-cover shrink-0"
       />
     );
   }
@@ -55,7 +55,9 @@ function tenureLabel(since) {
 }
 
 function groupDigits(value, groupSize = 4) {
-  const digits = (value || '').replace(/\D/g, '');
+  // Keeps the X's of a masked number — stripping them made a masked Aadhaar
+  // read as just its last four digits ("1234").
+  const digits = (value || '').replace(/[^\dX]/g, '');
   return digits.replace(new RegExp(`(.{${groupSize}})`, 'g'), '$1 ').trim();
 }
 
@@ -64,6 +66,14 @@ function maskDigits(value, keep = 4) {
   if (digits.length <= keep) return groupDigits(digits);
   const masked = 'X'.repeat(digits.length - keep) + digits.slice(-keep);
   return groupDigits(masked);
+}
+
+// PAN is letters + digits (ABCDE1234F) — shown whole when revealed, else
+// only its last four characters, like Aadhaar.
+const showPan = (value) => String(value || '').replace(/\s/g, '').toUpperCase();
+function maskPan(value, keep = 4) {
+  const pan = showPan(value);
+  return pan.length <= keep ? pan : 'X'.repeat(pan.length - keep) + pan.slice(-keep);
 }
 
 const ACCENTS = {
@@ -108,7 +118,7 @@ function InfoRow({ icon: Icon, accent, label, value, multiline, emptyText = 'Not
   );
 }
 
-function MaskedRow({ icon: Icon, accent, label, rawValue, revealed, onToggle, emptyText = 'Not configured' }) {
+function MaskedRow({ icon: Icon, accent, label, rawValue, revealed, onToggle, emptyText = 'Not configured', show = groupDigits, mask = maskDigits }) {
   if (!rawValue) {
     return <InfoRow icon={Icon} accent={accent} label={label} value="" emptyText={emptyText} />;
   }
@@ -121,7 +131,7 @@ function MaskedRow({ icon: Icon, accent, label, rawValue, revealed, onToggle, em
         <span className="font-semibold block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">{label}</span>
         <div className="flex items-center gap-2">
           <span className="font-bold text-slate-800 dark:text-slate-200 text-xs font-mono tracking-wider">
-            {revealed ? groupDigits(rawValue) : maskDigits(rawValue)}
+            {revealed ? show(rawValue) : mask(rawValue)}
           </span>
           <button
             type="button"
@@ -143,6 +153,7 @@ export default function MyProfileView() {
   const [pendingPhoto, setPendingPhoto] = useState(null);
   const [cropSrc, setCropSrc] = useState(null); // raw, uncropped selection — staged for AvatarCropperModal
   const [showAadhar, setShowAadhar] = useState(false);
+  const [showPanNo, setShowPanNo] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -220,8 +231,8 @@ export default function MyProfileView() {
 
         <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="relative group">
-              <div className="ring-4 ring-white/70 dark:ring-slate-800/70 rounded-full shadow-lg overflow-hidden">
+            <div className="relative group shrink-0">
+              <div className="w-20 h-20 ring-4 ring-white/70 dark:ring-slate-800/70 rounded-full shadow-lg overflow-hidden">
                 <ProfileAvatar name={profile.name} photo={pendingPhoto || profile.photo} size={80} />
               </div>
               <button
@@ -300,7 +311,7 @@ export default function MyProfileView() {
           <SectionBox accent="blue" icon={IdCard} title="Identity & Personal Details">
             <div className="space-y-3">
               <InfoRow icon={Calendar} accent="blue" label="Date of Birth" value={profile.dob ? fmtDate(profile.dob) : ''} />
-              <InfoRow icon={IdCard} accent="blue" label="PAN No." value={profile.pan} />
+              <MaskedRow icon={IdCard} accent="blue" label="PAN No." rawValue={profile.pan} revealed={showPanNo} onToggle={() => setShowPanNo(v => !v)} show={showPan} mask={maskPan} />
               <MaskedRow icon={Fingerprint} accent="blue" label="Aadhar No." rawValue={profile.aadhar} revealed={showAadhar} onToggle={() => setShowAadhar(v => !v)} />
               <InfoRow icon={Heart} accent="blue" label="Marital Status" value={profile.maritalStatus} />
               <InfoRow icon={Stethoscope} accent="blue" label="Disease, If Any" value={profile.disease} emptyText="None reported" />

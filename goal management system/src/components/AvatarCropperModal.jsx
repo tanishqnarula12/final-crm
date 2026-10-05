@@ -4,8 +4,15 @@ import { X, ZoomIn, Check } from 'lucide-react';
 import { btnPrimary, btnGhost } from './UI';
 import { useBackLayer } from '../utils/backNav';
 
-const VIEWPORT = 300; // preview circle size, css px
+const MAX_VIEWPORT = 300; // preview circle size, css px
 const OUTPUT = 480; // exported square image size, px
+// On a narrow phone the card is the screen less its 16px margins (at most
+// 384px), less 20px padding each side — the circle shrinks to fit inside it
+// instead of spilling past the card's edge.
+const fitViewport = () => {
+  const screen = typeof window !== 'undefined' ? window.innerWidth : 400;
+  return Math.max(200, Math.min(MAX_VIEWPORT, Math.min(screen - 32, 384) - 40));
+};
 
 // A small drag-to-pan + zoom-to-fit avatar cropper. Takes a raw (uncropped)
 // data URL — whatever the file input just read — and returns a square,
@@ -15,6 +22,7 @@ const OUTPUT = 480; // exported square image size, px
 // instead of whatever crop/orientation the source file happened to have.
 export default function AvatarCropperModal({ src, onCancel, onConfirm }) {
   useBackLayer(true, onCancel); // phone/browser Back closes it
+  const [VIEWPORT] = useState(fitViewport);
   const [natural, setNatural] = useState(null); // { w, h }
   const [scale, setScale] = useState(1);
   const [minScale, setMinScale] = useState(1);
@@ -37,7 +45,7 @@ export default function AvatarCropperModal({ src, onCancel, onConfirm }) {
       setOffset({ x: (VIEWPORT - w * min) / 2, y: (VIEWPORT - h * min) / 2 });
     };
     img.src = src;
-  }, [src]);
+  }, [src, VIEWPORT]);
 
   const clamp = (nextOffset, nextScale) => {
     if (!natural) return nextOffset;
