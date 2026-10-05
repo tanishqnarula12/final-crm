@@ -85,7 +85,9 @@ export default function OtherAssetsTab({ assets = [], onOpen, onEdit, onDelete, 
 
   return (
     <div className="space-y-4">
-      {/* Quick filters */}
+      {/* Quick filters, then search + Filter on the same row (the filters
+          live in the panel, as in Clients) */}
+      <div className="flex items-center gap-x-3 gap-y-2.5 flex-wrap">
       <div className="flex items-center gap-1.5 flex-wrap">
         {QUICK.map((qf) => {
           const n = qf.id === 'all' ? assets.length : assets.filter((a) => a.assetCategory === qf.id).length;
@@ -108,23 +110,23 @@ export default function OtherAssetsTab({ assets = [], onOpen, onEdit, onDelete, 
         })}
       </div>
 
-      {/* Search + Filter (the filters live in the panel, as in Clients) */}
-      <div className="flex items-center gap-2.5 flex-wrap">
-        <div className="relative flex-1 min-w-[220px] max-w-sm">
+      <div className="flex items-center gap-2.5 w-full md:w-auto md:ml-auto">
+        {filtersActive && (
+          <button onClick={clearAll} className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer shrink-0">
+            <X size={12} /> Clear
+          </button>
+        )}
+        <div className="relative flex-1 min-w-0 md:flex-none">
           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search applicant, PAN, group leader, asset type…"
-            className={inputCls + ' pl-9'}
+            className={inputCls + ' pl-9 w-full md:w-80'}
           />
         </div>
         <FilterToggle open={showFilters} onClick={() => setShowFilters((s) => !s)} count={panelCount} />
-        {filtersActive && (
-          <button onClick={clearAll} className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer">
-            <X size={12} /> Clear
-          </button>
-        )}
+      </div>
       </div>
 
       {showFilters ? (
