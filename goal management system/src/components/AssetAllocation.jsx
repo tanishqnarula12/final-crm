@@ -4,7 +4,7 @@ import {
   TrendingUp, Home, CreditCard, MessageSquare, History, ArrowRight, Save, Layers, Download, Target
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { Card, Avatar, btnPrimary, btnSecondary, btnGhost, inputCls } from './UI';
+import { Card, Avatar, btnPrimary, btnSecondary, btnGhost, inputCls, PageTitle } from './UI';
 import { fmtINR, fmtFull, fmtDate } from '../utils/calc';
 import {
   normalizeAllocation, allocationTotals, groupComposition, sectionGroupColumns,
@@ -24,7 +24,7 @@ const tooltipStyle = {
 // ===========================================================================
 // LIST — all clients with their net worth + allocation status
 // ===========================================================================
-export function AssetAllocationList({ clients, onSelect }) {
+export function AssetAllocationList({ clients, onSelect, tabs = null }) {
   const [query, setQuery] = useState('');
 
   const rows = useMemo(() => {
@@ -37,16 +37,18 @@ export function AssetAllocationList({ clients, onSelect }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Asset Allocation</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">
-            Net worth &amp; portfolio composition across {clients.length} {clients.length === 1 ? 'client' : 'clients'}
-          </p>
-        </div>
-        <div className="relative">
-          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name or PAN…" className={inputCls + ' pl-9 w-full md:w-64'} />
+      <div className="space-y-4">
+        <PageTitle
+          icon={Wallet}
+          title="Asset Allocation"
+          subtitle={`Net worth & portfolio composition across ${clients.length} ${clients.length === 1 ? 'client' : 'clients'}`}
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          {tabs && <div className="min-w-0 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{tabs}</div>}
+          <div className="relative w-full md:w-auto md:ml-auto">
+            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name or PAN…" className={inputCls + ' pl-9 w-full md:w-64'} />
+          </div>
         </div>
       </div>
 

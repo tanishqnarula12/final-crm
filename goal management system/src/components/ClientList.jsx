@@ -6,7 +6,7 @@ import {
   MapPin, Map, Tag, Briefcase, UserCheck, BadgeCheck, Clock, Skull
 } from 'lucide-react';
 import {
-  Avatar, Card, Field, inputCls, selectCls, btnPrimary, btnGhost, CoolSelect, MultiSelect
+  Avatar, Card, Field, inputCls, selectCls, btnPrimary, btnGhost, CoolSelect, MultiSelect, PageTitle
 } from './UI';
 import { getCurrentUser } from '../utils/auth';
 import { canCreateClient, canDeleteClient } from '../utils/permissions';
@@ -155,7 +155,7 @@ function StatusPill({ ok, yesIcon: YesIcon = CheckCircle2, noIcon: NoIcon = Aler
   );
 }
 
-export default function ClientList({ clients, onSelect, onSelectFreshly, onSelectApplicant, onAdd, onImport, onDelete, onDeleteAll, isViewer }) {
+export default function ClientList({ clients, onSelect, onSelectFreshly, onSelectApplicant, onAdd, onImport, onDelete, onDeleteAll, isViewer, tabs = null }) {
   // RBAC: Clients → Create / Delete from the matrix; the server enforces the
   // same. Per-row delete checks that client (so Assigned works); "delete all"
   // needs Delete on every client (All).
@@ -340,15 +340,33 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
 
   return (
     <div className="space-y-6">
-      {/* Header row: title + search bar + filter toggle + add client */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Clients Directory</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">
-            {filtered.length === clients.length ? `Showing all ${clients.length} profiles` : `Showing ${filtered.length} of ${clients.length} profiles`}
-          </p>
+      {/* Header: title, then the module tabs with search + filter toggle +
+          add client on the same row (the controls drop below the tabs when
+          the screen is too narrow for both). */}
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <PageTitle
+            icon={Users}
+            title="Clients Directory"
+            subtitle={filtered.length === clients.length ? `Showing all ${clients.length} profiles` : `Showing ${filtered.length} of ${clients.length} profiles`}
+          />
+          {/* TEMPORARY admin cleanup button (only Admin has client delete) —
+              password-gated wipe of all clients, used once to clear the
+              wrongly-mapped import before re-importing with correct owner/RM
+              names. Sits by the title, out of the search/filter/add row. */}
+          {mayDeleteClient && onDeleteAll && clients.length > 0 && (
+            <button
+              onClick={() => setShowDeleteAll(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-all cursor-pointer"
+              title="Delete every client (admin cleanup)"
+            >
+              <Trash2 size={14} /> Delete all clients
+            </button>
+          )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+        {tabs && <div className="min-w-0 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{tabs}</div>}
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto md:ml-auto">
           {/* Search bar — always visible. Filters the table below by name/PAN
               (unchanged), AND — while focused with a query typed — shows a
               richer live dropdown that also reaches into family members
@@ -360,8 +378,8 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
               onChange={(e) => setQuery(e.target.value)}
               onFocus={() => { clearTimeout(searchBlurTimer.current); setSearchFocused(true); }}
               onBlur={() => { searchBlurTimer.current = setTimeout(() => setSearchFocused(false), 150); }}
-              placeholder="Search name, mobile, email or PAN…"
-              className={inputCls + ' pl-9 w-full md:w-72'}
+              placeholder="Name, mobile, email, PAN…"
+              className={inputCls + ' pl-9 w-full md:w-56'}
             />
             {searchFocused && query.trim() && (
               <ClientSearchDropdown
@@ -401,18 +419,7 @@ export default function ClientList({ clients, onSelect, onSelectFreshly, onSelec
               <Plus size={14} /> Add client
             </button>
           )}
-          {/* TEMPORARY admin cleanup button — password-gated wipe of all
-              clients, used once to clear the wrongly-mapped import before
-              re-importing with correct owner/RM names. */}
-          {mayDeleteClient && onDeleteAll && clients.length > 0 && (
-            <button
-              onClick={() => setShowDeleteAll(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-all cursor-pointer"
-              title="Delete every client (admin cleanup)"
-            >
-              <Trash2 size={14} /> Delete all clients
-            </button>
-          )}
+        </div>
         </div>
       </div>
 

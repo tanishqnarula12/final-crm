@@ -1,14 +1,14 @@
 import React from 'react';
 import { Target, ChevronLeft, CheckCircle2 } from 'lucide-react';
-import { Card, Avatar, btnSecondary } from './UI';
+import { Card, Avatar, btnSecondary, PageTitle } from './UI';
 import { goalIcon, goalEmoji, calcGoal, monthLabel, fmtINR, fmtSip, achievementBadge, needsKidName } from '../utils/calc';
 
-export function GoalsOverview({ goalGroups, onSelect }) {
+export function GoalsOverview({ goalGroups, onSelect, tabs = null }) {
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Goal Categories Summary</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">{goalGroups.length} unique financial goals defined across all clients</p>
+      <div className="space-y-4">
+        <PageTitle icon={Target} title="Goal Categories Summary" subtitle={`${goalGroups.length} unique financial goals defined across all clients`} />
+        {tabs && <div className="max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{tabs}</div>}
       </div>
       {goalGroups.length === 0 ? (
         <Card className="p-12 text-center border-dashed border-2 border-slate-200 dark:border-slate-800">

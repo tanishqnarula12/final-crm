@@ -1545,6 +1545,51 @@ export default function App() {
     );
   }
 
+  // Clients module tabs (Clients · Goals Summary · Asset Allocation · Timeline
+  // Reports). On the four list pages the page title sits above them and the
+  // page's own controls (search, filter, add) share their row — so each of
+  // those pages places this bar itself (its `tabs` prop). Anywhere else in the
+  // module (a goal category's detail) it stays on top of the page.
+  const topTabsBar = (
+    <div className="inline-flex items-center gap-1.5 p-1.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm transition-colors">
+      {[
+        { id: 'clients', label: 'Clients', icon: Users },
+        { id: 'goals', label: 'Goals Summary', icon: Target },
+        { id: 'assets', label: 'Asset Allocation', icon: Wallet },
+        { id: 'reports', label: 'Timeline Reports', icon: FileBarChart }
+      ].map(t => {
+        const Icon = t.icon;
+        const active = tab === t.id;
+        return (
+          <button
+            key={t.id}
+            onClick={() => {
+              setTab(t.id);
+              setSelectedClientId(null);
+              setSelectedGoalId(null);
+              setSelectedGoalName(null);
+              setAssetClientId(null);
+              setMomClientId(null);
+              setClientProfileId(null);
+              setReviewClientId(null);
+            }}
+            className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+              active
+                ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/10 dark:shadow-none'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Icon size={14} />
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+  const tabsInPageHeader = !inClientProfile
+    && ['clients', 'goals', 'assets', 'reports'].includes(tab)
+    && !(tab === 'goals' && selectedGoalName);
+
   return (
     <div className="min-h-screen flex bg-slate-50/40 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 antialiased font-sans">
       {saveWarning && (
@@ -2096,42 +2141,11 @@ export default function App() {
       <main className={MAIN_CLS}>
         {/* Navigation Tabs (top-level) OR per-client profile sub-nav */}
         {!inClientProfile ? (
-          <div className="w-full overflow-x-auto mb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="inline-flex items-center gap-1.5 p-1.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm transition-colors">
-              {[
-                { id: 'clients', label: 'Clients', icon: Users },
-                { id: 'goals', label: 'Goals Summary', icon: Target },
-                { id: 'assets', label: 'Asset Allocation', icon: Wallet },
-                { id: 'reports', label: 'Timeline Reports', icon: FileBarChart }
-              ].map(t => {
-                const Icon = t.icon;
-                const active = tab === t.id;
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => {
-                      setTab(t.id);
-                      setSelectedClientId(null);
-                      setSelectedGoalId(null);
-                      setSelectedGoalName(null);
-                      setAssetClientId(null);
-                      setMomClientId(null);
-                      setClientProfileId(null);
-                      setReviewClientId(null);
-                    }}
-                    className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer shrink-0 whitespace-nowrap ${
-                      active
-                        ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/10 dark:shadow-none'
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    <Icon size={14} />
-                    {t.label}
-                  </button>
-                );
-              })}
+          !tabsInPageHeader && (
+            <div className="w-full overflow-x-auto mb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {topTabsBar}
             </div>
-          </div>
+          )
         ) : (
           <div className="w-full overflow-x-auto mb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden animate-fade-in no-print">
             <div className="inline-flex items-center gap-1.5 p-1.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm transition-colors">
@@ -2225,6 +2239,7 @@ export default function App() {
               onDeleteAll={handleDeleteAllClients}
               onImport={() => setShowImportExcel(true)}
               isViewer={isViewer}
+              tabs={topTabsBar}
             />
           </div>
         )}
@@ -2274,7 +2289,7 @@ export default function App() {
 
         {tab === 'goals' && !selectedGoalName && (
           <div className="animate-scale-up">
-            <GoalsOverview goalGroups={allGoalNames} onSelect={setSelectedGoalName} />
+            <GoalsOverview goalGroups={allGoalNames} onSelect={setSelectedGoalName} tabs={topTabsBar} />
           </div>
         )}
 
@@ -2291,7 +2306,7 @@ export default function App() {
 
         {tab === 'assets' && !assetClientId && (
           <div className="animate-scale-up">
-            <AssetAllocationList clients={clients.map(withEffectiveAllocation)} onSelect={setAssetClientId} />
+            <AssetAllocationList clients={clients.map(withEffectiveAllocation)} onSelect={setAssetClientId} tabs={topTabsBar} />
           </div>
         )}
 
@@ -2384,6 +2399,7 @@ export default function App() {
               setTimeframe={setReportTimeframe}
               rows={reportRows}
               onOpenClient={goToClientProfile}
+              tabs={topTabsBar}
             />
           </div>
         )}

@@ -1,14 +1,14 @@
 import React from 'react';
-import { CheckCircle2 } from 'lucide-react';
-import { Card, Avatar, Field, selectCls, CoolSelect } from './UI';
+import { CheckCircle2, FileBarChart } from 'lucide-react';
+import { Card, Avatar, Field, selectCls, CoolSelect, PageTitle } from './UI';
 import { goalEmoji, monthLabel, fmtINR, fmtSip, achievementBadge, CURRENT_MONTH, CURRENT_YEAR } from '../utils/calc';
 
-export default function ReportsView({ goalNames, goalFilter, setGoalFilter, timeframe, setTimeframe, rows, onOpenClient }) {
+export default function ReportsView({ goalNames, goalFilter, setGoalFilter, timeframe, setTimeframe, rows, onOpenClient, tabs = null }) {
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Planning & Timeline Reports</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">Track and filter client portfolio goals grouped by chronological target dates</p>
+      <div className="space-y-4">
+        <PageTitle icon={FileBarChart} title="Planning & Timeline Reports" subtitle="Track and filter client portfolio goals grouped by chronological target dates" />
+        {tabs && <div className="max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{tabs}</div>}
       </div>
 
       <Card className="p-5 border border-slate-200/60 dark:border-slate-800/80">

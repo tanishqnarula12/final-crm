@@ -153,6 +153,22 @@ export function Card({ children, className = '' }) {
   );
 }
 
+// A module page's title block — the blue icon tile, title and one-line
+// description every module header uses (Leads, Tasks, Queries, Prospects…).
+export function PageTitle({ icon: Icon, title, subtitle }) {
+  return (
+    <div className="flex items-center gap-3 min-w-0">
+      <div className="w-11 h-11 shrink-0 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/20">
+        <Icon size={20} />
+      </div>
+      <div className="min-w-0">
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">{title}</h2>
+        {subtitle && <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 font-medium">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
+
 export function StatTile({ label, value, hint, icon: Icon, accent = 'blue' }) {
   const accents = {
     blue: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 ring-1 ring-blue-100/50 dark:ring-blue-900/30',
