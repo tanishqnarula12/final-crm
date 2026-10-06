@@ -67,12 +67,14 @@ export default function RecordTable({
   // Saved under `saveKey` too.
   columnPicker = null,
 }) {
-  // Saved filters: the due-date range is kept as "this month" (so it rolls
-  // on to next month) unless someone set their own range or cleared it.
+  // Saved filters: the due-date range opens on "this month" (rolling on to
+  // the next month) unless someone picked their own dates. A cleared range
+  // isn't kept — one "Clear" used to drop the month filter for good — so
+  // the next visit opens on this month again.
   const saved = useMemo(() => readSaved(saveKey, 'filters') || {}, [saveKey]);
   const initialRange = () => {
     if (!dateField) return { first: '', last: '' };
-    if (saved.range === 'custom') return { first: saved.from || '', last: saved.to || '' };
+    if (saved.range === 'custom' && (saved.from || saved.to)) return { first: saved.from || '', last: saved.to || '' };
     return currentMonthRange();
   };
   const [query, setQuery] = useState('');
