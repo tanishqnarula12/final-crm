@@ -3,13 +3,13 @@
 // view/edit-mode gate and change-log helpers live in utils/cobrModules.js
 // (they're plain functions/hooks, not components — react-refresh requires a
 // component-only file to keep hot reload working).
-import React from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, MessageSquare, ArrowRight, Pencil } from 'lucide-react';
+import { X, MessageSquare, ArrowRight, Pencil, Undo2 } from 'lucide-react';
 import { Avatar, inputCls, selectCls, Field, CoolSelect, btnPrimary, btnGhost } from '../UI';
 import { fmtTaskStamp } from '../../utils/tasks';
 import { loadTeam, teamName } from '../../services/team';
-import { stageBadgeCls, STAGE_BTN_TONE, STAGE_SETS, formStageLabel } from '../../utils/cobrModules';
+import { stageBadgeCls, STAGE_BTN_TONE, STAGE_SETS } from '../../utils/cobrModules';
 import { useBackLayer } from '../../utils/backNav';
 
 // View Mode -> Close / Edit(if allowed); Edit Mode -> Cancel / Save. Mirrors
@@ -179,7 +179,7 @@ export function StagePicker({ type, stage, onSelect, disabled = false, actions }
       <div className="flex items-center gap-2 mb-3">
         <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Current Stage</span>
         <span className={`inline-flex items-center px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full ring-1 ${stageBadgeCls(type, stage)}`}>
-          {formStageLabel(type, stage)}
+          {stage}
         </span>
       </div>
 
@@ -200,13 +200,61 @@ export function StagePicker({ type, stage, onSelect, disabled = false, actions }
                   onClick={() => onSelect(s)}
                   className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${STAGE_BTN_TONE[tone] || STAGE_BTN_TONE.blue}`}
                 >
-                  {formStageLabel(type, s)} <ArrowRight size={11} />
+                  {s} <ArrowRight size={11} />
                 </button>
               );
             })}
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// Edit Mode's back stage: a "Back to <stage>" button that, after a required
+// reason, takes the record one step back (see stepBackTarget). The step is
+// added to the history and logged — nothing is erased — and, like a forward
+// move, it's kept once the record is saved.
+export function StageBack({ fromLabel, toLabel, onConfirm }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const close = () => { setOpen(false); setReason(''); };
+  if (!open) {
+    return (
+      <div className="pt-1">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${STAGE_BTN_TONE.amber}`}
+        >
+          <Undo2 size={12} /> Back to {toLabel}
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border-2 border-amber-300 dark:border-amber-900/60 bg-white dark:bg-slate-900 p-3 space-y-2">
+      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+        <Undo2 size={12} className="text-amber-500" /> Move back a stage ({fromLabel} → {toLabel}) <span className="text-rose-500">*</span>
+      </label>
+      <input
+        autoFocus
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder="Why is it going back a stage? (required)"
+        className={inputCls + ' text-xs py-2'}
+      />
+      <div className="flex gap-2 justify-end">
+        <button type="button" onClick={close} className={btnGhost + ' py-1.5 px-3 text-[10px]'}>Cancel</button>
+        <button
+          type="button"
+          disabled={!reason.trim()}
+          onClick={() => { onConfirm(reason.trim()); close(); }}
+          className={btnPrimary + ' py-1.5 px-3 text-[10px]' + (!reason.trim() ? ' opacity-50 cursor-not-allowed' : '')}
+        >
+          Move back
+        </button>
+      </div>
     </div>
   );
 }

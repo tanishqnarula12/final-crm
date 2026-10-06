@@ -8,14 +8,14 @@
 // handleSaveTaskGlobal, shared with the plain Task module).
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, XCircle, RotateCcw, Lock, MessageSquare } from 'lucide-react';
+import { X, Check, XCircle, RotateCcw, Lock, MessageSquare, Undo2 } from 'lucide-react';
 import { Avatar, btnPrimary, btnGhost, inputCls, selectCls, Field, CoolSelect } from './UI';
 import { STAGE_THEME, fmtTaskStamp, readSubPersons } from '../utils/tasks';
 import { COBR_STAGES, cobrTotals, clearRejectedEntries } from '../utils/cobr';
 import { loadTeam, teamName } from '../services/team';
 import { getCurrentUser } from '../utils/auth';
 import { fmtINR } from '../utils/calc';
-import { canDo, allowedStageOptions } from '../utils/permissions';
+import { canDo, allowedStageOptions, canMoveToStage } from '../utils/permissions';
 import { useBackLayer } from '../utils/backNav';
 
 // `interactive` = the working view (opened from the Tasks module / dashboard /
@@ -53,6 +53,13 @@ export default function CobrTaskModal({ task, interactive = true, allowReopen = 
   const reopening = wasCompleted && stage !== 'Completed';
   // A manual stage change (not the auto-advance, not a reopen) needs a reason.
   const stageChangePending = interactive && !reopening && stage !== loggedStage;
+  // Back stage in the COBR module (Completed already has Reopen): In Process
+  // → Open, for whoever may edit this COBR and move it back (the server's
+  // own rule), with a required reason.
+  const canBack = !interactive && allowReopen && initialStage === 'In Process'
+    && canDo('cobr', 'editDetails', task) && canMoveToStage('cobr', task, 'In Process', 'Open');
+  const movingBack = canBack && stage === 'Open';
+  const needsReason = stageChangePending || movingBack;
 
   const totals = cobrTotals(cobrEntries);
 
@@ -101,7 +108,7 @@ export default function CobrTaskModal({ task, interactive = true, allowReopen = 
   const handleSave = () => {
     // A manual stage change is blocked until a reason is given (mandatory log,
     // matching the Tasks module convention).
-    if (stageChangePending && !stageRemark.trim()) return;
+    if (needsReason && !stageRemark.trim()) return;
 
     const finalEntries = reopening ? clearRejectedEntries(cobrEntries) : cobrEntries;
     const extra = [];
@@ -116,6 +123,12 @@ export default function CobrTaskModal({ task, interactive = true, allowReopen = 
         at: new Date().toISOString(),
         by: getCurrentUser()?.name || 'System',
         text: `Stage changed from ${loggedStage} to ${stage} — ${stageRemark.trim()}`,
+      });
+    } else if (movingBack) {
+      extra.push({
+        at: new Date().toISOString(),
+        by: getCurrentUser()?.name || 'System',
+        text: `Stage moved back from In Process to Open — ${stageRemark.trim()}`,
       });
     }
     onSave({
@@ -210,10 +223,10 @@ export default function CobrTaskModal({ task, interactive = true, allowReopen = 
           </div>
 
           {/* Mandatory reason for a manual stage change (Tasks-module convention) */}
-          {stageChangePending && (
+          {needsReason && (
             <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/10 p-3">
               <label className="text-[11px] font-bold text-amber-700 dark:text-amber-400 block mb-1.5">
-                Reason for stage change ({loggedStage} → {stage}) <span className="text-rose-500">*</span>
+                {movingBack ? 'Reason for moving back (In Process → Open)' : `Reason for stage change (${loggedStage} → ${stage})`} <span className="text-rose-500">*</span>
               </label>
               <input
                 value={stageRemark}
@@ -394,14 +407,27 @@ export default function CobrTaskModal({ task, interactive = true, allowReopen = 
             <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
               <RotateCcw size={12} /> Reopening — rejected entries cleared. Save to confirm.
             </span>
+          ) : canBack && stage === 'In Process' ? (
+            <button
+              onClick={() => setStage('Open')}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold border border-amber-300 dark:border-amber-900/50 bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-all cursor-pointer"
+              title="Move this COBR back to Open"
+            >
+              <Undo2 size={14} /> Back to Open
+            </button>
+          ) : movingBack ? (
+            <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1.5 flex-wrap">
+              <Undo2 size={12} /> Moving back to Open — give a reason, then Save.
+              <button type="button" onClick={() => { setStage(initialStage); setStageRemark(''); }} className="underline cursor-pointer">Undo</button>
+            </span>
           ) : <span />}
           <div className="flex gap-2 ml-auto">
             <button onClick={onClose} className={btnGhost}>Close</button>
             <button
               onClick={handleSave}
-              disabled={stageChangePending && !stageRemark.trim()}
-              className={btnPrimary + (stageChangePending && !stageRemark.trim() ? ' opacity-50 cursor-not-allowed' : '')}
-              title={stageChangePending && !stageRemark.trim() ? 'Add a reason for the stage change first' : ''}
+              disabled={needsReason && !stageRemark.trim()}
+              className={btnPrimary + (needsReason && !stageRemark.trim() ? ' opacity-50 cursor-not-allowed' : '')}
+              title={needsReason && !stageRemark.trim() ? 'Add a reason for the stage change first' : ''}
             >
               Save Changes
             </button>

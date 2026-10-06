@@ -17,11 +17,12 @@ import { AlertTriangle, ArrowRight, CheckCircle2, Lock } from 'lucide-react';
 import { inputCls, selectCls, Field, CoolSelect, btnPrimary, btnGhost } from '../UI';
 import ClientApplicantFields from './ClientApplicantFields';
 import AttachmentField from './AttachmentField';
-import { RecordModal, AssignmentFields, LogTimeline, ViewEditFooter } from './RecordShell';
+import { RecordModal, AssignmentFields, LogTimeline, StageBack, ViewEditFooter } from './RecordShell';
 import {
   REC, CLAIM_STAGES, CLAIM_TYPES, RENEWAL_CLAIM_INSURANCE_TYPES,
   MOTOR_VEHICLE_TYPES, MOTOR_COVERAGE_TYPES, claimActionsFor, claimIsClosed,
-  claimSettledTotal, makeHistoryEntry, recordTaskName, stageBadgeCls, STAGE_BTN_TONE, stageReachedAt,
+  claimSettledTotal, makeHistoryEntry, recordTaskName, stageBadgeCls, STAGE_BTN_TONE, stageLastReachedAt,
+  stepBackTarget, makeBackEntry,
   useEditGate, buildFieldChangeLog, diffAttachmentLog, toLogComments,
 } from '../../utils/cobrModules';
 import { getCurrentUser } from '../../utils/auth';
@@ -129,6 +130,21 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
     cancelAction();
   };
 
+  // Back stage — Edit Mode only (see StageBack). Stepping back over a
+  // settlement takes that amount back off the settled total.
+  const back = isEdit ? stepBackTarget(REC.CLAIM, stage, history) : null;
+  const moveBack = (reason) => {
+    if (!back) return;
+    const by = me?.name || 'System';
+    const undone = Number(back.undo?.settlementAmount) || 0;
+    setHistory((h) => [...h, makeBackEntry({ to: back.to, note: reason, by, settlementAmount: undone ? -undone : undefined })]);
+    setComments((c) => [...c, {
+      at: new Date().toISOString(), by,
+      text: `Stage moved back from ${stage} to ${back.to} — ${reason}${undone ? ` | ${fmtINR(undone)} settlement taken back off the total` : ''}`,
+    }]);
+    setStage(back.to);
+  };
+
   const canSave = useMemo(() => {
     // Base required-field completeness is a CREATE-time guard only — see
     // OtherPolicyModal's canSave for why applying it to an edit as well
@@ -166,10 +182,11 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
       stage,
       settlementAmount: claimSettledTotal(hist),
       // Stamped once, when the claim actually reaches full settlement, and
-      // never re-stamped by a later save.
+      // never re-stamped by a later save. Moving back out of Claim Settled
+      // clears it; settling again stamps the new date.
       settlementDate: stage === 'Claim Settled'
-        ? (record?.settlementDate || stageReachedAt(hist, 'Claim Settled') || now)
-        : (record?.settlementDate || ''),
+        ? ((record?.stage === 'Claim Settled' && record.settlementDate) || stageLastReachedAt(hist, 'Claim Settled') || now)
+        : (record?.stage === 'Claim Settled' ? '' : (record?.settlementDate || '')),
       stageHistory: hist,
       comments: cmts,
       subPerson: f.subPersons[0] || '',
@@ -463,6 +480,10 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
               </button>
             </div>
           </div>
+        )}
+
+        {back && fieldsUnlocked && !pending && (
+          <StageBack fromLabel={stage} toLabel={back.to} onConfirm={moveBack} />
         )}
       </div>
 

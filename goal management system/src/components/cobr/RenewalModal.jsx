@@ -18,11 +18,11 @@ import { TrendingUp, Repeat, Check, X } from 'lucide-react';
 import { inputCls, selectCls, Field, CoolSelect, btnPrimary, btnGhost } from '../UI';
 import ClientApplicantFields from './ClientApplicantFields';
 import AttachmentField from './AttachmentField';
-import { RecordModal, AssignmentFields, LogTimeline, StagePicker, ViewEditFooter } from './RecordShell';
+import { RecordModal, AssignmentFields, LogTimeline, StagePicker, StageBack, ViewEditFooter } from './RecordShell';
 import {
   REC, RENEWAL_STAGES, RENEWAL_ACTIONS, RENEWAL_CLAIM_INSURANCE_TYPES,
   MOTOR_VEHICLE_TYPES, MOTOR_COVERAGE_TYPES, MODE_OF_PAYMENT_OPTIONS, BROKER_CODE_OPTIONS, renewalAttachmentsUnlocked,
-  makeHistoryEntry, recordTaskName, formStageLabel,
+  makeHistoryEntry, recordTaskName, stepBackTarget, makeBackEntry,
   useEditGate, buildFieldChangeLog, diffAttachmentLog, toLogComments,
 } from '../../utils/cobrModules';
 import { getCurrentUser } from '../../utils/auth';
@@ -138,12 +138,25 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
     const mergedAttachments = transitionFiles.length ? [...(f.attachments || []), ...transitionFiles] : f.attachments;
     setComments((c) => [...c, {
       at: now, by,
-      text: `Stage changed from ${formStageLabel(REC.RENEWAL, stage)} to ${formStageLabel(REC.RENEWAL, pendingStage)}${stageRemark.trim() ? ` — ${stageRemark.trim()}` : ''}${transitionFiles.length ? ` | Document(s) uploaded: ${transitionFiles.map((fl) => fl.fileName).join(', ')}` : ''}`,
+      text: `Stage changed from ${stage} to ${pendingStage}${stageRemark.trim() ? ` — ${stageRemark.trim()}` : ''}${transitionFiles.length ? ` | Document(s) uploaded: ${transitionFiles.map((fl) => fl.fileName).join(', ')}` : ''}`,
     }]);
     setStageHistory((h) => [...h, makeHistoryEntry({ stage: pendingStage, action: pendingStage, note: stageRemark.trim(), attachments: mergedAttachments, by })]);
     if (transitionFiles.length) set({ attachments: mergedAttachments });
     setStage(pendingStage);
     cancelStageChange();
+  };
+
+  // Back stage — Edit Mode only (see StageBack).
+  const back = isEdit ? stepBackTarget(REC.RENEWAL, stage, stageHistory) : null;
+  const moveBack = (reason) => {
+    if (!back) return;
+    const by = me?.name || 'System';
+    setStageHistory((h) => [...h, makeBackEntry({ to: back.to, note: reason, by })]);
+    setComments((c) => [...c, {
+      at: new Date().toISOString(), by,
+      text: `Stage moved back from ${stage} to ${back.to} — ${reason}`,
+    }]);
+    setStage(back.to);
   };
 
   const canSave = useMemo(() => {
@@ -169,7 +182,7 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
     let hist = stageHistory;
     let cmts = comments;
     if (!isEdit) {
-      cmts = [...cmts, { at: now, by, text: `Renewal record created at stage "${formStageLabel(REC.RENEWAL, stage)}".` }];
+      cmts = [...cmts, { at: now, by, text: `Renewal record created at stage "${stage}".` }];
       hist = [...hist, makeHistoryEntry({ stage, action: stage, note: 'Record created', by })];
     } else {
       // Runs on every save, not just full Edit Mode — Up Sell/Cross Sell can
@@ -366,7 +379,7 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
         {pendingStage && (
           <div className="rounded-xl border-2 border-blue-300 dark:border-blue-900/60 bg-white dark:bg-slate-900 p-3 space-y-2">
             <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <Check size={12} className="text-blue-500" /> Reason for stage change ({formStageLabel(REC.RENEWAL, stage)} → {formStageLabel(REC.RENEWAL, pendingStage)})
+              <Check size={12} className="text-blue-500" /> Reason for stage change ({stage} → {pendingStage})
             </label>
             <input
               autoFocus
@@ -404,6 +417,10 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
               </button>
             </div>
           </div>
+        )}
+
+        {back && fieldsUnlocked && !pendingStage && (
+          <StageBack fromLabel={stage} toLabel={back.to} onConfirm={moveBack} />
         )}
 
         <AttachmentField

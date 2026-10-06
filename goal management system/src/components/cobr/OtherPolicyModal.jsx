@@ -20,9 +20,10 @@ import { AlertTriangle, ArrowRight, CheckCircle2, Lock } from 'lucide-react';
 import { inputCls, selectCls, Field, CoolSelect, btnPrimary, btnGhost } from '../UI';
 import ClientApplicantFields from './ClientApplicantFields';
 import AttachmentField from './AttachmentField';
-import { RecordModal, AssignmentFields, LogTimeline, ViewEditFooter } from './RecordShell';
+import { RecordModal, AssignmentFields, LogTimeline, StageBack, ViewEditFooter } from './RecordShell';
 import {
   REC, INSURANCE_TYPES, POLICY_STATUS_OPTIONS, PAYMENT_FREQUENCY_OPTIONS, policyActionsFor, policyIsClosed, makeHistoryEntry, recordTaskName,
+  stepBackTarget, makeBackEntry,
   stageBadgeCls, STAGE_BTN_TONE, useEditGate, buildFieldChangeLog, diffAttachmentLog, toLogComments,
 } from '../../utils/cobrModules';
 import { getCurrentUser } from '../../utils/auth';
@@ -160,6 +161,23 @@ export default function OtherPolicyModal({ record, clients = [], onClose, onSave
     setReasonNotReceived(pending.outcomeFlow && !received ? reason.trim() : '');
     setNextReminderDate(pending.reminderFlow ? reminderDate : '');
     cancelAction();
+  };
+
+  // Back stage — Edit Mode only (see StageBack). Leaving an outcome clears
+  // what it recorded (outcome, amount / reason, next reminder).
+  const back = isEdit ? stepBackTarget(REC.POLICY, stage, history) : null;
+  const moveBack = (reason) => {
+    if (!back) return;
+    const by = me?.name || 'System';
+    setHistory((h) => [...h, makeBackEntry({ to: back.to, note: reason, by })]);
+    setComments((c) => [...c, { at: new Date().toISOString(), by, text: `Stage moved back from ${stage} to ${back.to} — ${reason}${outcome ? ` | Outcome "${outcome}" cleared` : ''}` }]);
+    setStage(back.to);
+    if (!policyIsClosed(back.to)) {
+      setOutcome('');
+      setAmountReceived('');
+      setReasonNotReceived('');
+      setNextReminderDate('');
+    }
   };
 
   const canSave = useMemo(() => {
@@ -563,6 +581,10 @@ export default function OtherPolicyModal({ record, clients = [], onClose, onSave
               </button>
             </div>
           </div>
+        )}
+
+        {back && fieldsUnlocked && !pending && (
+          <StageBack fromLabel={stage} toLabel={back.to} onConfirm={moveBack} />
         )}
       </div>
 

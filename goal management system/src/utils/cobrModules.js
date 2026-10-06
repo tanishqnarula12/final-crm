@@ -119,14 +119,11 @@ export const RENEWAL_STAGES = [
   'Close Lost',
 ];
 
-// The last stage reads differently by place (6 Oct 2026): lists and the
-// dashboard call a renewal at "Policy Document Shared" what it now is —
-// Policy Renewed — while the form names the step itself, sending the
-// document over WhatsApp. The stored stage value is unchanged.
+// Lists and the dashboard call a renewal at its last stage what it now is —
+// Policy Renewed (6 Oct 2026); the form keeps the step's own name, Policy
+// Document Shared. The stored stage value is unchanged.
 const STAGE_LIST_LABEL = { [REC.RENEWAL]: { 'Policy Document Shared': 'Policy Renewed' } };
-const STAGE_FORM_LABEL = { [REC.RENEWAL]: { 'Policy Document Shared': 'WhatsApp Document Shared' } };
 export const listStageLabel = (type, stage) => STAGE_LIST_LABEL[type]?.[stage] || stage;
-export const formStageLabel = (type, stage) => STAGE_FORM_LABEL[type]?.[stage] || stage;
 export const RENEWAL_LIST_LABELS = STAGE_LIST_LABEL[REC.RENEWAL];
 
 export const RENEWAL_STAGE_TONE = {
@@ -586,6 +583,49 @@ export const makeHistoryEntry = ({ stage, action, note, attachments, settlementA
   note: note || '',
   attachments: attachments || [],
   ...(settlementAmount != null && settlementAmount !== '' ? { settlementAmount: Number(settlementAmount) || 0 } : {}),
+});
+
+// The latest time a record arrived at `stage` (stageReachedAt gives the
+// first) — what a milestone date should read after a record was moved back
+// and then reached that stage again.
+export const stageLastReachedAt = (history = [], stage) =>
+  [...(history || [])].reverse().find((h) => h.stage === stage)?.at || '';
+
+// ---------------------------------------------------------------------------
+// Back stage (Edit Mode): one step back along the path the record actually
+// took, read from its own history — each arrival at a new stage is a step, a
+// "Moved back" entry (back: true) undoes the latest step, and repeats on the
+// same stage (a claim's loops) add nothing. Records whose history doesn't
+// explain how they got here fall back to the stage normally before it.
+// Returns { to, undo } — `undo` is the history entry that brought the record
+// to its current stage (null when unknown) — or null when there's no step.
+// ---------------------------------------------------------------------------
+const STEP_BACK_FALLBACK = {
+  [REC.RENEWAL]: { 'WhatsApp Link Sent': 'Qualified', 'Call Done': 'WhatsApp Link Sent', 'Payment Done': 'Call Done', 'Policy Document Upload': 'Payment Done', 'Policy Document Shared': 'Policy Document Upload' },
+  [REC.CLAIM]: { 'Document Collected': 'Qualified', 'Claim Submitted': 'Document Collected' },
+  [REC.FD]: { 'WhatsApp Link Sent': 'Qualified', 'Waiting for Update': 'WhatsApp Link Sent', 'FD Renewed': 'Waiting for Update', 'Invested With Us': 'Waiting for Update' },
+  [REC.POLICY]: { 'Policy Working Done': 'Qualified', 'Shared With Client': 'Policy Working Done', 'Waiting For Update': 'Shared With Client', 'Policy Surrendered': 'Waiting For Update', 'Policy Matured': 'Waiting For Update', 'Policy Continued': 'Waiting For Update' },
+};
+export function stepBackTarget(type, stage, history = []) {
+  const path = [];
+  for (const h of history || []) {
+    if (!h?.stage) continue;
+    if (h.back) {
+      path.pop();
+      if (path[path.length - 1]?.stage !== h.stage) path.push({ stage: h.stage, entry: null });
+    } else if (path[path.length - 1]?.stage !== h.stage) {
+      path.push({ stage: h.stage, entry: h });
+    }
+  }
+  if (path.length && path[path.length - 1].stage === stage && path.length > 1) {
+    return { to: path[path.length - 2].stage, undo: path[path.length - 1].entry };
+  }
+  const fallback = STEP_BACK_FALLBACK[type]?.[stage];
+  return fallback ? { to: fallback, undo: null } : null;
+}
+export const makeBackEntry = ({ to, note, by, settlementAmount }) => ({
+  ...makeHistoryEntry({ stage: to, action: 'Moved back', note, settlementAmount, by }),
+  back: true,
 });
 
 // Task-shaped name, so these rows read sensibly anywhere the generic Tasks

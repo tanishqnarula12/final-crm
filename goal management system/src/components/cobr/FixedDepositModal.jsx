@@ -21,10 +21,11 @@ import { AlertTriangle, ArrowRight, CheckCircle2, Lock } from 'lucide-react';
 import { inputCls, Field, btnPrimary, btnGhost } from '../UI';
 import ClientApplicantFields from './ClientApplicantFields';
 import AttachmentField from './AttachmentField';
-import { RecordModal, AssignmentFields, LogTimeline, ViewEditFooter } from './RecordShell';
+import { RecordModal, AssignmentFields, LogTimeline, StageBack, ViewEditFooter } from './RecordShell';
 import {
   REC, fdActionsFor, fdIsClosed, makeHistoryEntry, recordTaskName,
-  stageBadgeCls, STAGE_BTN_TONE, useEditGate, buildFieldChangeLog, diffAttachmentLog, toLogComments, stageReachedAt,
+  stageBadgeCls, STAGE_BTN_TONE, useEditGate, buildFieldChangeLog, diffAttachmentLog, toLogComments, stageLastReachedAt,
+  stepBackTarget, makeBackEntry,
 } from '../../utils/cobrModules';
 import { getCurrentUser } from '../../utils/auth';
 import { uid, fmtINR } from '../../utils/calc';
@@ -115,6 +116,19 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
     cancelAction();
   };
 
+  // Back stage — Edit Mode only (see StageBack). Leaving an outcome clears
+  // what it recorded (investment amount / next reminder).
+  const back = isEdit ? stepBackTarget(REC.FD, stage, history) : null;
+  const moveBack = (reason) => {
+    if (!back) return;
+    const by = me?.name || 'System';
+    setHistory((h) => [...h, makeBackEntry({ to: back.to, note: reason, by })]);
+    setComments((c) => [...c, { at: new Date().toISOString(), by, text: `Stage moved back from ${stage} to ${back.to} — ${reason}` }]);
+    setStage(back.to);
+    if (back.to !== 'Invested With Us') setInvestmentAmount('');
+    if (back.to !== 'FD Renewed') setNextReminderDate('');
+  };
+
   const canSave = useMemo(() => {
     // Required-field completeness is a CREATE-time guard only — see
     // OtherPolicyModal's canSave for why applying it to an edit as well
@@ -183,9 +197,10 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
       investmentAmount: stage === 'Invested With Us' ? investmentAmount : '',
       // Stamped once, when the money actually came in, and never re-stamped
       // by a later save.
+      // Moving back out of it clears it; investing again stamps the new date.
       investmentDate: stage === 'Invested With Us'
-        ? (record?.investmentDate || stageReachedAt(hist, 'Invested With Us') || now)
-        : (record?.investmentDate || ''),
+        ? ((record?.stage === 'Invested With Us' && record.investmentDate) || stageLastReachedAt(hist, 'Invested With Us') || now)
+        : (record?.stage === 'Invested With Us' ? '' : (record?.investmentDate || '')),
       nextReminderDate: stage === 'FD Renewed' ? nextReminderDate : '',
       stageHistory: hist,
       comments: cmts,
@@ -409,6 +424,10 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
               </button>
             </div>
           </div>
+        )}
+
+        {back && fieldsUnlocked && !pending && (
+          <StageBack fromLabel={stage} toLabel={back.to} onConfirm={moveBack} />
         )}
 
         <AttachmentField
