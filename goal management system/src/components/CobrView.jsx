@@ -22,6 +22,7 @@ import { COBR_STAGES, cobrTotals, isCobrTask } from '../utils/cobr';
 import {
   REC, RENEWAL_STAGES, CLAIM_STAGES, FD_STAGES, POLICY_STAGES,
   isRenewal, isClaim, isFd, isPolicy, isOpenStage, claimSettlementDisplay, COBR_EXCEL_SPEC, stageReachedAt,
+  buildFieldChangeLog, toLogComments,
   WORKSPACE_SECTIONS, workspaceSectionOf,
 } from '../utils/cobrModules';
 import { teamName } from '../services/team';
@@ -135,6 +136,22 @@ export default function CobrView({
     setAssetToDelete(null);
     setEditor(null);
     setToast({ title: 'Asset Deleted', body: `${rec.applicant} — ${assetShortName(rec.assetSubType)} was deleted. An admin can restore it from Recently deleted.` });
+  };
+
+  // Renewals → Commission Received, set from the table after a confirmation;
+  // logged in the record's Comments & Logs exactly as the form logs it.
+  const [commissionAsk, setCommissionAsk] = useState(null); // { record, value: 'Yes' | 'No' | '' }
+  const canEditCommission = (r) => !isViewer && canDo('renewals', 'editDetails', r);
+  const saveCommission = ({ record, value }) => {
+    const lines = buildFieldChangeLog(record, { commissionReceived: value }, [{ key: 'commissionReceived', label: 'Commission Received', format: (v) => v || '—' }]);
+    onSaveRecord && onSaveRecord({
+      ...record,
+      commissionReceived: value,
+      comments: [...(record.comments || []), ...toLogComments(lines)],
+      updatedAt: new Date().toISOString(),
+    });
+    setCommissionAsk(null);
+    setToast({ title: 'Commission updated', body: `${record.applicant || 'Renewal'}: Commission Received ${value ? `set to ${value}` : 'cleared'}.` });
   };
 
   const handleDeleteRecord = (type, record) => {
@@ -317,11 +334,15 @@ export default function CobrView({
             {
               key: 'commissionReceived',
               label: 'Commission',
-              render: (r) => r.commissionReceived === 'Yes'
-                ? <span className="text-emerald-600 dark:text-emerald-400 font-bold">Yes</span>
-                : r.commissionReceived === 'No'
-                  ? <span className="text-rose-600 dark:text-rose-400 font-bold">No</span>
-                  : '—',
+              // Settable right here (with a confirmation) by whoever may edit
+              // the renewal's details — the right the server checks for it.
+              render: (r) => (canEditCommission(r)
+                ? <CommissionToggle value={r.commissionReceived} onPick={(value) => setCommissionAsk({ record: r, value })} />
+                : r.commissionReceived === 'Yes'
+                  ? <span className="text-emerald-600 dark:text-emerald-400 font-bold">Yes</span>
+                  : r.commissionReceived === 'No'
+                    ? <span className="text-rose-600 dark:text-rose-400 font-bold">No</span>
+                    : '—'),
               sortValue: (r) => r.commissionReceived || '',
             },
           ]}
@@ -510,6 +531,28 @@ export default function CobrView({
           <p className="text-[11px] text-slate-400 mt-3">It disappears for everyone, and from Asset Allocation. An admin can restore it from Recently deleted.</p>
         </AssetAlert>
       )}
+      {commissionAsk && (
+        <AssetAlert
+          title={commissionAsk.value === 'Yes' ? 'Mark commission as received?' : commissionAsk.value === 'No' ? 'Mark commission as not received?' : 'Clear the commission status?'}
+          onClose={() => setCommissionAsk(null)}
+          actions={(
+            <>
+              <button type="button" onClick={() => setCommissionAsk(null)} className={btnGhost}>Cancel</button>
+              <button type="button" onClick={() => saveCommission(commissionAsk)} className={btnPrimary}>
+                {commissionAsk.value === 'Yes' ? 'Yes, received' : commissionAsk.value === 'No' ? 'Yes, not received' : 'Clear it'}
+              </button>
+            </>
+          )}
+        >
+          <p>
+            <span className="font-bold text-slate-800 dark:text-slate-200">{commissionAsk.record.applicant || 'This renewal'}</span>
+            {[commissionAsk.record.policyName, commissionAsk.record.insuranceType].filter(Boolean).length > 0 && ` — ${[commissionAsk.record.policyName, commissionAsk.record.insuranceType].filter(Boolean).join(', ')}`}
+          </p>
+          <p className="mt-1.5">
+            Commission Received: <b>{commissionAsk.record.commissionReceived || 'not set'}</b> → <b>{commissionAsk.value || 'not set'}</b>
+          </p>
+        </AssetAlert>
+      )}
       {toast && createPortal(
         <div role="status" className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:bottom-6 left-1/2 -translate-x-1/2 z-[80] w-[calc(100%-2rem)] max-w-sm md:w-auto animate-scale-up">
           <div className="flex items-start gap-3 px-4 py-3 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-2xl">
@@ -522,6 +565,38 @@ export default function CobrView({
         </div>,
         document.body
       )}
+    </div>
+  );
+}
+
+// Renewals table → Commission: Yes / No pills, the current one filled;
+// clicking the filled one again clears it. The caller confirms every pick
+// before anything is saved, so a stray click changes nothing.
+const COMMISSION_ON = {
+  Yes: 'bg-emerald-600 text-white border-emerald-600',
+  No: 'bg-rose-600 text-white border-rose-600',
+};
+const COMMISSION_OFF = {
+  Yes: 'hover:border-emerald-400 hover:text-emerald-600 dark:hover:text-emerald-400',
+  No: 'hover:border-rose-400 hover:text-rose-600 dark:hover:text-rose-400',
+};
+function CommissionToggle({ value, onPick }) {
+  return (
+    <div className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+      {['Yes', 'No'].map((v) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => onPick(value === v ? '' : v)}
+          aria-pressed={value === v}
+          title={value === v ? 'Clear the commission status' : `Mark commission as ${v === 'Yes' ? 'received' : 'not received'}`}
+          className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-lg border transition-all cursor-pointer ${
+            value === v ? COMMISSION_ON[v] : `bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 ${COMMISSION_OFF[v]}`
+          }`}
+        >
+          {v}
+        </button>
+      ))}
     </div>
   );
 }
