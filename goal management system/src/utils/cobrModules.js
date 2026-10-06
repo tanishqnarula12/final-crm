@@ -119,6 +119,16 @@ export const RENEWAL_STAGES = [
   'Close Lost',
 ];
 
+// The last stage reads differently by place (6 Oct 2026): lists and the
+// dashboard call a renewal at "Policy Document Shared" what it now is —
+// Policy Renewed — while the form names the step itself, sending the
+// document over WhatsApp. The stored stage value is unchanged.
+const STAGE_LIST_LABEL = { [REC.RENEWAL]: { 'Policy Document Shared': 'Policy Renewed' } };
+const STAGE_FORM_LABEL = { [REC.RENEWAL]: { 'Policy Document Shared': 'WhatsApp Document Shared' } };
+export const listStageLabel = (type, stage) => STAGE_LIST_LABEL[type]?.[stage] || stage;
+export const formStageLabel = (type, stage) => STAGE_FORM_LABEL[type]?.[stage] || stage;
+export const RENEWAL_LIST_LABELS = STAGE_LIST_LABEL[REC.RENEWAL];
+
 export const RENEWAL_STAGE_TONE = {
   Qualified: 'slate',
   'WhatsApp Link Sent': 'blue',

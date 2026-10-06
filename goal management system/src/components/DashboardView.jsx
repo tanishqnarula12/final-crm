@@ -17,7 +17,7 @@ import { loadProspects, ALL_STAGE_THEME } from '../utils/prospects';
 import { loadTasks, TASK_STAGES, STAGE_THEME } from '../utils/tasks';
 import { loadMeetings, MEETING_STATUSES } from '../utils/meetings';
 import { hasAllocation, allocationTotals } from '../utils/assets';
-import { isPolicy, isRenewal, isClaim, isFd, RENEWAL_STAGES, CLAIM_STAGES, FD_STAGES, POLICY_STAGES, stageReachedAt } from '../utils/cobrModules';
+import { isPolicy, isRenewal, isClaim, isFd, RENEWAL_STAGES, RENEWAL_LIST_LABELS, CLAIM_STAGES, FD_STAGES, POLICY_STAGES, stageReachedAt } from '../utils/cobrModules';
 import { effectiveAllocation, withEffectiveAllocation } from '../utils/otherAssets';
 import { isCobrTask, cobrTotals } from '../utils/cobr';
 import { can } from '../services/permissions';
@@ -1109,7 +1109,7 @@ export default function DashboardView({
                   <span className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0"><CalendarCheck size={14} /></span>
                   <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Renewals</h4>
                 </div>
-                <StageList map={servicing.renewal.stages} order={RENEWAL_STAGES} emptyText="No renewals yet." />
+                <StageList map={servicing.renewal.stages} order={RENEWAL_STAGES} labels={RENEWAL_LIST_LABELS} emptyText="No renewals yet." />
               </Card>
               <Card className="p-6 border border-slate-200/70 dark:border-slate-800/70 rounded-[20px] bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:shadow-none">
                 <div className="flex items-center gap-2.5 mb-4">
@@ -1816,19 +1816,21 @@ const STAGE_DOT = {
   'Scheduled': 'bg-blue-500', 'Cancelled': 'bg-rose-500',
 };
 
-function StageList({ map, order, emptyText }) {
-  const rows = order.filter(s => (map[s] || 0) > 0).map(s => ({ label: s, value: map[s] }));
+// `labels` renames a stage for display only (e.g. a renewal's "Policy
+// Document Shared" reads "Policy Renewed"); its colour stays the stage's own.
+function StageList({ map, order, emptyText, labels = {} }) {
+  const rows = order.filter(s => (map[s] || 0) > 0).map(s => ({ stage: s, label: labels[s] || s, value: map[s] }));
   const total = rows.reduce((s, r) => s + r.value, 0);
   if (total === 0) return <p className="text-[10px] text-slate-400 dark:text-slate-500 italic font-bold py-2">{emptyText}</p>;
   const max = Math.max(...rows.map(r => r.value));
   return (
     <div className="space-y-2.5">
       {rows.map(r => (
-        <div key={r.label} className="flex items-start gap-2">
-          <span className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1 ${STAGE_DOT[r.label] || 'bg-slate-400'}`} />
+        <div key={r.stage} className="flex items-start gap-2">
+          <span className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1 ${STAGE_DOT[r.stage] || 'bg-slate-400'}`} />
           <span className="text-[11px] font-bold text-slate-650 dark:text-slate-350 leading-snug flex-1 min-w-0 pt-px">{r.label}</span>
           <div className="w-16 h-1 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 mt-1.5">
-            <div className={`h-full rounded-full ${STAGE_DOT[r.label] || 'bg-slate-400'}`} style={{ width: `${(r.value / max) * 100}%` }} />
+            <div className={`h-full rounded-full ${STAGE_DOT[r.stage] || 'bg-slate-400'}`} style={{ width: `${(r.value / max) * 100}%` }} />
           </div>
           <span className="text-[11px] font-black text-slate-850 dark:text-slate-205 tabular-nums w-4 text-right shrink-0">{r.value}</span>
         </div>

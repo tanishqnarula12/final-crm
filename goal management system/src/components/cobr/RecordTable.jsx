@@ -7,7 +7,7 @@
 import React, { useMemo, useState } from 'react';
 import { Search, ArrowUp, ArrowDown, X, Trash2, Filter } from 'lucide-react';
 import { Card, selectCls, inputCls, CoolSelect, Field, FilterToggle, FilterPanel, ActiveFilterChips } from '../UI';
-import { stageBadgeCls } from '../../utils/cobrModules';
+import { stageBadgeCls, listStageLabel } from '../../utils/cobrModules';
 import { ExcelActions } from './ExcelTools';
 
 // First/last day of the current calendar month as YYYY-MM-DD, in local
@@ -129,7 +129,7 @@ export default function RecordTable({
   const chips = [
     groupLeader && { key: 'gl', label: `Group leader: ${groupLeader}`, onRemove: () => { setGroupLeader(''); setApplicant(''); } },
     applicant && { key: 'ap', label: `Applicant: ${applicant}`, onRemove: () => setApplicant('') },
-    stageFilter !== 'all' && { key: 'st', label: `Status: ${stageFilter}`, onRemove: () => setStageFilter('all') },
+    stageFilter !== 'all' && { key: 'st', label: `Status: ${listStageLabel(type, stageFilter)}`, onRemove: () => setStageFilter('all') },
     dateField && (from || to) && { key: 'dt', label: `${dateField.label}: ${dmy(from)} – ${dmy(to)}`, onRemove: clearDates },
   ].filter(Boolean);
 
@@ -214,7 +214,7 @@ export default function RecordTable({
           <Field label="Status">
             <CoolSelect value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} className={selectCls}>
               <option value="all">All Statuses ({counts.all})</option>
-              {stages.map((s) => <option key={s} value={s}>{s} ({counts[s] || 0})</option>)}
+              {stages.map((s) => <option key={s} value={s}>{listStageLabel(type, s)} ({counts[s] || 0})</option>)}
             </CoolSelect>
           </Field>
           {dateField && (
@@ -262,7 +262,7 @@ export default function RecordTable({
                       <div className="text-sm font-bold text-slate-900 dark:text-slate-100 break-words">{first ? val(first) : '—'}</div>
                     </div>
                     <span className={`shrink-0 inline-flex items-center leading-none px-2 py-1 text-[9px] font-bold uppercase tracking-wider ring-1 rounded-full ${stageBadgeCls(type, r.stage)}`}>
-                      {r.stage || '—'}
+                      {listStageLabel(type, r.stage) || '—'}
                     </span>
                   </div>
                   {rest.length > 0 && (
@@ -338,7 +338,7 @@ export default function RecordTable({
                         though the <td> itself is vertically centered like the rest. */}
                     <td className="px-4 py-3 whitespace-nowrap align-middle">
                       <span className={`inline-flex items-center leading-none px-2 py-1 text-[10px] font-bold uppercase tracking-wider ring-1 rounded-full ${stageBadgeCls(type, r.stage)}`}>
-                        {r.stage || '—'}
+                        {listStageLabel(type, r.stage) || '—'}
                       </span>
                     </td>
                     {onDelete && (

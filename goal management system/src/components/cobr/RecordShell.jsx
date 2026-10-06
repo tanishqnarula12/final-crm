@@ -9,7 +9,7 @@ import { X, MessageSquare, ArrowRight, Pencil } from 'lucide-react';
 import { Avatar, inputCls, selectCls, Field, CoolSelect, btnPrimary, btnGhost } from '../UI';
 import { fmtTaskStamp } from '../../utils/tasks';
 import { loadTeam, teamName } from '../../services/team';
-import { stageBadgeCls, STAGE_BTN_TONE, STAGE_SETS } from '../../utils/cobrModules';
+import { stageBadgeCls, STAGE_BTN_TONE, STAGE_SETS, formStageLabel } from '../../utils/cobrModules';
 import { useBackLayer } from '../../utils/backNav';
 
 // View Mode -> Close / Edit(if allowed); Edit Mode -> Cancel / Save. Mirrors
@@ -179,7 +179,7 @@ export function StagePicker({ type, stage, onSelect, disabled = false, actions }
       <div className="flex items-center gap-2 mb-3">
         <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Current Stage</span>
         <span className={`inline-flex items-center px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full ring-1 ${stageBadgeCls(type, stage)}`}>
-          {stage}
+          {formStageLabel(type, stage)}
         </span>
       </div>
 
@@ -200,7 +200,7 @@ export function StagePicker({ type, stage, onSelect, disabled = false, actions }
                   onClick={() => onSelect(s)}
                   className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${STAGE_BTN_TONE[tone] || STAGE_BTN_TONE.blue}`}
                 >
-                  {s} <ArrowRight size={11} />
+                  {formStageLabel(type, s)} <ArrowRight size={11} />
                 </button>
               );
             })}
