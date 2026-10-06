@@ -284,12 +284,12 @@ export default function CobrView({
           tabs={rowTabs}
           rows={rowsFor[REC.RENEWAL]}
           stages={RENEWAL_STAGES}
-          searchFields={['applicant', 'groupLeader', 'pan', 'policyNumber', 'policyName', 'insuranceType']}
+          searchFields={['applicant', 'groupLeader', 'pan', 'policyNumber', 'policyName', 'insuranceType', 'brokerCode']}
           searchPlaceholder="Search applicant, PAN, policy no., insurance type…"
           dateField={{ key: 'dueDate', label: 'Due date' }}
           onOpen={(r) => setEditor({ type: REC.RENEWAL, record: r })}
           emptyText="No renewals tracked yet."
-          minWidth={1380}
+          minWidth={1500}
           excelSpec={COBR_EXCEL_SPEC[REC.RENEWAL]}
           clients={clients}
           onImportRecords={handleImportRecords}
@@ -300,6 +300,7 @@ export default function CobrView({
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
             { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
             { key: 'insuranceType', label: 'Insurance Type' },
+            { key: 'brokerCode', label: 'Broker Code' },
             { key: 'premiumAmount', label: 'Premium Amount', align: 'right', render: (r) => money(r.premiumAmount), sortValue: (r) => Number(r.premiumAmount) || 0 },
             { key: 'dueDate', label: 'Due Date', render: (r) => d(r.dueDate) },
             {

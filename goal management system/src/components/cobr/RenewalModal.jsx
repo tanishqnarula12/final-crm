@@ -21,7 +21,7 @@ import AttachmentField from './AttachmentField';
 import { RecordModal, AssignmentFields, LogTimeline, StagePicker, ViewEditFooter } from './RecordShell';
 import {
   REC, RENEWAL_STAGES, RENEWAL_ACTIONS, RENEWAL_CLAIM_INSURANCE_TYPES,
-  MOTOR_VEHICLE_TYPES, MOTOR_COVERAGE_TYPES, MODE_OF_PAYMENT_OPTIONS, renewalAttachmentsUnlocked,
+  MOTOR_VEHICLE_TYPES, MOTOR_COVERAGE_TYPES, MODE_OF_PAYMENT_OPTIONS, BROKER_CODE_OPTIONS, renewalAttachmentsUnlocked,
   makeHistoryEntry, recordTaskName,
   useEditGate, buildFieldChangeLog, diffAttachmentLog, toLogComments,
 } from '../../utils/cobrModules';
@@ -338,7 +338,14 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
 
         <Field label="Broker Code">
           <fieldset disabled={!fieldsUnlocked} className="contents">
-            <input value={f.brokerCode} onChange={(e) => set({ brokerCode: e.target.value })} className={inputCls} />
+            <CoolSelect value={f.brokerCode} onChange={(e) => set({ brokerCode: e.target.value })} className={selectCls}>
+              <option value="">Select…</option>
+              {BROKER_CODE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+              {/* a code typed in before the list existed stays selectable */}
+              {record?.brokerCode && !BROKER_CODE_OPTIONS.includes(record.brokerCode) && (
+                <option value={record.brokerCode}>{record.brokerCode}</option>
+              )}
+            </CoolSelect>
           </fieldset>
         </Field>
 

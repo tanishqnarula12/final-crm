@@ -105,6 +105,10 @@ export const TONE = {
 // ---------------------------------------------------------------------------
 export const MODE_OF_PAYMENT_OPTIONS = ['Online', 'Auto Debit'];
 
+// Broker Code is picked from this list for new entries (6 Oct 2026). Codes
+// typed in before then stay on their records and keep showing in the form.
+export const BROKER_CODE_OPTIONS = ['Fintness Finserv', 'SLA', 'Dev', 'Kishan Sir', 'Square'];
+
 export const RENEWAL_STAGES = [
   'Qualified',
   'WhatsApp Link Sent',
@@ -407,7 +411,7 @@ export const RENEWAL_EXCEL_FIELDS = [
   { key: 'premiumAmount', label: 'Premium Amount', type: 'number' },
   { key: 'paymentLink', label: 'Payment Link', type: 'text' },
   { key: 'modeOfPayment', label: 'Mode of Payment', type: 'select', options: MODE_OF_PAYMENT_OPTIONS },
-  { key: 'brokerCode', label: 'Broker Code', type: 'text' },
+  { key: 'brokerCode', label: 'Broker Code', type: 'select', options: BROKER_CODE_OPTIONS },
   { key: 'dueDate', label: 'Due Date', type: 'date' },
   { key: 'assignedTo', label: 'Assigned To', type: 'text', required: true },
   { key: 'upSell', label: 'Up Sell', type: 'boolean' },
