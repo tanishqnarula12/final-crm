@@ -4,11 +4,29 @@
 // vocabulary; the search / stage filter / date-range filter / sorting /
 // S. No. / status-badge behaviour is implemented once here so all five tabs
 // stay consistent.
-import React, { useMemo, useState } from 'react';
-import { Search, ArrowUp, ArrowDown, X, Trash2, Filter } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Search, ArrowUp, ArrowDown, X, Trash2, Filter, Columns3, Check, Lock } from 'lucide-react';
 import { Card, selectCls, inputCls, CoolSelect, Field, FilterToggle, FilterPanel, ActiveFilterChips } from '../UI';
 import { stageBadgeCls, listStageLabel } from '../../utils/cobrModules';
+import { getCurrentUser } from '../../utils/auth';
+import { useBackLayer } from '../../utils/backNav';
 import { ExcelActions } from './ExcelTools';
+
+// Per-user table settings kept in this browser (like the Clients
+// directory's columns and filters) — they survive signing out and back in.
+const savedKey = (key, what) => `crm:recordTable:${key}:${what}:${getCurrentUser()?.id || 'anon'}`;
+const readSaved = (key, what) => {
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(savedKey(key, what));
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+};
+const writeSaved = (key, what, value) => {
+  if (!key) return;
+  try { localStorage.setItem(savedKey(key, what), JSON.stringify(value)); } catch { /* private mode / quota — just not kept */ }
+};
 
 // First/last day of the current calendar month as YYYY-MM-DD, in local
 // time — never toISOString() (UTC-based; near midnight IST it can land on
@@ -41,22 +59,85 @@ export default function RecordTable({
   onDelete = null, // (record) => void — omit to hide the delete column entirely
   canDelete = null, // (record) => boolean
   tabs = null, // the module's tab bar, to lead the search row
+  // Remember this table's filter-panel choices (per user, in this browser)
+  // under this key — sticky until cleared, like the Clients directory's.
+  saveKey = null,
+  // Let people pick the columns (the Clients directory's "Manage columns"):
+  // { defaults: [column keys shown until someone picks], locked: [always shown] }.
+  // Saved under `saveKey` too.
+  columnPicker = null,
 }) {
+  // Saved filters: the due-date range is kept as "this month" (so it rolls
+  // on to next month) unless someone set their own range or cleared it.
+  const saved = useMemo(() => readSaved(saveKey, 'filters') || {}, [saveKey]);
+  const initialRange = () => {
+    if (!dateField) return { first: '', last: '' };
+    if (saved.range === 'custom') return { first: saved.from || '', last: saved.to || '' };
+    return currentMonthRange();
+  };
   const [query, setQuery] = useState('');
-  const [stageFilter, setStageFilter] = useState('all');
+  const [stageFilter, setStageFilter] = useState(() => (saved.stage && stages.includes(saved.stage) ? saved.stage : 'all'));
   // The date pickers update fromInput/toInput live as the user picks a date;
   // the actual filter (from/to, read by `filtered` below) only moves when
   // Apply Filter is clicked. Two separate state pairs rather than one,
   // because picking a "from" date alone used to silently apply an
   // incomplete range mid-pick with no way to tell it had taken effect.
-  const [fromInput, setFromInput] = useState(() => (dateField ? currentMonthRange().first : ''));
-  const [toInput, setToInput] = useState(() => (dateField ? currentMonthRange().last : ''));
-  const [from, setFrom] = useState(() => (dateField ? currentMonthRange().first : ''));
-  const [to, setTo] = useState(() => (dateField ? currentMonthRange().last : ''));
+  const [fromInput, setFromInput] = useState(() => initialRange().first);
+  const [toInput, setToInput] = useState(() => initialRange().last);
+  const [from, setFrom] = useState(() => initialRange().first);
+  const [to, setTo] = useState(() => initialRange().last);
   const [sort, setSort] = useState({ key: '__created', dir: 'desc' });
-  const [groupLeader, setGroupLeader] = useState('');
-  const [applicant, setApplicant] = useState('');
+  const [groupLeader, setGroupLeader] = useState(() => saved.groupLeader || '');
+  const [applicant, setApplicant] = useState(() => saved.applicant || '');
   const [showFilters, setShowFilters] = useState(false);
+
+  useEffect(() => {
+    if (!saveKey) return;
+    const month = currentMonthRange();
+    const isMonth = !dateField || (from === month.first && to === month.last);
+    writeSaved(saveKey, 'filters', {
+      stage: stageFilter === 'all' ? '' : stageFilter, groupLeader, applicant,
+      range: isMonth ? 'month' : 'custom', from, to,
+    });
+  }, [saveKey, dateField, stageFilter, groupLeader, applicant, from, to]);
+
+  // Columns: locked ones always, the rest as picked (in the table's own order).
+  const locked = columnPicker?.locked || [];
+  const pickable = columnPicker ? columns.filter((c) => !locked.includes(c.key)) : [];
+  const [visibleKeys, setVisibleKeys] = useState(() => {
+    if (!columnPicker) return null;
+    const keys = readSaved(saveKey, 'columns');
+    return Array.isArray(keys) ? keys.filter((k) => pickable.some((c) => c.key === k)) : columnPicker.defaults;
+  });
+  useEffect(() => { if (columnPicker && visibleKeys) writeSaved(saveKey, 'columns', visibleKeys); }, [columnPicker, saveKey, visibleKeys]);
+  const shownColumns = columnPicker ? columns.filter((c) => locked.includes(c.key) || visibleKeys.includes(c.key)) : columns;
+  const toggleColumn = (key) => setVisibleKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  // Fewer columns → a narrower table (no sideways scroll for nothing).
+  const tableMinWidth = columnPicker
+    ? Math.max(900, Math.round((minWidth * (shownColumns.length + 2)) / (locked.length + columnPicker.defaults.length + 2)))
+    : minWidth;
+
+  const [pickerAt, setPickerAt] = useState(null); // { top, left } while the picker is open
+  const pickerBtnRef = useRef(null);
+  const closePicker = () => setPickerAt(null);
+  useBackLayer(!!pickerAt, closePicker);
+  const placePicker = () => {
+    const r = pickerBtnRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const width = 288; // w-72
+    const max = document.documentElement.clientWidth - width - 16;
+    setPickerAt({ top: r.bottom + 6, left: Math.max(16, Math.min(r.right - width, max)) });
+  };
+  const pickerOpen = !!pickerAt;
+  useEffect(() => {
+    if (!pickerOpen) return undefined;
+    window.addEventListener('scroll', placePicker, true);
+    window.addEventListener('resize', placePicker);
+    return () => {
+      window.removeEventListener('scroll', placePicker, true);
+      window.removeEventListener('resize', placePicker);
+    };
+  }, [pickerOpen]);
 
   const applyDateFilter = () => { setFrom(fromInput); setTo(toInput); };
   const dateFilterDirty = fromInput !== from || toInput !== to;
@@ -141,7 +222,30 @@ export default function RecordTable({
       <X size={12} /> Clear
     </button>
   );
-  const filterToggle = <FilterToggle open={showFilters} onClick={() => setShowFilters((s) => !s)} count={chips.length} />;
+  const filterToggle = (
+    <>
+      <FilterToggle open={showFilters} onClick={() => setShowFilters((s) => !s)} count={chips.length} />
+      {/* Beside Filter rather than at the table's right edge, which is
+          off-screen on a laptop until the wide table is scrolled. */}
+      {columnPicker && (
+        <button
+          ref={pickerBtnRef}
+          type="button"
+          onClick={() => (pickerOpen ? closePicker() : placePicker())}
+          title="Manage columns"
+          aria-label="Manage columns"
+          aria-expanded={pickerOpen}
+          className={`inline-flex items-center gap-1.5 px-3 xl:px-4 py-2.5 text-xs font-bold uppercase tracking-wider border rounded-xl transition-all cursor-pointer shrink-0 ${
+            pickerOpen
+              ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-900/60 shadow-sm'
+              : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Columns3 size={14} /> <span className="hidden xl:inline">Columns</span>
+        </button>
+      )}
+    </>
+  );
 
   return (
     <div className="space-y-4">
@@ -252,7 +356,7 @@ export default function RecordTable({
               the status badge, then every other column as label / value. */}
           <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
             {filtered.map((r, i) => {
-              const [first, ...rest] = columns;
+              const [first, ...rest] = shownColumns;
               const val = (c) => (c.render ? c.render(r) : (r[c.key] || '—'));
               return (
                 <div key={r.id} onClick={() => onOpen && onOpen(r)} className="p-4 cursor-pointer active:bg-slate-50 dark:active:bg-slate-800/40 transition-colors">
@@ -291,7 +395,7 @@ export default function RecordTable({
             })}
           </div>
           <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-left" style={{ minWidth: `${minWidth}px` }}>
+            <table className="w-full text-left" style={{ minWidth: `${tableMinWidth}px` }}>
               <thead>
                 {/* whitespace-nowrap on every header keeps the bold/tracked-out
                     header font from wrapping to two lines while the lighter
@@ -300,7 +404,7 @@ export default function RecordTable({
                     against the data rows. */}
                 <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800">
                   <th className="px-4 py-3 w-12 whitespace-nowrap align-middle">S.No.</th>
-                  {columns.map((c) => (
+                  {shownColumns.map((c) => (
                     <th
                       key={c.key}
                       onClick={() => toggleSort(c.key)}
@@ -326,7 +430,7 @@ export default function RecordTable({
                     className="group border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors cursor-pointer"
                   >
                     <td className="px-4 py-3 text-xs text-slate-400 tabular-nums whitespace-nowrap align-middle">{i + 1}</td>
-                    {columns.map((c) => (
+                    {shownColumns.map((c) => (
                       <td key={c.key} className={`px-4 py-3 text-xs whitespace-nowrap align-middle ${c.align === 'right' ? 'text-right tabular-nums' : ''} ${c.cls || 'text-slate-600 dark:text-slate-300'}`}>
                         {c.render ? c.render(r) : (r[c.key] || '—')}
                       </td>
@@ -362,6 +466,65 @@ export default function RecordTable({
           </>
         )}
       </Card>
+
+      {/* Manage columns — the Clients directory's picker, same look. */}
+      {pickerAt && createPortal(
+        <>
+          <div className="fixed inset-0 z-40" onClick={closePicker} />
+          <div
+            role="dialog"
+            aria-label="Manage columns"
+            style={{ position: 'fixed', top: `${pickerAt.top}px`, left: `${pickerAt.left}px` }}
+            className="w-72 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/80 shadow-2xl z-50 p-3 animate-scale-up text-left"
+          >
+            <div className="px-2 pb-2 mb-1 border-b border-slate-100 dark:border-slate-800">
+              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Always shown</p>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {['S.No.', ...columns.filter((c) => locked.includes(c.key)).map((c) => c.label), 'Status'].map((label) => (
+                  <span key={label} className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                    <Lock size={9} /> {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="px-2 py-1.5 flex items-center justify-between">
+              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Optional columns</p>
+              <button
+                type="button"
+                onClick={() => setVisibleKeys(columnPicker.defaults)}
+                className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
+              >
+                Reset
+              </button>
+            </div>
+            <div className="space-y-0.5 max-h-72 overflow-y-auto">
+              {pickable.map((c) => {
+                const checked = visibleKeys.includes(c.key);
+                const Icon = c.icon;
+                return (
+                  <button
+                    key={c.key}
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={checked}
+                    onClick={() => toggleColumn(c.key)}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-all cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                  >
+                    <span className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-all ${
+                      checked ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-slate-700'
+                    }`}>
+                      {checked && <Check size={11} />}
+                    </span>
+                    {Icon && <Icon size={13} className="text-slate-400 dark:text-slate-500 shrink-0" />}
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex-1">{c.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
     </div>
   );
 }

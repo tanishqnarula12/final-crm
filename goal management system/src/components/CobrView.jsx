@@ -12,7 +12,11 @@
 // four tabs existed.
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Search, ArrowLeftRight, RefreshCw, ShieldAlert, Landmark, FileCheck2, Gem, CheckCircle2, FileSpreadsheet, ShieldCheck, X } from 'lucide-react';
+import {
+  Plus, Search, ArrowLeftRight, RefreshCw, ShieldAlert, Landmark, FileCheck2, Gem, CheckCircle2, FileSpreadsheet, ShieldCheck, X,
+  Users, CreditCard, Shield, Building2, FileText, Hash, Briefcase, IndianRupee, Wallet, CalendarDays, TrendingUp, BadgeCheck,
+  UserCheck, Clock, ClipboardList, HandCoins, CalendarCheck,
+} from 'lucide-react';
 import { Card, btnPrimary, btnGhost, selectCls, inputCls, CoolSelect, PageTitle, Field, FilterToggle, FilterPanel, ActiveFilterChips } from './UI';
 import { loadTasks, saveTasks, loadOtherAssets, saveOtherAssets } from '../utils/tasks';
 import { assetShortName, fmtRupees } from '../utils/otherAssets';
@@ -313,15 +317,24 @@ export default function CobrView({
           canImportExcel={canImportFor(REC.RENEWAL)}
           onDelete={(r) => handleDeleteRecord(REC.RENEWAL, r)}
           canDelete={(r) => canDeleteFor(REC.RENEWAL, r)}
+          saveKey="renewals"
+          columnPicker={{ locked: ['applicant'], defaults: ['pan', 'insuranceType', 'brokerCode', 'premiumAmount', 'dueDate', 'crossUpSell', 'commissionReceived'] }}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
-            { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
-            { key: 'insuranceType', label: 'Insurance Type' },
-            { key: 'brokerCode', label: 'Broker Code' },
-            { key: 'premiumAmount', label: 'Premium Amount', align: 'right', render: (r) => money(r.premiumAmount), sortValue: (r) => Number(r.premiumAmount) || 0 },
-            { key: 'dueDate', label: 'Due Date', render: (r) => d(r.dueDate) },
+            { key: 'groupLeader', label: 'Group Leader', icon: Users },
+            { key: 'pan', label: 'PAN', icon: CreditCard, cls: 'font-mono text-slate-500 dark:text-slate-400' },
+            { key: 'insuranceType', label: 'Insurance Type', icon: Shield },
+            { key: 'companyName', label: 'Company Name', icon: Building2 },
+            { key: 'policyName', label: 'Policy Name', icon: FileText },
+            { key: 'policyNumber', label: 'Policy Number', icon: Hash },
+            { key: 'brokerCode', label: 'Broker Code', icon: Briefcase },
+            { key: 'sumAssured', label: 'Sum Assured', icon: ShieldCheck, align: 'right', render: (r) => money(r.sumAssured), sortValue: (r) => Number(r.sumAssured) || 0 },
+            { key: 'premiumAmount', label: 'Premium Amount', icon: IndianRupee, align: 'right', render: (r) => money(r.premiumAmount), sortValue: (r) => Number(r.premiumAmount) || 0 },
+            { key: 'modeOfPayment', label: 'Mode of Payment', icon: Wallet },
+            { key: 'dueDate', label: 'Due Date', icon: CalendarDays, render: (r) => d(r.dueDate) },
             {
               key: 'crossUpSell',
+              icon: TrendingUp,
               label: 'Cross / Up Sell',
               render: (r) => {
                 const parts = [];
@@ -334,6 +347,7 @@ export default function CobrView({
             {
               key: 'commissionReceived',
               label: 'Commission',
+              icon: BadgeCheck,
               // Settable right here (with a confirmation) by whoever may edit
               // the renewal's details — the right the server checks for it.
               render: (r) => (canEditCommission(r)
@@ -345,6 +359,8 @@ export default function CobrView({
                     : '—'),
               sortValue: (r) => r.commissionReceived || '',
             },
+            { key: 'assignedTo', label: 'Assigned To', icon: UserCheck, render: (r) => teamName(r.assignedTo) || '—', sortValue: (r) => teamName(r.assignedTo) || '' },
+            { key: 'createdAt', label: 'Created', icon: Clock, render: (r) => d(r.createdAt), sortValue: (r) => r.createdAt || '' },
           ]}
         />
       )}
@@ -367,15 +383,22 @@ export default function CobrView({
           canImportExcel={canImportFor(REC.CLAIM)}
           onDelete={(r) => handleDeleteRecord(REC.CLAIM, r)}
           canDelete={(r) => canDeleteFor(REC.CLAIM, r)}
+          saveKey="claims"
+          columnPicker={{ locked: ['applicant'], defaults: ['pan', 'insuranceType', 'claimType', 'claimAmount', 'settlementAmount', 'settlementDate'] }}
           columns={[
             { key: 'applicant', label: 'Client / Applicant', cls: 'font-bold text-slate-800 dark:text-slate-200' },
-            { key: 'pan', label: 'PAN', cls: 'font-mono text-slate-500 dark:text-slate-400' },
-            { key: 'insuranceType', label: 'Insurance Type' },
-            { key: 'claimType', label: 'Claim Type' },
-            { key: 'claimAmount', label: 'Claim Amount', align: 'right', render: (r) => money(r.claimAmount), sortValue: (r) => Number(r.claimAmount) || 0 },
+            { key: 'groupLeader', label: 'Group Leader', icon: Users },
+            { key: 'pan', label: 'PAN', icon: CreditCard, cls: 'font-mono text-slate-500 dark:text-slate-400' },
+            { key: 'insuranceType', label: 'Insurance Type', icon: Shield },
+            { key: 'policyName', label: 'Policy Name', icon: FileText },
+            { key: 'policyNumber', label: 'Policy Number', icon: Hash },
+            { key: 'sumAssured', label: 'Sum Assured', icon: ShieldCheck, align: 'right', render: (r) => money(r.sumAssured), sortValue: (r) => Number(r.sumAssured) || 0 },
+            { key: 'claimType', label: 'Claim Type', icon: ClipboardList },
+            { key: 'claimAmount', label: 'Claim Amount', icon: IndianRupee, align: 'right', render: (r) => money(r.claimAmount), sortValue: (r) => Number(r.claimAmount) || 0 },
             {
               key: 'settlementAmount',
               label: 'Settlement Amount',
+              icon: HandCoins,
               align: 'right',
               render: (r) => {
                 const { amount, kind } = claimSettlementDisplay(r);
@@ -388,9 +411,13 @@ export default function CobrView({
             {
               key: 'settlementDate',
               label: 'Settlement Date',
+              icon: CalendarCheck,
               render: (r) => (r.stage === 'Claim Settled' ? d(claimClosedOn(r)) : '—'),
               sortValue: (r) => claimClosedOn(r) || '',
             },
+            { key: 'dueDate', label: 'Target Date', icon: CalendarDays, render: (r) => d(r.dueDate) },
+            { key: 'assignedTo', label: 'Assigned To', icon: UserCheck, render: (r) => teamName(r.assignedTo) || '—', sortValue: (r) => teamName(r.assignedTo) || '' },
+            { key: 'createdAt', label: 'Created', icon: Clock, render: (r) => d(r.createdAt), sortValue: (r) => r.createdAt || '' },
           ]}
         />
       )}
