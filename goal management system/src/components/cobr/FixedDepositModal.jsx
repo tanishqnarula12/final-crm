@@ -430,12 +430,15 @@ export default function FixedDepositModal({ record, clients = [], onClose, onSav
           <StageBack fromLabel={stage} toLabel={back.to} onConfirm={moveBack} />
         )}
 
+        {/* Attachments are a detail the server keeps only from someone with
+            Edit Details — an assignee who may only move the stage would see
+            their file vanish on save. */}
         <AttachmentField
           label="Attachments"
           files={f.attachments}
           taskId={record?.id}
           onChange={(files) => set({ attachments: files })}
-          disabled={!canChangeStageThis}
+          disabled={!canEditThis}
           lockedHint="You do not have permission to add attachments to this FD."
         />
       </div>

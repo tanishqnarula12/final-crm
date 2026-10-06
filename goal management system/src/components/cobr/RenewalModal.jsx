@@ -52,6 +52,8 @@ const FIELD_DEFS = [
   { key: 'commissionReceived', label: 'Commission Received', format: (v) => v || '—' },
 ];
 
+const chipCls = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border';
+
 export default function RenewalModal({ record, clients = [], onClose, onSave }) {
   const isEdit = !!record;
   const me = getCurrentUser();
@@ -109,10 +111,14 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
   const attachUnlocked = renewalAttachmentsUnlocked(stage);
   const requiresDocForPending = pendingStage === 'Policy Document Upload';
 
-  // Up Sell / Cross Sell / Commission Received ride alongside whoever can
-  // move the stage forward (not the assigner-only "Edit" gate) — the point
-  // is to capture an opportunity, or mark the commission in, the moment it
-  // comes up mid-workflow, without a detour through general edit mode.
+  // Up Sell / Cross Sell / Commission Received can be set without entering
+  // Edit Mode — the point is to capture an opportunity, or mark the
+  // commission in, the moment it comes up mid-workflow. They're still
+  // details, though: the server keeps a change to them only from someone
+  // with Edit Details, so anyone else (e.g. an assignee who may only move
+  // the stage) sees them read-only instead of buttons that would undo
+  // themselves on save.
+  const canSetExtras = canEditThis;
   const oppChanged = isEdit && (
     !!f.upSell !== !!record.upSell
     || String(f.upSellAmount || '') !== String(record.upSellAmount || '')
@@ -186,8 +192,8 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
       hist = [...hist, makeHistoryEntry({ stage, action: stage, note: 'Record created', by })];
     } else {
       // Runs on every save, not just full Edit Mode — Up Sell/Cross Sell can
-      // now be updated inline (gated on canChangeStageThis) without ever
-      // entering Edit Mode, and that change still needs to be logged.
+      // be updated inline (gated on canSetExtras) without ever entering
+      // Edit Mode, and that change still needs to be logged.
       // buildFieldChangeLog/diffAttachmentLog are no-ops when nothing in
       // their field set actually differs, so this is safe to always run.
       const changeLines = [
@@ -433,43 +439,49 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
         />
       </div>
 
-      {/* Up Sell / Cross Sell — available to whoever can move the stage
-          forward (assigner or assignee), not just in full Edit Mode, so an
-          opportunity can be captured the moment it comes up. */}
+      {/* Up Sell / Cross Sell — settable without Edit Mode by whoever has
+          Edit Details (canSetExtras), so an opportunity can be captured the
+          moment it comes up; everyone else sees what's recorded. */}
       <div className="rounded-2xl border border-indigo-200/60 dark:border-indigo-900/40 bg-indigo-50/30 dark:bg-indigo-950/10 p-4 space-y-3">
         <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Opportunity</h4>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={!canChangeStageThis}
-            onClick={() => set({ upSell: !f.upSell })}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-              f.upSell
-                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-indigo-400'
-            }`}
-          >
-            <TrendingUp size={12} /> Up Sell
-          </button>
-          <button
-            type="button"
-            disabled={!canChangeStageThis}
-            onClick={() => set({ crossSell: !f.crossSell })}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-              f.crossSell
-                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-indigo-400'
-            }`}
-          >
-            <Repeat size={12} /> Cross Sell
-          </button>
-        </div>
+        {canSetExtras ? (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => set({ upSell: !f.upSell })}
+              className={`${chipCls} transition-all cursor-pointer ${
+                f.upSell
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-indigo-400'
+              }`}
+            >
+              <TrendingUp size={12} /> Up Sell
+            </button>
+            <button
+              type="button"
+              onClick={() => set({ crossSell: !f.crossSell })}
+              className={`${chipCls} transition-all cursor-pointer ${
+                f.crossSell
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-indigo-400'
+              }`}
+            >
+              <Repeat size={12} /> Cross Sell
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {f.upSell && <span className={`${chipCls} bg-indigo-600 text-white border-indigo-600`}><TrendingUp size={12} /> Up Sell</span>}
+            {f.crossSell && <span className={`${chipCls} bg-indigo-600 text-white border-indigo-600`}><Repeat size={12} /> Cross Sell</span>}
+            {!f.upSell && !f.crossSell && <span className="text-xs text-slate-400 dark:text-slate-500">None recorded</span>}
+          </div>
+        )}
 
         {(f.upSell || f.crossSell) && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
             {f.upSell && (
               <Field label="Up Sell Amount *">
-                <fieldset disabled={!canChangeStageThis} className="contents">
+                <fieldset disabled={!canSetExtras} className="contents">
                   <input type="number" min="0" value={f.upSellAmount} onChange={(e) => set({ upSellAmount: e.target.value })} className={inputCls} />
                 </fieldset>
               </Field>
@@ -477,17 +489,17 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
             {f.crossSell && (
               <>
                 <Field label="Cross Sell — Company Name *">
-                  <fieldset disabled={!canChangeStageThis} className="contents">
+                  <fieldset disabled={!canSetExtras} className="contents">
                     <input value={f.crossSellCompany} onChange={(e) => set({ crossSellCompany: e.target.value })} className={inputCls} />
                   </fieldset>
                 </Field>
                 <Field label="Cross Sell — Policy Name *">
-                  <fieldset disabled={!canChangeStageThis} className="contents">
+                  <fieldset disabled={!canSetExtras} className="contents">
                     <input value={f.crossSellPolicy} onChange={(e) => set({ crossSellPolicy: e.target.value })} className={inputCls} />
                   </fieldset>
                 </Field>
                 <Field label="Cross Sell — Amount *">
-                  <fieldset disabled={!canChangeStageThis} className="contents">
+                  <fieldset disabled={!canSetExtras} className="contents">
                     <input type="number" min="0" value={f.crossSellAmount} onChange={(e) => set({ crossSellAmount: e.target.value })} className={inputCls} />
                   </fieldset>
                 </Field>
@@ -497,40 +509,46 @@ export default function RenewalModal({ record, clients = [], onClose, onSave }) 
         )}
       </div>
 
-      {/* Commission Received — same functionality as Opportunity above:
-          editable by whoever can move the stage forward, not gated behind
-          full Edit Mode, so it can be marked the moment it's actually known.
-          Tri-state (blank until someone marks it, not defaulted to No) since
-          "not yet known" is a real, distinct state from "confirmed not
-          received" — clicking the active option again clears back to blank. */}
+      {/* Commission Received — same rule as Opportunity above. Tri-state
+          (blank until someone marks it, not defaulted to No) since "not yet
+          known" is a real, distinct state from "confirmed not received" —
+          clicking the active option again clears back to blank. */}
       <div className="rounded-2xl border border-emerald-200/60 dark:border-emerald-900/40 bg-emerald-50/30 dark:bg-emerald-950/10 p-4 space-y-3">
         <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Commission Received</h4>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={!canChangeStageThis}
-            onClick={() => set({ commissionReceived: f.commissionReceived === 'Yes' ? '' : 'Yes' })}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-              f.commissionReceived === 'Yes'
-                ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-emerald-400'
-            }`}
-          >
-            <Check size={12} /> Yes
-          </button>
-          <button
-            type="button"
-            disabled={!canChangeStageThis}
-            onClick={() => set({ commissionReceived: f.commissionReceived === 'No' ? '' : 'No' })}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-              f.commissionReceived === 'No'
-                ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-rose-400'
-            }`}
-          >
-            <X size={12} /> No
-          </button>
-        </div>
+        {canSetExtras ? (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => set({ commissionReceived: f.commissionReceived === 'Yes' ? '' : 'Yes' })}
+              className={`${chipCls} transition-all cursor-pointer ${
+                f.commissionReceived === 'Yes'
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-emerald-400'
+              }`}
+            >
+              <Check size={12} /> Yes
+            </button>
+            <button
+              type="button"
+              onClick={() => set({ commissionReceived: f.commissionReceived === 'No' ? '' : 'No' })}
+              className={`${chipCls} transition-all cursor-pointer ${
+                f.commissionReceived === 'No'
+                  ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-rose-400'
+              }`}
+            >
+              <X size={12} /> No
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {f.commissionReceived === 'Yes'
+              ? <span className={`${chipCls} bg-emerald-600 text-white border-emerald-600`}><Check size={12} /> Yes</span>
+              : f.commissionReceived === 'No'
+                ? <span className={`${chipCls} bg-rose-600 text-white border-rose-600`}><X size={12} /> No</span>
+                : <span className="text-xs text-slate-400 dark:text-slate-500">Not marked yet</span>}
+          </div>
+        )}
       </div>
 
       {isEdit && <LogTimeline comments={comments} />}
