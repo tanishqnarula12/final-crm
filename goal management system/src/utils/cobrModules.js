@@ -652,23 +652,23 @@ const COBR_RECORD_LABEL = {
 };
 // The name a record's file shows under there, in the spirit of the
 // "<type>_<applicant>" names a direct upload gets:
-// "<Kind>_Document-<applicant>-<policy / bank / asset>-<year>", e.g.
-// "Policy_Renew_Document-Samresh Kumar-HDFC Click 2 Protect-2026". The year
+// "<Kind>_Document-<applicant>-<insurance type / bank / asset>-<year>", e.g.
+// "Policy_Renew_Document-Samresh Kumar-Health / Medical-2026". The year
 // is the record's own (the renewal's due date, the claim's opening, the FD's
 // start, the policy's issue, the asset's date), else the upload's. Files
 // that would share a name — two on one record, or on two records of the same
-// person, policy and year — are told apart in upload order: the first keeps
+// person, type and year — are told apart in upload order: the first keeps
 // the plain name, the next read "Policy_Renew_Document (2)-…", "(3)", … .
 // Display only — the file and the name it was saved under stay as they are.
 const COBR_DOC_NAME = {
-  [REC.RENEWAL]: { kind: 'Policy_Renew_Document', name: (r) => r.policyName || r.insuranceType, year: (r) => r.dueDate },
-  [REC.CLAIM]: { kind: 'Claim_Document', name: (r) => r.policyName || r.claimType || r.insuranceType, year: (r) => r.createdAt },
+  [REC.RENEWAL]: { kind: 'Policy_Renew_Document', name: (r) => r.insuranceType, year: (r) => r.dueDate },
+  [REC.CLAIM]: { kind: 'Claim_Document', name: (r) => r.insuranceType, year: (r) => r.createdAt },
   [REC.FD]: { kind: 'FD_Document', name: (r) => r.bankName, year: (r) => r.startingDate },
-  [REC.POLICY]: { kind: 'Policy_Document', name: (r) => r.policyName || r.companyName || r.insuranceType, year: (r) => r.issuingDate || r.startDate },
+  [REC.POLICY]: { kind: 'Policy_Document', name: (r) => r.insuranceType, year: (r) => r.issuingDate || r.startDate },
   [REC.ASSET]: { kind: 'Asset_Document', name: (r) => r.assetSubType || r.assetCategory, year: (r) => r.assetDate },
 };
 const yearIn = (v) => String(v || '').match(/\b(?:19|20)\d{2}\b/)?.[0] || '';
-// The name's parts ([kind, applicant, policy, year]), or null for a record
+// The name's parts ([kind, applicant, type, year]), or null for a record
 // type without one.
 const cobrDocName = (r, item, client) => {
   const spec = COBR_DOC_NAME[r.relatedTo];
