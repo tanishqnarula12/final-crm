@@ -37,6 +37,7 @@ import {
   editActionFor,
 } from './permissions.js';
 import { logActivity, diffFields } from './activityLog.js';
+import { stageStepKeys } from './stageStepFields.js';
 
 // Task change classification: a log/comment edit is NOT a details edit.
 // `cobrEntries` (COBR's per-scheme done/rejected checklist) is deliberately
@@ -275,7 +276,14 @@ export async function syncBulk(prisma, spec) {
       if (!allowed && assignAllowed) allowed = true;
       if (!allowed) { stats.rejected++; continue; } // keep the stored version
 
-      if (!detailAllowed) detailKeys.forEach((k) => { rec[k] = existing.payload[k]; });
+      // What a permitted stage step records itself (a renewal's policy
+      // document, an FD's investment, a claim's settlement, a policy's
+      // outcome) rides on the move — owner decision #14, see
+      // lib/stageStepFields.js. Every other detail still needs editDetails.
+      const stepKeys = !detailAllowed && stageChanged && stageAllowed
+        ? stageStepKeys(mod, existing.payload, rec, from, to)
+        : null;
+      if (!detailAllowed) detailKeys.forEach((k) => { if (!stepKeys?.has(k)) rec[k] = existing.payload[k]; });
       if (!logAllowed) logKeys.forEach((k) => { rec[k] = existing.payload[k]; });
       if (!stageAllowed) rec[stageField] = existing[stageField];
       // Re-derive after any partial revert — the STAGE_CHANGE log/event
