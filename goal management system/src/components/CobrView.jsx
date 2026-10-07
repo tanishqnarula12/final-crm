@@ -26,7 +26,7 @@ import { COBR_STAGES, cobrTotals, isCobrTask } from '../utils/cobr';
 import {
   REC, RENEWAL_STAGES, CLAIM_STAGES, FD_STAGES, POLICY_STAGES,
   isRenewal, isClaim, isFd, isPolicy, isOpenStage, claimSettlementDisplay, COBR_EXCEL_SPEC, stageReachedAt,
-  buildFieldChangeLog, toLogComments,
+  buildFieldChangeLog, toLogComments, liveFiles,
   WORKSPACE_SECTIONS, workspaceSectionOf,
 } from '../utils/cobrModules';
 import { teamName } from '../services/team';
@@ -160,7 +160,7 @@ export default function CobrView({
 
   const handleDeleteRecord = (type, record) => {
     const label = COBR_EXCEL_SPEC[type]?.label || 'record';
-    if (!confirmDelete(label, record.taskName, [record.stage && `Stage: ${record.stage}`, filesNote(record.attachments)])) return;
+    if (!confirmDelete(label, record.taskName, [record.stage && `Stage: ${record.stage}`, filesNote(liveFiles(record.attachments))])) return;
     saveTasks(loadTasks().filter((t) => t.id !== record.id));
   };
 

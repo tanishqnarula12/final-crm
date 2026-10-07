@@ -10,6 +10,7 @@ import { Search, X, Eye, Pencil, Trash2, Paperclip } from 'lucide-react';
 import { Card, CoolSelect, selectCls, inputCls, Field, FilterToggle, FilterPanel, ActiveFilterChips } from '../UI';
 import { ASSET_CATEGORIES, categoryLabel, subTypesFor, fmtRupees, fmtDmy } from '../../utils/otherAssets';
 import { ExcelActions } from './ExcelTools';
+import { liveFiles } from '../../utils/cobrModules';
 
 const QUICK = [{ id: 'all', label: 'All' }, { id: 'financial', label: 'Financial Assets' }, { id: 'physical', label: 'Physical Assets' }];
 
@@ -38,7 +39,7 @@ const excelRow = (a) => ({
   assetSubType: a.assetSubType || '',
   amount: Number(a.amount) || 0,
   assetDate: a.assetDate || '',
-  attachments: (a.attachments || []).length,
+  attachments: liveFiles(a.attachments).length, // a file deleted from Documents isn't counted
   remarks: a.remarks || '',
 });
 
@@ -110,8 +111,8 @@ export default function OtherAssetsTab({ assets = [], onOpen, onEdit, onDelete, 
       )}
     </div>
   );
-  const files = (a) => ((a.attachments || []).length
-    ? <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400"><Paperclip size={11} /> {a.attachments.length}</span>
+  const files = (a) => (liveFiles(a.attachments).length
+    ? <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400"><Paperclip size={11} /> {liveFiles(a.attachments).length}</span>
     : '—');
 
   return (

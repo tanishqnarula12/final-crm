@@ -16,7 +16,7 @@ import React, { useState, useMemo } from 'react';
 import { AlertTriangle, ArrowRight, CheckCircle2, Lock } from 'lucide-react';
 import { inputCls, selectCls, Field, CoolSelect, btnPrimary, btnGhost } from '../UI';
 import ClientApplicantFields from './ClientApplicantFields';
-import AttachmentField from './AttachmentField';
+import AttachmentField, { AttachmentChips } from './AttachmentField';
 import { RecordModal, AssignmentFields, LogTimeline, StageBack, ViewEditFooter } from './RecordShell';
 import {
   REC, CLAIM_STAGES, CLAIM_TYPES, RENEWAL_CLAIM_INSURANCE_TYPES,
@@ -495,6 +495,15 @@ export default function ClaimModal({ record, clients = [], onClose, onSave }) {
           onChange={(files2) => set({ attachments: files2 })}
           hint="Attach whatever has been collected so far (optional)."
         />
+      )}
+
+      {/* The claim's files, read-only — each step adds its own above; one
+          deleted from Documents shows who deleted it and when. */}
+      {isEdit && (f.attachments || []).length > 0 && (
+        <div className="space-y-2">
+          <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">Documents Collected</span>
+          <AttachmentChips files={f.attachments} taskId={record?.id} />
+        </div>
       )}
 
       {isEdit && <LogTimeline comments={comments} />}

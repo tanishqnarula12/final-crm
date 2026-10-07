@@ -13,7 +13,7 @@ import { getCurrentUser } from '../utils/auth';
 import { can, momRecord } from '../utils/permissions';
 import { printHtmlDocument, printSafeDataUrl, wrapStandaloneHtml, useBlobUrl } from '../utils/documents';
 import { buildMomHtml } from '../utils/momHtml';
-import { cobrWorkspaceDocuments } from '../utils/cobrModules';
+import { cobrWorkspaceDocuments, deleteRecordFile, recordFileDeleteQuestion } from '../utils/cobrModules';
 import { DOCUMENT_TYPE_GROUPS } from '../utils/documentTypes';
 import { useBackLayer } from '../utils/backNav';
 
@@ -294,6 +294,13 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
     e.stopPropagation();
     e.preventDefault();
     if (deletingDocRef.current) return;
+    // A Renewal / Claim / FD / Policy / Asset file: marked deleted on its
+    // record, which keeps a "Deleted by … on …" note (deleteRecordFile).
+    if (doc.taskId) {
+      if (!doc.deletable || !window.confirm(recordFileDeleteQuestion(doc))) return;
+      if (deleteRecordFile(doc.taskId, doc.attachment?.id)) alert('Document deleted successfully!');
+      return;
+    }
     if (!window.confirm(`Are you sure you want to delete "${doc.title}"?`)) return;
     deletingDocRef.current = true;
 

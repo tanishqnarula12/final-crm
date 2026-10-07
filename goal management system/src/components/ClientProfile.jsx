@@ -24,7 +24,7 @@ import { DOCUMENT_TYPE_GROUPS } from '../utils/documentTypes';
 import { hasAllocation, allocationTotals, filledItems } from '../utils/assets';
 import { withEffectiveAllocation } from '../utils/otherAssets';
 import { cobrTotals } from '../utils/cobr';
-import { cobrWorkspaceDocuments } from '../utils/cobrModules';
+import { cobrWorkspaceDocuments, deleteRecordFile, recordFileDeleteQuestion } from '../utils/cobrModules';
 import { printHtmlDocument, printSafeDataUrl, wrapStandaloneHtml, useBlobUrl } from '../utils/documents';
 import { buildMomHtml } from '../utils/momHtml';
 import { useBackLayer } from '../utils/backNav';
@@ -265,6 +265,13 @@ export default function ClientProfileView({
     e.stopPropagation();
     e.preventDefault();
     if (deletingDocRef.current) return;
+    // A Renewal / Claim / FD / Policy / Asset file: marked deleted on its
+    // record, which keeps a "Deleted by … on …" note (deleteRecordFile).
+    if (doc.taskId) {
+      if (!doc.deletable || !window.confirm(recordFileDeleteQuestion(doc))) return;
+      if (deleteRecordFile(doc.taskId, doc.attachment?.id)) alert('Document deleted successfully!');
+      return;
+    }
     if (!window.confirm(`Are you sure you want to delete "${doc.title}"?`)) return;
     deletingDocRef.current = true;
 
@@ -1343,7 +1350,10 @@ function AttachmentsBox({ staticItems = [], dynamicItems = [], onPreview, onDele
         const meta = docMeta[doc.type] || { icon: FileText, style: 'bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-400' };
         const Icon = meta.icon;
         // A MOM document is the MOM record itself — deleting it is MOM → Delete.
-        const isDeletable = doc.type === 'mom' && can('mom', 'delete', momRecord(doc.mom, client));
+        // A Servicing record's file takes Documents → Delete plus that
+        // register's Edit Details (`deletable`, see cobrWorkspaceDocuments).
+        const isDeletable = (doc.type === 'mom' && can('mom', 'delete', momRecord(doc.mom, client)))
+          || (!!doc.taskId && doc.deletable === true && mayDeleteDocs);
         return (
           <div
             key={doc.id}

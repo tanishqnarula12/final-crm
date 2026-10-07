@@ -7,10 +7,12 @@
 // already knows how to render a task attachment can render these too.
 import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, X, Paperclip, Download, Lock, FileText } from 'lucide-react';
+import { Upload, X, Paperclip, Download, Lock, FileText, Trash2 } from 'lucide-react';
 import { btnGhost } from '../UI';
 import { getCurrentUser } from '../../utils/auth';
 import { uid } from '../../utils/calc';
+import { fmtTaskStamp } from '../../utils/tasks';
+import { isDeletedFile } from '../../utils/cobrModules';
 import { useBlobUrl } from '../../utils/documents';
 import { needsFile, ensureTaskFile } from '../../services/clientFiles';
 import { useBackLayer } from '../../utils/backNav';
@@ -46,7 +48,21 @@ export function AttachmentChips({ files = [], onRemove, compact = false, taskId 
   return (
     <>
       <div className="flex flex-wrap gap-1.5">
-        {files.map((f) => (
+        {files.map((f) => (isDeletedFile(f) ? (
+          // Deleted from Documents (deleteRecordFile): a note in its place,
+          // not openable and not removable.
+          <span
+            key={f.id}
+            data-deleted-file
+            className={`inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 pl-2 pr-2 py-1 rounded-lg bg-rose-50/70 dark:bg-rose-950/20 text-slate-500 dark:text-slate-400 ring-1 ring-rose-200/60 dark:ring-rose-900/40 ${compact ? 'text-[10px]' : 'text-[11px]'} font-semibold max-w-full`}
+          >
+            <Trash2 size={compact ? 9 : 10} className="shrink-0 text-rose-500 dark:text-rose-400" />
+            <span className="line-through truncate max-w-[180px]">{f.name || f.fileName || 'file'}</span>
+            <span className="text-rose-600 dark:text-rose-400">
+              Deleted by {f.deletedBy || 'someone'}{fmtTaskStamp(f.deletedAt) ? ` on ${fmtTaskStamp(f.deletedAt)}` : ''}
+            </span>
+          </span>
+        ) : (
           <span
             key={f.id}
             title={`${f.fileName}${f.uploadedBy ? ` · uploaded by ${f.uploadedBy}` : ''}`}
@@ -71,7 +87,7 @@ export function AttachmentChips({ files = [], onRemove, compact = false, taskId 
               </button>
             )}
           </span>
-        ))}
+        )))}
       </div>
 
       {preview && createPortal(

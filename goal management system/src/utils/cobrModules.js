@@ -12,7 +12,7 @@
 
 import { useState } from 'react';
 import { uid } from './calc';
-import { loadTasks, loadOtherAssets } from './tasks';
+import { loadTasks, loadOtherAssets, saveTasks, saveOtherAssets } from './tasks';
 import { canDo } from './permissions';
 import { getCurrentUser } from './auth';
 
@@ -689,6 +689,10 @@ export function cobrWorkspaceDocuments(clients) {
     const client = clients.find((c) => c.id === r.groupLeaderId) || clients.find((c) => c.name === r.groupLeader);
     if (!client) return;
     const recordLabel = (COBR_RECORD_LABEL[r.relatedTo] || (() => 'Record'))(r);
+    // Deleting a file here is an edit of its record, so it takes the
+    // register's Edit Details — the right the server checks (the views add
+    // Documents → Delete on top).
+    const mayDelete = canDo(RECORD_PERMISSION_MODULE[r.relatedTo], 'editDetails', r);
     (r.attachments || []).forEach((item, i) => {
       const name = cobrDocName(r, item, client);
       const title = name ? name.join('-') : (item.name || item.fileName || 'Untitled Document');
@@ -707,13 +711,15 @@ export function cobrWorkspaceDocuments(clients) {
         // The file lives on this record (tasks load slim) — previews fetch it from here.
         taskId: r.id,
         sourceLabel: `${recordLabel} · ${r.applicant || ''}`.trim(),
-        // Lives on the Renewal/Claim/FD/Policy record, not clientDetails
-        // .attachments — deleting/renaming it belongs to that record's own
-        // editor, not the Documents view.
-        deletable: false,
+        recordLabel,
+        // Lives on the Renewal/Claim/FD/Policy/Asset record, not
+        // clientDetails.attachments — a delete goes through deleteRecordFile.
+        deletable: mayDelete,
       });
     });
   });
+  // Numbered with the deleted files still counted, so a delete never
+  // renumbers the files left.
   sameName.forEach((files) => {
     if (files.length < 2) return;
     files.sort((a, b) => a.at.localeCompare(b.at) || a.recordId.localeCompare(b.recordId) || a.i - b.i);
@@ -721,7 +727,45 @@ export function cobrWorkspaceDocuments(clients) {
       if (n) docs[f.doc].title = [`${f.name[0]} (${n + 1})`, ...f.name.slice(1)].join('-');
     });
   });
-  return docs;
+  return docs.filter((d) => !isDeletedFile(d.attachment));
+}
+
+// The permission-matrix column of each register (as in CobrView).
+export const RECORD_PERMISSION_MODULE = { [REC.RENEWAL]: 'renewals', [REC.CLAIM]: 'claims', [REC.FD]: 'fixedDeposits', [REC.POLICY]: 'otherInsurancePolicies', [REC.ASSET]: 'otherAssets' };
+
+// A record file deleted from Documents (see deleteRecordFile).
+export const isDeletedFile = (a) => !!a?.deletedAt;
+export const liveFiles = (list) => (Array.isArray(list) ? list.filter((a) => !isDeletedFile(a)) : []);
+// The confirmation a Documents delete of such a file asks.
+export const recordFileDeleteQuestion = (doc) => `Delete "${doc.title}"?\n\nIt will no longer show in Documents. Its ${doc.recordLabel || 'record'} will keep a note in its attachments that you deleted it, with the date and time.`;
+
+// Documents → delete a Renewal / Claim / FD / Other Policy / Other Asset file.
+// Soft, like every delete here: the file stays on its record, marked with who
+// deleted it and when, so the record's Attachment box shows "Deleted by … on
+// …" in its place and the Documents lists leave it out. The record's stage
+// history keeps its own copy untouched, as logs always do. Saved like any
+// record edit — the server keeps it only from someone with that register's
+// Edit Details. Returns false when there was nothing to delete.
+export function deleteRecordFile(taskId, attachmentId) {
+  const asset = loadOtherAssets().find((a) => a.id === taskId);
+  const record = asset || loadTasks().find((t) => t.id === taskId);
+  const item = (record?.attachments || []).find((a) => a?.id === attachmentId);
+  if (!item || isDeletedFile(item)) return false;
+  const me = getCurrentUser();
+  const at = new Date().toISOString();
+  const by = me?.name || 'System';
+  const next = {
+    ...record,
+    attachments: record.attachments.map((a) => (a?.id === attachmentId
+      ? { ...a, deletedAt: at, deletedBy: by, ...(me?.id ? { deletedById: me.id } : {}) }
+      : a)),
+    // Other Assets have no Comments & Logs; the other registers log it there.
+    ...(asset ? {} : { comments: [...(record.comments || []), { at, by, text: `Attachment deleted from Documents: ${item.name || item.fileName || 'file'}` }] }),
+    updatedAt: at,
+  };
+  if (asset) saveOtherAssets(loadOtherAssets().map((a) => (a.id === taskId ? next : a)));
+  else saveTasks(loadTasks().map((t) => (t.id === taskId ? next : t)));
+  return true;
 }
 
 // ---------------------------------------------------------------------------
