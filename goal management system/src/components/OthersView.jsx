@@ -3,6 +3,7 @@ import { Wrench, AlertCircle } from 'lucide-react';
 import { Card, inputCls, Field } from './UI';
 import TopPerformingSchemes from './TopPerformingSchemes';
 import PlanningSandbox from './PlanningSandbox';
+import AssetTaxationGuide from './AssetTaxationGuide';
 import { canTopSchemes } from '../utils/permissions';
 
 // Sub-tab is controlled by the sidebar flyout → App.jsx → here via `subTab` prop.
@@ -71,6 +72,9 @@ export default function OthersView({ subTab = 'other_tools' }) {
           ==================================================================== */}
       {activeSubTab === 'goal_planner' && <PlanningSandbox mode="goals" />}
       {activeSubTab === 'asset_planner' && <PlanningSandbox mode="assets" />}
+
+      {/* ASSET TAXATION GUIDE — read-only reference (utils/assetTaxation.js) */}
+      {activeSubTab === 'tax_guide' && <AssetTaxationGuide />}
 
       {/* ====================================================================
           CALCULATOR TAB

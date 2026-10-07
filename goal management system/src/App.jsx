@@ -94,7 +94,7 @@ const MOBILE_TITLES = {
   myprofile: 'My Profile', leave: 'Leave', users: 'User Management', permissions: 'Permission Matrix',
   'activity-log': 'Activity Log', 'recently-deleted': 'Recently Deleted',
 };
-const OTHERS_TITLES = { other_tools: 'Calculator', top_schemes: 'Top Schemes', goal_planner: 'Goal Planner', asset_planner: 'Asset Allocation' };
+const OTHERS_TITLES = { other_tools: 'Calculator', top_schemes: 'Top Schemes', goal_planner: 'Goal Planner', asset_planner: 'Asset Allocation', tax_guide: 'Asset Taxation Guide' };
 
 export default function App() {
   const [authed, setAuthed] = useState(() => isAuthenticated());
