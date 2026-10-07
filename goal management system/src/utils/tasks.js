@@ -85,12 +85,14 @@ const mergeSaved = (saved = [], removedIds = []) => {
 // Saves the task list (everything loadTasks() hands out). Other Assets ride
 // along unchanged; an asset that turns up in `tasks` is treated as an edit of
 // that asset (never a second copy).
+// Both saves return a promise of whether the server took every change (true)
+// or refused / failed some of it (false) — most callers needn't wait for it.
 export const saveTasks = (tasks) => {
   const incomingAssets = tasks.filter(isAssetRow);
   if (!incomingAssets.length) return persistAll([...tasks, ...assetCache]);
   const byId = new Map(incomingAssets.map((a) => [a.id, a]));
   const known = new Set(assetCache.map((a) => a.id));
-  persistAll([
+  return persistAll([
     ...tasks.filter((t) => !isAssetRow(t)),
     ...incomingAssets.filter((a) => !known.has(a.id)),
     ...assetCache.map((a) => byId.get(a.id) || a),
@@ -110,7 +112,7 @@ const persistAll = (tasks) => {
 
   setCache(tasks);
   window.dispatchEvent(new Event('crm:tasks-updated'));
-  if (!changed.length && !deletedIds.length) return;
+  if (!changed.length && !deletedIds.length) return Promise.resolve(true);
 
   const done = sync.beginWrite();
   // The server validates every change (RBAC) and returns the authoritative
@@ -118,7 +120,7 @@ const persistAll = (tasks) => {
   // user when that happens, so a blocked change doesn't just silently "not
   // stick" with no explanation (e.g. an assignee trying to edit task
   // details, or moving a stage backward).
-  api.patch('/tasks?slim=1', { tasks: changed, deletedIds })
+  return api.patch('/tasks?slim=1', { tasks: changed, deletedIds })
     .catch((err) => {
       // The whole-list fallback is for a server without PATCH — which also
       // never sends slim tasks. If this list is slim, that server can't
@@ -140,6 +142,15 @@ const persistAll = (tasks) => {
           detail: { message: `${res.stats.rejected} change${res.stats.rejected === 1 ? '' : 's'} could not be saved — you may not have permission. The list has been refreshed.` },
         }));
       }
+      // The server took the change but couldn't write it (e.g. a database
+      // timeout) — it came back as stored, so say so instead of letting the
+      // change quietly disappear.
+      if (res?.stats?.failed > 0) {
+        window.dispatchEvent(new CustomEvent('crm:tasks-sync-warning', {
+          detail: { message: `${res.stats.failed} change${res.stats.failed === 1 ? '' : 's'} could not be saved — please try again. The list has been refreshed.` },
+        }));
+      }
+      return !(res?.stats?.rejected > 0) && !(res?.stats?.failed > 0);
     })
     .catch((err) => {
       console.error('Failed to persist tasks:', err);
@@ -147,6 +158,7 @@ const persistAll = (tasks) => {
       window.dispatchEvent(new CustomEvent('crm:tasks-sync-warning', {
         detail: { message: 'Your change could not be saved. The list has been refreshed.' },
       }));
+      return false;
     });
 };
 

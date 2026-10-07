@@ -745,8 +745,9 @@ export const recordFileDeleteQuestion = (doc) => `Delete "${doc.title}"?\n\nIt w
 // …" in its place and the Documents lists leave it out. The record's stage
 // history keeps its own copy untouched, as logs always do. Saved like any
 // record edit — the server keeps it only from someone with that register's
-// Edit Details. Returns false when there was nothing to delete.
-export function deleteRecordFile(taskId, attachmentId) {
+// Edit Details. Resolves true only once the server has stored it (false when
+// there was nothing to delete, or the save was refused or failed).
+export async function deleteRecordFile(taskId, attachmentId) {
   const asset = loadOtherAssets().find((a) => a.id === taskId);
   const record = asset || loadTasks().find((t) => t.id === taskId);
   const item = (record?.attachments || []).find((a) => a?.id === attachmentId);
@@ -763,9 +764,13 @@ export function deleteRecordFile(taskId, attachmentId) {
     ...(asset ? {} : { comments: [...(record.comments || []), { at, by, text: `Attachment deleted from Documents: ${item.name || item.fileName || 'file'}` }] }),
     updatedAt: at,
   };
-  if (asset) saveOtherAssets(loadOtherAssets().map((a) => (a.id === taskId ? next : a)));
-  else saveTasks(loadTasks().map((t) => (t.id === taskId ? next : t)));
-  return true;
+  const saved = await (asset
+    ? saveOtherAssets(loadOtherAssets().map((a) => (a.id === taskId ? next : a)))
+    : saveTasks(loadTasks().map((t) => (t.id === taskId ? next : t))));
+  if (!saved) return false;
+  // The list now holds the record as the server stored it.
+  const stored = (asset ? loadOtherAssets() : loadTasks()).find((t) => t.id === taskId);
+  return isDeletedFile((stored?.attachments || []).find((a) => a?.id === attachmentId));
 }
 
 // ---------------------------------------------------------------------------

@@ -298,7 +298,15 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
     // record, which keeps a "Deleted by … on …" note (deleteRecordFile).
     if (doc.taskId) {
       if (!doc.deletable || !window.confirm(recordFileDeleteQuestion(doc))) return;
-      if (deleteRecordFile(doc.taskId, doc.attachment?.id)) alert('Document deleted successfully!');
+      deletingDocRef.current = true;
+      try {
+        // Only once the server has stored it — never on a save that failed.
+        alert(await deleteRecordFile(doc.taskId, doc.attachment?.id)
+          ? 'Document deleted successfully!'
+          : 'The document could not be deleted. Please try again.');
+      } finally {
+        deletingDocRef.current = false;
+      }
       return;
     }
     if (!window.confirm(`Are you sure you want to delete "${doc.title}"?`)) return;

@@ -94,6 +94,14 @@ function mayAssign(mode, actor, existing, mod, rec) {
   return false; // 'admin' (or unknown) → admin only
 }
 
+// Each record's own transaction. A record that carries its files inline (a
+// renewal with its policy PDF, copied again into its stage history) plus its
+// activity-log rows can take Supabase well over Prisma's default 5 s to write:
+// on 7 Oct 2026 a renewal's saves failed that way ("Transaction already
+// closed", P2028, ~10 s) and the change was lost. The lock is still on that
+// one row only.
+const RECORD_TX = { maxWait: 10000, timeout: 60000 };
+
 // Does `key` differ between the stored payload and the incoming record?
 const fieldChanged = (before, after, key) => JSON.stringify(before?.[key] ?? null) !== JSON.stringify(after?.[key] ?? null);
 
@@ -196,7 +204,7 @@ export async function syncBulk(prisma, spec) {
             module: mod, recordId: rec.id, action: 'CREATE',
             newValue: summarize(payload), performedBy: actor.id,
           });
-        });
+        }, RECORD_TX);
       } catch (err) {
         stats.failed++;
         console.error(`[syncBulk] create failed for ${mod} ${rec.id}:`, err);
@@ -381,7 +389,7 @@ export async function syncBulk(prisma, spec) {
             performedBy: actor.id,
           });
         }
-      });
+      }, RECORD_TX);
     } catch (err) {
       stats.failed++;
       console.error(`[syncBulk] update failed for ${mod} ${rec.id}:`, err);
@@ -441,7 +449,7 @@ export async function syncBulk(prisma, spec) {
             module: mod, recordId: row.id, action: 'DELETE',
             oldValue: summarize(row.payload), performedBy: actor.id,
           });
-        });
+        }, RECORD_TX);
       } catch (err) {
         stats.failed++;
         console.error(`[syncBulk] delete failed for ${mod} ${row.id}:`, err);
