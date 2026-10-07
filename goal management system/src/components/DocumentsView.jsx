@@ -190,7 +190,10 @@ export default function DocumentsView({ clients = [], tasksChangeCounter }) {
     const q = query.trim().toLowerCase();
     return documents
       .filter(d => d.type === typeFilter)
-      .filter(d => !q || d.client.name.toLowerCase().includes(q) || d.title.toLowerCase().includes(q))
+      // The file's own name too — a Servicing file shows under a built name
+      // (cobrWorkspaceDocuments) but should still turn up by what it was called.
+      .filter(d => !q || d.client.name.toLowerCase().includes(q) || d.title.toLowerCase().includes(q)
+        || String(d.attachment?.fileName || '').toLowerCase().includes(q))
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   }, [documents, typeFilter, query]);
 

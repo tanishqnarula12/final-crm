@@ -1355,7 +1355,9 @@ function AttachmentsBox({ staticItems = [], dynamicItems = [], onPreview, onDele
                 <Icon size={15} />
               </span>
               <div className="min-w-0">
-                <span className="font-bold text-xs text-slate-800 dark:text-slate-200 block truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{doc.title}</span>
+                {/* Wraps on a phone: a Servicing file's name (policy, year) is
+                    longer than the card is wide there. */}
+                <span className="font-bold text-xs text-slate-800 dark:text-slate-200 block md:truncate break-words group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{doc.title}</span>
                 <span className="text-[9px] text-slate-450 dark:text-slate-500 uppercase font-black tracking-wider block mt-0.5">Report Document</span>
               </div>
             </div>

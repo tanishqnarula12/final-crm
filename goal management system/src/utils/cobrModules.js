@@ -650,20 +650,57 @@ const COBR_RECORD_LABEL = {
   [REC.POLICY]: (r) => `Policy — ${r.insuranceType || 'Insurance'}${r.companyName ? ` (${r.companyName})` : ''}`,
   [REC.ASSET]: (r) => `Other Asset — ${r.assetSubType || 'Asset'}`,
 };
+// The name a record's file shows under there, in the spirit of the
+// "<type>_<applicant>" names a direct upload gets:
+// "<Kind>_Document-<applicant>-<policy / bank / asset>-<year>", e.g.
+// "Policy_Renew_Document-Samresh Kumar-HDFC Click 2 Protect-2026". The year
+// is the record's own (the renewal's due date, the claim's opening, the FD's
+// start, the policy's issue, the asset's date), else the upload's. Files
+// that would share a name — two on one record, or on two records of the same
+// person, policy and year — are told apart in upload order: the first keeps
+// the plain name, the next read "Policy_Renew_Document (2)-…", "(3)", … .
+// Display only — the file and the name it was saved under stay as they are.
+const COBR_DOC_NAME = {
+  [REC.RENEWAL]: { kind: 'Policy_Renew_Document', name: (r) => r.policyName || r.insuranceType, year: (r) => r.dueDate },
+  [REC.CLAIM]: { kind: 'Claim_Document', name: (r) => r.policyName || r.claimType || r.insuranceType, year: (r) => r.createdAt },
+  [REC.FD]: { kind: 'FD_Document', name: (r) => r.bankName, year: (r) => r.startingDate },
+  [REC.POLICY]: { kind: 'Policy_Document', name: (r) => r.policyName || r.companyName || r.insuranceType, year: (r) => r.issuingDate || r.startDate },
+  [REC.ASSET]: { kind: 'Asset_Document', name: (r) => r.assetSubType || r.assetCategory, year: (r) => r.assetDate },
+};
+const yearIn = (v) => String(v || '').match(/\b(?:19|20)\d{2}\b/)?.[0] || '';
+// The name's parts ([kind, applicant, policy, year]), or null for a record
+// type without one.
+const cobrDocName = (r, item, client) => {
+  const spec = COBR_DOC_NAME[r.relatedTo];
+  if (!spec) return null;
+  return [
+    spec.kind,
+    r.applicant || client.name,
+    spec.name(r),
+    yearIn(spec.year(r)) || yearIn(item.date) || yearIn(r.createdAt),
+  ].map((part) => String(part || '').trim()).filter(Boolean);
+};
 export function cobrWorkspaceDocuments(clients) {
   // Other Assets' attachments too — they are kept apart from the task list.
   const workspaceTasks = [...loadTasks().filter((t) => isRenewal(t) || isClaim(t) || isFd(t) || isPolicy(t)), ...loadOtherAssets()];
   const docs = [];
+  const sameName = new Map(); // client id + name → the files carrying it
   workspaceTasks.forEach((r) => {
     const client = clients.find((c) => c.id === r.groupLeaderId) || clients.find((c) => c.name === r.groupLeader);
     if (!client) return;
     const recordLabel = (COBR_RECORD_LABEL[r.relatedTo] || (() => 'Record'))(r);
-    (r.attachments || []).forEach((item) => {
+    (r.attachments || []).forEach((item, i) => {
+      const name = cobrDocName(r, item, client);
+      const title = name ? name.join('-') : (item.name || item.fileName || 'Untitled Document');
+      if (name) {
+        const key = `${client.id}\n${title}`;
+        sameName.set(key, [...(sameName.get(key) || []), { at: String(item.date || ''), recordId: String(r.id), i, name, doc: docs.length }]);
+      }
       docs.push({
         id: `cobr-${r.id}-${item.id}`,
         type: 'custom',
         client,
-        title: item.name || item.fileName || 'Untitled Document',
+        title,
         date: item.date || r.updatedAt || '',
         isLegacy: false,
         attachment: item,
@@ -675,6 +712,13 @@ export function cobrWorkspaceDocuments(clients) {
         // editor, not the Documents view.
         deletable: false,
       });
+    });
+  });
+  sameName.forEach((files) => {
+    if (files.length < 2) return;
+    files.sort((a, b) => a.at.localeCompare(b.at) || a.recordId.localeCompare(b.recordId) || a.i - b.i);
+    files.forEach((f, n) => {
+      if (n) docs[f.doc].title = [`${f.name[0]} (${n + 1})`, ...f.name.slice(1)].join('-');
     });
   });
   return docs;
