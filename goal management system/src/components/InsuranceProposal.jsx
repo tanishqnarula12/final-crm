@@ -7,7 +7,9 @@ import { RELATIONS } from '../utils/team';
 import { uid, DOB_MIN, dobMax, fmtFileDate } from '../utils/calc';
 import { addProspects } from '../utils/prospects';
 import { saveGeneratedDocument, wrapStandaloneHtml } from '../utils/documents';
+import { readInsuranceProposalPdf, hasEnteredData, ProposalPdfError } from '../utils/proposalPdf';
 import { ProspectModal } from './BusinessProspects';
+import { UploadProposalButton, ProposalImportNotice } from './ProposalPdfUpload';
 
 // New insurance lines of business — shown as disabled "Coming Soon" pills
 // until their field sets are defined and each gets its own proposal section.
@@ -672,6 +674,82 @@ export default function InsuranceProposal({ client, isViewer }) {
     }
   };
 
+  // Upload Proposal: fill the form from an insurance proposal PDF made
+  // earlier in the CRM (read on this device — see utils/proposalPdf.js). It
+  // replaces what's in the form, after a confirm if anything has been typed.
+  // A few fields are never printed on the proposal, so those are listed for
+  // the advisor to fill in.
+  const [importing, setImporting] = useState(false);
+  const [importNotice, setImportNotice] = useState(null);
+  const handleUploadProposal = async (file) => {
+    setImporting(true);
+    setImportNotice(null);
+    try {
+      const r = await readInsuranceProposalPdf(file);
+      const typed = hasEnteredData({ basePolicies, topupPolicies, accidentalPolicies, travelPolicies, marinePolicies, motorPolicies, indemnityPolicies, portDate, termPolicies: termGroups.map((g) => g.policies) });
+      if (typed && !window.confirm(`Fill the form from "${file.name}"?\n\nThis replaces the details in the form now.`)) return;
+
+      const warnings = [...r.warnings];
+      const optionFor = (name) => applicantOptions.find((o) => o.name.trim().toLowerCase() === String(name || '').trim().toLowerCase());
+      if (r.proposer) {
+        const opt = optionFor(r.proposer);
+        if (opt) setProposer(opt.name);
+        else if (!applicantOptions.length) setProposer(r.proposer);
+        else warnings.unshift(`This proposal was prepared for "${r.proposer}", who isn't ${client?.name || 'this client'} or one of their family members — Proposer Name was left as it was.`);
+      }
+      setTypes(r.types);
+      // PAN isn't printed on the proposal; it comes from the client's records.
+      if (r.applicants.length) {
+        setApplicants(r.applicants.map((a) => {
+          const opt = optionFor(a.name);
+          return { ...a, name: opt ? opt.name : a.name, pan: opt?.pan || '' };
+        }));
+      }
+      setIsPort(r.types.medical && r.isPort);
+      setPortDate(r.types.medical && r.isPort ? r.portDate : '');
+      setBasePolicies(r.basePolicies.length ? r.basePolicies : [{ name: '', sum: '', premium: '', riders: '' }]);
+      setTopupPolicies(r.topupPolicies.length ? r.topupPolicies : [{ company: '', name: '', deductible: '', sum: '', premium: '' }]);
+      setTermGroups(r.termGroups.length
+        ? r.termGroups.map((g) => ({ ...g, insuredName: optionFor(g.insuredName)?.name || g.insuredName }))
+        : [{ insuredName: client?.name || '', policies: [{ name: '', sum: '', cover: '', premium: '' }] }]);
+      setAccidentalPolicies(r.accidentalPolicies.length ? r.accidentalPolicies : [{ name: '', sum: '', premium: '', riders: '' }]);
+      setTravelPolicies(r.travelPolicies.length ? r.travelPolicies.map((p) => ({ ...EMPTY_TRAVEL_POLICY, ...p })) : [{ ...EMPTY_TRAVEL_POLICY }]);
+      setMarinePolicies(r.marinePolicies.length ? r.marinePolicies.map((p) => ({ ...EMPTY_MARINE_POLICY, ...p })) : [{ ...EMPTY_MARINE_POLICY }]);
+      setMotorPolicies(r.motorPolicies.length ? r.motorPolicies.map((p) => ({ ...EMPTY_MOTOR_POLICY, ...p })) : [{ ...EMPTY_MOTOR_POLICY }]);
+      setIndemnityPolicies(r.indemnityPolicies.length ? r.indemnityPolicies.map((p) => ({ ...EMPTY_INDEMNITY_POLICY, ...p })) : [{ ...EMPTY_INDEMNITY_POLICY }]);
+
+      const notPrinted = [
+        r.marinePolicies.length && 'Marine Insurance: Contact Person, Mobile and Email',
+        r.motorPolicies.length && 'Motor Insurance: Registration Date, Previous Policy Expiry Date and Hypothecation / Financier Details',
+        r.indemnityPolicies.length && 'Indemnity Insurance: Registered Address, Contact Person, Mobile, Email, Nature & Scope of Professional Services, Professional Category, Number of Employees / Professionals, Deductible / Excess and Geographical / Policy Territory',
+      ].filter(Boolean);
+      notPrinted.forEach((n) => warnings.push(`${n} aren't printed on the proposal PDF — please fill them in.`));
+
+      const n = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+      const parts = [
+        r.applicants.length && n(r.applicants.length, 'applicant', 'applicants'),
+        r.types.medical && `Medical (${n(r.basePolicies.length + r.topupPolicies.length, 'policy', 'policies')})`,
+        r.types.term && `Term Life (${n(r.termGroups.length, 'insured', 'insured')})`,
+        r.types.accidental && `Accidental (${n(r.accidentalPolicies.length, 'policy', 'policies')})`,
+        r.types.travel && `Travel (${n(r.travelPolicies.length, 'traveller', 'travellers')})`,
+        r.types.marine && `Marine (${n(r.marinePolicies.length, 'shipment', 'shipments')})`,
+        r.types.motor && `Motor (${n(r.motorPolicies.length, 'vehicle', 'vehicles')})`,
+        r.types.indemnity && `Indemnity (${n(r.indemnityPolicies.length, 'entry', 'entries')})`,
+      ].filter(Boolean);
+      setImportNotice({
+        kind: 'ok',
+        title: `Filled from ${file.name}`,
+        lines: [parts.join(' · '), 'Review the details, then Generate Proposal as usual.'],
+        warnings,
+      });
+    } catch (err) {
+      if (!(err instanceof ProposalPdfError)) console.error(err);
+      setImportNotice({ kind: 'error', title: err instanceof ProposalPdfError ? err.message : 'Could not read this PDF. Please try again.' });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const handleReset = () => {
     if (!window.confirm('Are you sure you want to reset the form? This will clear all entered details.')) {
       return;
@@ -680,6 +758,7 @@ export default function InsuranceProposal({ client, isViewer }) {
     const clientId = client?.id || 'global';
     const key = `insurance_proposal_draft_${clientId}`;
     localStorage.removeItem(key);
+    setImportNotice(null);
 
     // Reset to defaults
     if (client) {
@@ -1083,7 +1162,7 @@ export default function InsuranceProposal({ client, isViewer }) {
         <div className="space-y-6 animate-fade-in no-print">
           {/* Card 1: Setup Options */}
           <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-md rounded-[20px] space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/60">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800/60">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-blue-50/50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-100/40 dark:border-blue-900/30">
                   <FileText size={18} />
@@ -1093,13 +1172,18 @@ export default function InsuranceProposal({ client, isViewer }) {
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium font-sans">Configure proposer details and select insurance categories</p>
                 </div>
               </div>
-              <button
-                onClick={handleReset}
-                className={btnGhost + ' text-rose-600 dark:text-rose-450 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 font-bold py-2 px-4 rounded-xl text-xs flex items-center gap-1.5'}
-              >
-                ✕ Reset Form
-              </button>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <UploadProposalButton onFile={handleUploadProposal} busy={importing} />
+                <button
+                  onClick={handleReset}
+                  className={btnGhost + ' text-rose-600 dark:text-rose-450 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 font-bold py-2 px-4 rounded-xl text-xs flex items-center gap-1.5'}
+                >
+                  ✕ Reset Form
+                </button>
+              </div>
             </div>
+
+            <ProposalImportNotice notice={importNotice} onClose={() => setImportNotice(null)} />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>

@@ -7,7 +7,9 @@ import { LOGO_DATA_URI } from '../assets/logoBase64';
 import { addProspects } from '../utils/prospects';
 import { fmtFileDate } from '../utils/calc';
 import { saveGeneratedDocument, wrapStandaloneHtml } from '../utils/documents';
+import { readInvestmentProposalPdf, hasEnteredData, ProposalPdfError } from '../utils/proposalPdf';
 import { ProspectModal } from './BusinessProspects';
+import { UploadProposalButton, ProposalImportNotice } from './ProposalPdfUpload';
 
 const TYPES = [
   { id: "sip", label: "Purchase with SIP" },
@@ -343,6 +345,68 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     });
   };
 
+  // Upload Proposal: fill the form from a proposal PDF made earlier in the
+  // CRM (read on this device — see utils/proposalPdf.js). It replaces what's
+  // in the form, after a confirm if anything has been typed; the advisor
+  // then reviews it and generates the proposal as usual.
+  const [importing, setImporting] = useState(false);
+  const [importNotice, setImportNotice] = useState(null);
+  const handleUploadProposal = async (file) => {
+    setImporting(true);
+    setImportNotice(null);
+    try {
+      const r = await readInvestmentProposalPdf(file, { schemes: SCHEMES });
+      const labelOf = (id) => TYPES.find((t) => t.id === id)?.label || id;
+      const offered = availableTypes.map((t) => t.id);
+      const types = r.selTypes.filter((t) => offered.includes(t));
+      const skipped = r.selTypes.filter((t) => !offered.includes(t));
+      if (!types.length) {
+        throw new ProposalPdfError(`This proposal has ${skipped.map(labelOf).join(', ')}, which Other Code doesn't offer — please upload it in the Investment Proposal tab.`);
+      }
+      if (hasEnteredData({ sections, remarks, bankDetails, redemptionBookedGain }, ['accType'])
+        && !window.confirm(`Fill the form from "${file.name}"?\n\nThis replaces the details in the form now.`)) return;
+
+      const warnings = [...r.warnings];
+      if (skipped.length) warnings.unshift(`${skipped.map(labelOf).join(', ')} ${skipped.length > 1 ? 'are' : 'is'} not offered in Other Code, so ${skipped.length > 1 ? 'they were' : 'it was'} left out.`);
+      if (r.clientName) {
+        const opt = applicantOptions.find((o) => o.name.trim().toLowerCase() === r.clientName.trim().toLowerCase());
+        if (opt) setClientName(opt.name);
+        else if (!applicantOptions.length) setClientName(r.clientName);
+        else warnings.unshift(`This proposal was prepared for "${r.clientName}", who isn't ${client?.name || 'this client'} or one of their family members — Client Name was left as it was.`);
+      }
+      const nextSections = {};
+      TYPES.forEach((t) => { nextSections[t.id] = [newRow(t.id)]; });
+      types.forEach((t) => {
+        if (r.sections[t]?.length) nextSections[t] = r.sections[t].map((row) => ({ ...newRow(t), ...row }));
+      });
+      const emptyBank = () => [{ bankName: '', accNo: '', ifsc: '', accType: 'Savings', amount: '' }];
+      setSections(nextSections);
+      setRemarks(Object.fromEntries(TYPES.map((t) => [t.id, types.includes(t.id) ? (r.remarks[t.id] || '') : ''])));
+      setBankDetails({
+        redemption: types.includes('redemption') && r.bankDetails.redemption?.length ? r.bankDetails.redemption : emptyBank(),
+        swp: types.includes('swp') && r.bankDetails.swp?.length ? r.bankDetails.swp : emptyBank(),
+      });
+      setRedemptionIncludeExemption(types.includes('redemption') ? r.redemptionIncludeExemption : true);
+      setRedemptionBookedGain(types.includes('redemption') ? r.redemptionBookedGain : '');
+      setSelTypes(types);
+      setActiveTab(types[0]);
+      setImportNotice({
+        kind: 'ok',
+        title: `Filled from ${file.name}`,
+        lines: [
+          types.map((t) => `${labelOf(t)} (${r.counts[t] || 0} row${r.counts[t] === 1 ? '' : 's'})`).join(' · '),
+          'Review the details, then Generate Proposal as usual.',
+        ],
+        warnings,
+      });
+    } catch (err) {
+      if (!(err instanceof ProposalPdfError)) console.error(err);
+      setImportNotice({ kind: 'error', title: err instanceof ProposalPdfError ? err.message : 'Could not read this PDF. Please try again.' });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const handleReset = () => {
     if (!window.confirm('Are you sure you want to reset the form? This will clear all entered details.')) {
       return;
@@ -351,6 +415,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     const clientId = client?.id || 'global';
     const key = `${variant}_proposal_draft_${clientId}`;
     localStorage.removeItem(key);
+    setImportNotice(null);
 
     setClientName(client?.name || '');
     setSelTypes(['sip']);
@@ -1328,7 +1393,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     <div className="space-y-6">
       {/* Configuration Card */}
       <Card className="p-6 border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-md rounded-[20px] space-y-6">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/60">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800/60">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-50/50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-100/40 dark:border-blue-900/30">
               <Plus size={18} />
@@ -1338,14 +1403,18 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium font-sans">Set client name and select proposal category components</p>
             </div>
           </div>
-          <button
-            onClick={handleReset}
-            className={btnGhost + ' text-rose-600 dark:text-rose-450 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 font-bold py-2 px-4 rounded-xl text-xs flex items-center gap-1.5'}
-          >
-            ✕ Reset Form
-          </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <UploadProposalButton onFile={handleUploadProposal} busy={importing} />
+            <button
+              onClick={handleReset}
+              className={btnGhost + ' text-rose-600 dark:text-rose-450 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 font-bold py-2 px-4 rounded-xl text-xs flex items-center gap-1.5'}
+            >
+              ✕ Reset Form
+            </button>
+          </div>
         </div>
 
+        <ProposalImportNotice notice={importNotice} onClose={() => setImportNotice(null)} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Client Name</label>
