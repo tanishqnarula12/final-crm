@@ -120,7 +120,8 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
   const [insuranceMedical, setInsuranceMedical] = useState(initialDetails.insuranceMedical || 'No');
   const [insuranceAccidental, setInsuranceAccidental] = useState(initialDetails.insuranceAccidental || 'No');
 
-  // 5. Profession (with free-text fallback when "Other" is selected)
+  // 5. Occupation (with free-text fallback when "Other" is selected). Shown
+  // as "Occupation" since 8 Oct 2026; still stored as `profession`.
   const [profession, setProfession] = useState(initialDetails.profession || '');
   const [professionOther, setProfessionOther] = useState(initialDetails.professionOther || '');
 
@@ -135,7 +136,10 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
   // (Self). None are mandatory. Family members get their own copies of these
   // same fields directly on each member object (see handleAddFamilyMember).
   const [income, setIncome] = useState(initialDetails.income || '');
-  const [occupation, setOccupation] = useState(initialDetails.occupation || '');
+  // The old free-text "Occupation" here is no longer shown (8 Oct 2026) —
+  // "Occupation" is now the required list above. Whatever a client already
+  // has in it is kept as it is on save.
+  const [occupation] = useState(initialDetails.occupation || '');
   const [placeOfBirth, setPlaceOfBirth] = useState(initialDetails.placeOfBirth || '');
   const [mothersName, setMothersName] = useState(initialDetails.mothersName || '');
   const [nomineeName, setNomineeName] = useState(initialDetails.nomineeName || '');
@@ -431,10 +435,10 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
                 </CoolSelect>
               </div>
             </Field>
-            <Field label="Profession *" error={errors.profession}>
+            <Field label="Occupation *" error={errors.profession}>
               <div className="relative">
                 <CoolSelect value={profession} onChange={(e) => setProfession(e.target.value)} className={selectCls}>
-                  <option value="">Select profession…</option>
+                  <option value="">Select occupation…</option>
                   {PROFESSIONS.map(p => <option key={p} value={p}>{p}</option>)}
                 </CoolSelect>
               </div>
@@ -442,7 +446,7 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
                 <input
                   value={professionOther}
                   onChange={(e) => setProfessionOther(e.target.value)}
-                  placeholder="Please specify profession"
+                  placeholder="Please specify occupation"
                   className={inputCls + ' mt-2 animate-fade-in'}
                 />
               )}
@@ -453,9 +457,6 @@ export function ClientFormModal({ initial, clients = [], autosaveKey, onClose, o
             </div>
             <Field label="Income (Annual)">
               <input value={income} onChange={(e) => setIncome(e.target.value)} className={inputCls} placeholder="e.g. 12,00,000" />
-            </Field>
-            <Field label="Occupation">
-              <input value={occupation} onChange={(e) => setOccupation(e.target.value)} className={inputCls} placeholder="e.g. Business" />
             </Field>
             <Field label="Place of Birth">
               <input value={placeOfBirth} onChange={(e) => setPlaceOfBirth(e.target.value)} className={inputCls} placeholder="City, State" />
@@ -1221,7 +1222,7 @@ function rowErrors(r, i, allRows, existingClients, team) {
   if (!r.address3) flag('address3', 'Missing address line 3');
   if (!r.clientType) flag('clientType', 'Missing client type');
   if (!r.maritalStatus) flag('maritalStatus', 'Missing marital status');
-  if (!r.profession) flag('profession', 'Missing profession');
+  if (!r.profession) flag('profession', 'Missing occupation');
   if (!r.state) flag('state', 'Missing state');
   if (!r.city) flag('city', 'Missing city');
 
@@ -1298,7 +1299,7 @@ const yesNo = (v) => {
 
 // The full set of columns the sample template ships with (also the export order).
 const TEMPLATE_HEADERS = [
-  'Name', 'PAN', 'Age', 'DOB', 'Mobile', 'Email', 'Client Type', 'Marital Status', 'Profession',
+  'Name', 'PAN', 'Age', 'DOB', 'Mobile', 'Email', 'Client Type', 'Marital Status', 'Occupation',
   'Address 1', 'Address 2', 'Address 3', 'City', 'State', 'Country', 'Pincode', 'Status',
   'Mutual Funds', 'Term Insurance', 'Medical Insurance', 'Accidental Insurance',
   'Relationship Manager', 'Portfolio Manager', 'Insurance Manager', 'Service Manager', 'Owner', 'Operation Manager', 'Internal Manager',
@@ -1323,7 +1324,7 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
   const downloadTemplate = () => {
     const example = {
       Name: 'Aarav Sharma', PAN: 'ABCPS1234A', Age: 33, DOB: '1992-05-15',
-      Mobile: '9876543210', Email: 'aarav@example.com', 'Client Type': 'HNI', 'Marital Status': 'Married', Profession: 'Salaried – Private Sector',
+      Mobile: '9876543210', Email: 'aarav@example.com', 'Client Type': 'HNI', 'Marital Status': 'Married', Occupation: 'Salaried – Private Sector',
       'Address 1': 'Flat 101, Sunrise Apartments', 'Address 2': 'MG Road', 'Address 3': 'Near City Mall',
       City: 'Jaipur', State: 'Rajasthan', Country: 'India', Pincode: '302004', Status: 'Active',
       'Mutual Funds': 'Yes', 'Term Insurance': 'No', 'Medical Insurance': 'Yes', 'Accidental Insurance': 'No',
@@ -1623,7 +1624,7 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
                             <button
                               type="button"
                               onClick={() => toggleExpand(r.rowNum)}
-                              title="Client type, profession, location, team assignments & family members"
+                              title="Client type, occupation, location, team assignments & family members"
                               className={`inline-flex items-center gap-0.5 tabular-nums font-bold cursor-pointer ${
                                 detailsHaveErrors ? 'text-rose-600 dark:text-rose-400' : 'text-slate-600 dark:text-slate-400'
                               }`}
@@ -1648,7 +1649,7 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
                             <td />
                             <td colSpan={11} className="px-3 py-2.5 space-y-3">
                               <div>
-                                <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">Client Type / Marital Status / Profession / Location</div>
+                                <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">Client Type / Marital Status / Occupation / Location</div>
                                 <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                                   <div>
                                     <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-0.5">Client Type</label>
@@ -1665,7 +1666,7 @@ export function ExcelImportModal({ onClose, onImport, clients = [] }) {
                                     </select>
                                   </div>
                                   <div>
-                                    <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-0.5">Profession</label>
+                                    <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-0.5">Occupation</label>
                                     <select value={r.profession} onChange={(e) => updateRow(r.rowNum, 'profession', e.target.value)} className={detailCellCls('profession')}>
                                       <option value="">Select…</option>
                                       {PROFESSIONS.map((p) => <option key={p} value={p}>{p}</option>)}

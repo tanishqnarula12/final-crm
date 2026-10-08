@@ -60,7 +60,6 @@ export default function ClientProfileView({
     maritalStatus = '',
     familyDetails = [],
     income = '',
-    occupation = '',
     placeOfBirth = '',
     mothersName = '',
     nomineeName = '',
@@ -414,12 +413,16 @@ export default function ClientProfileView({
     return counts;
   }, [dynamicAttachments, details.attachments]);
 
+  // The client's Occupation — the required list on the form (stored as
+  // `profession`; the old free-text `occupation` isn't shown since 8 Oct 2026).
+  const occupationLabel = profession === 'Other' ? (professionOther || 'Other') : profession;
+
   // The client themselves is always the "Self" applicant, shown first, followed
   // by family members (any duplicate "Self" entry in the saved list is dropped).
   const applicantRows = [
     {
       name: client.name, relation: 'Self', pan: client.pan, dob, mobile, email,
-      income, occupation, placeOfBirth, mothersName, nomineeName, nomineeRelation,
+      income, occupation: occupationLabel, placeOfBirth, mothersName, nomineeName, nomineeRelation,
     },
     ...familyDetails.filter(f => (f.relation || '').toLowerCase() !== 'self'),
   ];
@@ -576,7 +579,7 @@ export default function ClientProfileView({
               <ContactRow icon={Phone} accent="blue" label="Mobile" value={mobile} />
               <ContactRow icon={Mail} accent="sky" label="Email" value={email} />
               <ContactRow icon={User} accent="blue" label="Client Type" value={clientType} emptyText="Not configured" />
-              <ContactRow icon={Briefcase} accent="blue" label="Profession" value={profession === 'Other' ? (professionOther || 'Other') : profession} emptyText="Not configured" />
+              <ContactRow icon={Briefcase} accent="blue" label="Occupation" value={occupationLabel} emptyText="Not configured" />
               <ContactRow icon={UsersRound} accent="blue" label="Marital Status" value={maritalStatus} emptyText="Not configured" />
               <ContactRow icon={MapPin} accent="cyan" label="Address" value={formattedAddress} multiline emptyText="No address details configured" />
             </div>

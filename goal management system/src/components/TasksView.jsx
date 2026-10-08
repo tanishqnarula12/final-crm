@@ -1668,7 +1668,7 @@ export function TaskFormModal({ initial, clients, isViewer, onClose, onSave }) {
             <Field label="Place of Birth *">
               <input value={nftFields.placeOfBirth || ''} onChange={e => updateNftField('placeOfBirth', e.target.value)} disabled={!isEditingMode} className={inputStyle} placeholder="City, Country" />
             </Field>
-            <Field label="Occupation *" hint="Auto-filled from the client's profession on file, if available">
+            <Field label="Occupation *" hint="Auto-filled from the client's occupation on file, if available">
               <CoolSelect value={nftFields.occupation || ''} onChange={e => updateNftField('occupation', e.target.value)} disabled={!isEditingMode} className={selectStyle}>
                 <option value="">Select occupation…</option>
                 <option value="Salaried">Salaried</option>

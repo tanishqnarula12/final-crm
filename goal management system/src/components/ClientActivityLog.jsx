@@ -25,14 +25,16 @@ const fallbackMeta = { icon: ScrollText, cls: 'bg-slate-100 text-slate-500 dark:
 const FIELD_LABELS = {
   mobile: 'Mobile', email: 'Email', clientType: 'Client Type', dob: 'Date of Birth',
   address1: 'Address Line 1', address2: 'Address Line 2', address3: 'Address Line 3',
-  city: 'City', state: 'State', pinCode: 'Pincode', profession: 'Profession', professionOther: 'Profession (Other)',
+  city: 'City', state: 'State', pinCode: 'Pincode', profession: 'Occupation', professionOther: 'Occupation (Other)',
   relationshipManager: 'Relationship Manager', portfolioManager: 'Portfolio Manager',
   insuranceManager: 'Insurance Manager', serviceManager: 'Service Manager',
   owner: 'Owner', operationManager: 'Operation Manager', internalManager: 'Internal Manager',
   familyDetails: 'Family Members', mutualFunds: 'Mutual Funds', insuranceTerm: 'Term Insurance',
   insuranceMedical: 'Medical Insurance', insuranceAccidental: 'Accidental Insurance',
   name: 'Name', pan: 'PAN', age: 'Age', assumptions: 'Assumptions', assignedTo: 'Assigned RM',
-  income: 'Income', occupation: 'Occupation', placeOfBirth: 'Place of Birth',
+  // `occupation` is the old free-text field (no longer on the form since 8 Oct
+  // 2026); "Occupation" itself is now `profession` above.
+  income: 'Income', occupation: 'Occupation (old free-text field)', placeOfBirth: 'Place of Birth',
   mothersName: "Mother's Name", nomineeName: 'Nominee Name', nomineeRelation: 'Nominee Relation',
 };
 const fieldLabel = (key) => FIELD_LABELS[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
