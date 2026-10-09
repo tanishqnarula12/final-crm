@@ -481,7 +481,9 @@ const INV_COLUMNS = {
   FROMCATEGORY: 'fromCategory', FROMSCHEMENAME: 'fromScheme', TOCATEGORY: 'toCategory', TOSCHEMENAME: 'toScheme',
   FROMAMOUNTRS: 'fromAmount', TOAMOUNTRS: 'toAmount',
   ALLUNITS: 'allUnits', SHORTTERMRS: 'shortTerm', LONGTERMRS: 'longTerm', TAXLIABILITY: 'taxLiability',
+  FREQUENCY: 'frequency', // STP, since 9 Oct 2026 — older STP prints have no such column
 };
+const STP_FREQUENCIES = ['Daily', 'Weekly', 'Monthly', 'Yearly'];
 const INV_AMOUNT_KEYS = ['amount', 'currentSip', 'proposedSip', 'totalSip', 'fromAmount', 'toAmount', 'shortTerm', 'longTerm'];
 const INV_RIGHT = new Set([...Object.keys(INV_COLUMNS).filter((k) => INV_AMOUNT_KEYS.includes(INV_COLUMNS[k])), 'AMOUNT']);
 const ACC_TYPES = ['Savings', 'Current', 'NRE', 'NRO'];
@@ -563,12 +565,20 @@ export function parseInvestmentProposal(pages, { schemes = {} } = {}) {
           if (m) row.scheme = m[1].trim();
         }
         ['category', 'fromCategory', 'toCategory'].forEach((k) => { if (row[k] !== undefined) row[k] = category(row[k], `${label}, row ${r.n}`); });
+        if (row.frequency) {
+          const f = STP_FREQUENCIES.find((x) => x.toLowerCase() === row.frequency.toLowerCase());
+          if (!f) warnings.push(`${label}, row ${r.n}: frequency "${row.frequency}" isn't one of ${STP_FREQUENCIES.join(' / ')} — please pick it again.`);
+          row.frequency = f || '';
+        }
         if (row.scheme !== undefined) row.scheme = scheme(row.scheme, row.category);
         if (row.fromScheme !== undefined) row.fromScheme = scheme(row.fromScheme, row.fromCategory);
         if (row.toScheme !== undefined) row.toScheme = scheme(row.toScheme, row.toCategory);
         rows.push(row);
       });
       checkTotals(main, rows, label, warnings);
+      if (mk.id === 'stp' && rows.length && !main.columns.some((c) => c.key === 'FREQUENCY')) {
+        warnings.push(`${label}: Frequency isn't printed on this older proposal PDF — please pick it for each row.`);
+      }
     } else {
       warnings.push(`${label}: no table found in the PDF.`);
     }

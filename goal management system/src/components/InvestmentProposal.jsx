@@ -32,6 +32,9 @@ const TYPES = [
 // there had silently drifted to only 9 of these 19 categories.
 const CATEGORIES = Object.keys(SCHEMES);
 
+// How often an STP transfers.
+const STP_FREQUENCIES = ['Daily', 'Weekly', 'Monthly', 'Yearly'];
+
 // Helper to clean commas and parse floats
 const parseNum = (v) => {
   const n = parseFloat((String(v) || '0').replace(/,/g, ''));
@@ -82,6 +85,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     if (key === 'amount' || key === 'currentSip' || key === 'proposedSip' || key === 'totalSip' || key === 'shortTerm' || key === 'longTerm' || key === 'fromAmount' || key === 'toAmount') return { minWidth: '110px' };
     if (key === 'taxLiability') return { minWidth: '140px' };
     if (key === 'allUnits') return { minWidth: '80px' };
+    if (key === 'frequency') return { minWidth: '140px' };
     return { minWidth: '100px' };
   };
 
@@ -139,7 +143,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     swpcancel: [{ category: '', scheme: '', date: '', amount: '' }],
     redemption: [{ category: '', scheme: '', amount: '', allUnits: false, shortTerm: '', longTerm: '' }],
     lumpsum: [{ category: '', scheme: '', amount: '' }],
-    stp: [{ fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '' }],
+    stp: [{ fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '', frequency: '' }],
     swp: [{ category: '', scheme: '', date: '', amount: '' }],
     switch: [{ fromCategory: '', fromScheme: '', allUnits: false, toCategory: '', toScheme: '', toAmount: '' }]
   }));
@@ -187,7 +191,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
             swpcancel: [{ category: '', scheme: '', date: '', amount: '' }],
             redemption: [{ category: '', scheme: '', amount: '', allUnits: false, shortTerm: '', longTerm: '' }],
             lumpsum: [{ category: '', scheme: '', amount: '' }],
-            stp: [{ fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '' }],
+            stp: [{ fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '', frequency: '' }],
             swp: [{ category: '', scheme: '', date: '', amount: '' }],
             switch: [{ fromCategory: '', fromScheme: '', allUnits: false, toCategory: '', toScheme: '', toAmount: '' }],
             ...parsed.sections
@@ -224,7 +228,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       swpcancel: [{ category: '', scheme: '', date: '', amount: '' }],
       redemption: [{ category: '', scheme: '', amount: '', allUnits: false, shortTerm: '', longTerm: '' }],
       lumpsum: [{ category: '', scheme: '', amount: '' }],
-      stp: [{ fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '' }],
+      stp: [{ fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '', frequency: '' }],
       swp: [{ category: '', scheme: '', date: '', amount: '' }],
       switch: [{ fromCategory: '', fromScheme: '', allUnits: false, toCategory: '', toScheme: '', toAmount: '' }]
     });
@@ -297,7 +301,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       case 'swpcancel': return { category: '', scheme: '', date: '', amount: '' };
       case 'redemption': return { category: '', scheme: '', amount: '', allUnits: false, shortTerm: '', longTerm: '' };
       case 'lumpsum': return { category: '', scheme: '', amount: '' };
-      case 'stp': return { fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '' };
+      case 'stp': return { fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '', frequency: '' };
       case 'swp': return { category: '', scheme: '', date: '', amount: '' };
       case 'switch': return { fromCategory: '', fromScheme: '', toCategory: '', toScheme: '', toAmount: '' };
       default: return {};
@@ -327,6 +331,19 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       const list = [...(prev[tab] || [])];
       list[index] = { ...list[index], [key]: value };
       return { ...prev, [tab]: list };
+    });
+  };
+
+  // STP: To Amount fills in as half the From Amount (10,000 → 5,000) and
+  // keeps following it until the advisor types a To Amount of their own.
+  const halfOf = (v) => (/\d/.test(String(v ?? '')) ? fmtAmt(String(Math.round(parseNum(v) / 2))) : '');
+  const updateStpFromAmount = (index, value) => {
+    setSections(prev => {
+      const list = [...(prev.stp || [])];
+      const row = list[index] || {};
+      const following = !row.toAmount || row.toAmount === halfOf(row.fromAmount);
+      list[index] = { ...row, fromAmount: value, ...(following ? { toAmount: halfOf(value) } : {}) };
+      return { ...prev, stp: list };
     });
   };
 
@@ -430,7 +447,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       swpcancel: [{ category: '', scheme: '', date: '', amount: '' }],
       redemption: [{ category: '', scheme: '', amount: '', allUnits: false, shortTerm: '', longTerm: '' }],
       lumpsum: [{ category: '', scheme: '', amount: '' }],
-      stp: [{ fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '' }],
+      stp: [{ fromCategory: '', fromScheme: '', fromAmount: '', toCategory: '', toScheme: '', toAmount: '', frequency: '' }],
       swp: [{ category: '', scheme: '', date: '', amount: '' }],
       switch: [{ fromCategory: '', fromScheme: '', allUnits: false, toCategory: '', toScheme: '', toAmount: '' }]
     });
@@ -944,9 +961,16 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     const fci = keys.findIndex(kk => currList.includes(kk));
 
     const hasTwoSchemes = cols.filter(c => c.toLowerCase().includes('scheme')).length > 1;
+    // STP's Frequency column takes its room from the two scheme columns, and
+    // its 8 columns get 8px side padding instead of 12px — at 12px the table
+    // is wider than an A4 page with some scheme names, and the scheme names
+    // wrap onto twice as many lines.
+    const hasFrequency = keys.includes('frequency');
+    const padX = hasFrequency ? 'padding-left:8px;padding-right:8px;' : '';
     const getColWidth = (colName) => {
       const name = colName.toLowerCase();
-      if (name.includes('scheme')) return hasTwoSchemes ? '25%' : '40%';
+      if (name === 'frequency') return '10%';
+      if (name.includes('scheme')) return hasTwoSchemes ? (hasFrequency ? '20%' : '25%') : '40%';
       if (name.includes('category')) return hasTwoSchemes ? '12%' : '20%';
       if (name.includes('amount') || name.includes('date') || name.includes('tax') || name.includes('term')) {
         return hasTwoSchemes ? '11%' : '17%';
@@ -954,13 +978,13 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       return '';
     };
 
-    let headersHTML = `<th style='${thS}width:${hasTwoSchemes ? '4%' : '5%'};'>S.No</th>`;
+    let headersHTML = `<th style='${thS}width:${hasTwoSchemes ? '4%' : '5%'};${padX}'>S.No</th>`;
     cols.forEach((col, ci) => {
       const isNum = currList.includes(keys[ci]);
       const align = isNum ? "text-align:right;" : "";
       const w = getColWidth(col);
       const wStyle = w ? `width:${w};` : "";
-      headersHTML += `<th style='${thS}${align}${wStyle}'>${col}</th>`;
+      headersHTML += `<th style='${thS}${align}${wStyle}${padX}'>${col}</th>`;
     });
 
     let rowsHTML = '';
@@ -970,7 +994,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
       // page boundary (top half on one page, bottom half on the next) — the
       // table as a WHOLE still spans multiple pages fine for a long section,
       // only an individual row is protected.
-      rowsHTML += `<tr style='background:${bg};break-inside:avoid;page-break-inside:avoid;'><td style='${tdS}color:#1a4a9c;font-weight:700;'>${i + 1}</td>`;
+      rowsHTML += `<tr style='background:${bg};break-inside:avoid;page-break-inside:avoid;'><td style='${tdS}color:#1a4a9c;font-weight:700;${padX}'>${i + 1}</td>`;
       keys.forEach(key => {
         let val = '';
         if (type === 'sipchanges' && key === 'totalSip') {
@@ -982,7 +1006,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
         }
         const isNum = currList.includes(key);
         const align = isNum ? "text-align:right;" : "";
-        rowsHTML += `<td style='${tdS}${align}'>${val}</td>`;
+        rowsHTML += `<td style='${tdS}${align}${padX}'>${val}</td>`;
       });
       rowsHTML += `</tr>`;
     });
@@ -991,10 +1015,10 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     if (HAS_TOTAL.includes(type)) {
       if (SPLIT_TOTAL[type]) {
         const sp = SPLIT_TOTAL[type];
-        footerHTML += `<tr style='break-inside:avoid;page-break-inside:avoid;'><td colspan='${sp.labelCols}' style='background:#0047AB;color:#fff;padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;text-align:right;'>TOTAL</td>`;
+        footerHTML += `<tr style='break-inside:avoid;page-break-inside:avoid;'><td colspan='${sp.labelCols}' style='background:#0047AB;color:#fff;padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;text-align:right;${padX}'>TOTAL</td>`;
         sp.cols.forEach(key => {
           if (key === "") footerHTML += `<td style='background:#0047AB;'></td>`;
-          else footerHTML += `<td style='background:#0047AB;color:#fff;padding:10px 12px;font-size:13px;font-weight:700;text-align:right;white-space:nowrap;'>${fmtINRhtml(String(calcTotal(type, key)))}</td>`;
+          else footerHTML += `<td style='background:#0047AB;color:#fff;padding:10px 12px;font-size:13px;font-weight:700;text-align:right;white-space:nowrap;${padX}'>${fmtINRhtml(String(calcTotal(type, key)))}</td>`;
         });
         footerHTML += `</tr>`;
       } else {
@@ -1258,7 +1282,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     swpcancel: ["Category", "Scheme Name", "Date of SWP", "SWP Amount (Rs)"],
     redemption: ["Category", "Scheme Name", "All Units", "Amount (Rs)", "Short Term (Rs)", "Long Term (Rs)", "Tax Liability"],
     lumpsum: ["Category", "Scheme Name", "Amount (Rs)"],
-    stp: ["From Category", "From Scheme Name", "From Amount (Rs)", "To Category", "To Scheme Name", "To Amount (Rs)"],
+    stp: ["From Category", "From Scheme Name", "From Amount (Rs)", "To Category", "To Scheme Name", "To Amount (Rs)", "Frequency"],
     swp: ["Category", "Scheme Name", "Date of SWP", "Amount (Rs)"],
     switch: ["From Category", "From Scheme Name", "All Units", "To Category", "To Scheme Name", "To Amount (Rs)"]
   };
@@ -1274,7 +1298,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
     swpcancel: ["category", "scheme", "date", "amount"],
     redemption: ["category", "scheme", "allUnits", "amount", "shortTerm", "longTerm", "taxLiability"],
     lumpsum: ["category", "scheme", "amount"],
-    stp: ["fromCategory", "fromScheme", "fromAmount", "toCategory", "toScheme", "toAmount"],
+    stp: ["fromCategory", "fromScheme", "fromAmount", "toCategory", "toScheme", "toAmount", "frequency"],
     swp: ["category", "scheme", "date", "amount"],
     switch: ["fromCategory", "fromScheme", "allUnits", "toCategory", "toScheme", "toAmount"]
   };
@@ -1300,7 +1324,7 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
   const SPLIT_TOTAL = {
     // labelCols + cols.length must equal the total column count (incl. S.No)
     sipchanges: { labelCols: 4, cols: ["currentSip", "proposedSip", "totalSip"] },
-    stp: { labelCols: 3, cols: ["fromAmount", "", "", "toAmount"] },
+    stp: { labelCols: 3, cols: ["fromAmount", "", "", "toAmount", ""] },
     switch: { labelCols: 6, cols: ["toAmount"] },
     stpcancel: { labelCols: 5, cols: ["amount"] }
   };
@@ -1610,12 +1634,32 @@ export default function InvestmentProposal({ client, isViewer, variant = 'invest
                         );
                       }
 
+                      if (key === 'frequency') {
+                        return (
+                          <td key={ki} className="px-3 py-2" style={getColStyle(key)}>
+                            <select
+                              value={row.frequency || ''}
+                              onChange={(e) => updateRow(activeTab, index, key, e.target.value)}
+                              aria-label="Frequency"
+                              className={inputCls + ' py-1.5 px-2 bg-transparent border-0 focus:bg-white dark:focus:bg-slate-950 focus:ring-1 focus:ring-blue-500 text-xs'}
+                            >
+                              <option value="">Select Frequency...</option>
+                              {STP_FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                          </td>
+                        );
+                      }
+
+                      const isStpFrom = activeTab === 'stp' && key === 'fromAmount';
                       return (
                         <td key={ki} className="px-3 py-2" style={getColStyle(key)}>
                           <input
                             type="text"
                             value={row[key] || ''}
-                            onChange={(e) => updateRow(activeTab, index, key, isNum ? fmtAmt(e.target.value) : e.target.value)}
+                            onChange={(e) => (isStpFrom
+                              ? updateStpFromAmount(index, fmtAmt(e.target.value))
+                              : updateRow(activeTab, index, key, isNum ? fmtAmt(e.target.value) : e.target.value))}
+                            title={activeTab === 'stp' && key === 'toAmount' ? 'Fills in as half the From Amount — you can change it' : undefined}
                             placeholder={isNum ? 'e.g. 5,000' : (key === 'date' ? 'e.g. 10th' : 'e.g. Remarks')}
                             className={inputCls + ` py-1.5 px-2 bg-transparent border-0 focus:bg-white dark:focus:bg-slate-950 focus:ring-1 focus:ring-blue-500 text-xs ${
                               isNum ? 'text-right tabular-nums font-semibold' : ''
