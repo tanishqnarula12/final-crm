@@ -8,7 +8,8 @@
 // All gains / Tax-Free, `held` the holding period, `rate` the tax, `detail` a
 // condition on it. An STCG `held` the material leaves unsaid is simply the
 // other side of that product's LTCG period. `facts` are extra labelled lines
-// (a category, a maturity), `note` a one-line explanation, `glance` the
+// for search only (the card's outcome box already says them), `note` a
+// one-line explanation, `glance` the
 // "Special rule" cell of Taxation at a Glance, `aliases` extra search words.
 
 export const TAX_GUIDE_FY = 'FY 2025-26';

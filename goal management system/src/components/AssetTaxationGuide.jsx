@@ -148,27 +148,6 @@ function Timeline({ outcomes }) {
   );
 }
 
-function SummaryTiles({ l, s }) {
-  const tile = 'rounded-xl border border-slate-200/70 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 px-3 py-2.5 min-w-0';
-  return (
-    <div className="mt-4 grid grid-cols-3 gap-2">
-      <div className={tile}>
-        <Label>LTCG holding period</Label>
-        <p className="mt-1 text-xs sm:text-sm font-bold text-slate-900 dark:text-white">{l.held}</p>
-      </div>
-      <div className={tile}>
-        <Label>LTCG</Label>
-        <p className={`mt-1 text-xs sm:text-sm font-extrabold ${TONES.ltcg.text}`}>{l.rate}</p>
-        {l.detail && <p className="mt-0.5 text-[10px] leading-snug text-slate-500 dark:text-slate-400">{l.detail}</p>}
-      </div>
-      <div className={tile}>
-        <Label>STCG</Label>
-        <p className={`mt-1 text-xs sm:text-sm font-extrabold ${s ? TONES[rateTone(s)].text : 'text-slate-400'}`}>{s ? s.rate : '—'}</p>
-      </div>
-    </div>
-  );
-}
-
 // All gains at the slab rate, or fully tax-free: one bold box says it all.
 function SingleOutcome({ o }) {
   const tone = rateTone(o);
@@ -211,8 +190,11 @@ function ExposureTree({ cases }) {
   );
 }
 
-function ProductCard({ p, focused, hideWhen = false, wide = false }) {
-  const { l, s, only } = split(p.outcomes);
+// Each fact appears once: "How it works" carries the holding periods and
+// rates, and a heading above the card (the Debt dates, the SGB groups) is not
+// repeated inside it.
+function ProductCard({ p, focused, hideWhen = false, hideBadge = false, wide = false }) {
+  const { l, only } = split(p.outcomes);
   return (
     <div id={`tax-${p.id}`} className={`scroll-mt-24 ${wide ? 'lg:col-span-2' : ''}`}>
       <Card className={`p-5 h-full ${focused ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''}`}>
@@ -225,7 +207,7 @@ function ProductCard({ p, focused, hideWhen = false, wide = false }) {
               </p>
             )}
           </div>
-          {p.badge && <Badge tone="special">{p.badge}</Badge>}
+          {p.badge && !hideBadge && <Badge tone="special">{p.badge}</Badge>}
         </div>
         {p.note && <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{p.note}</p>}
         {p.includes && (
@@ -236,18 +218,7 @@ function ProductCard({ p, focused, hideWhen = false, wide = false }) {
             </ul>
           </div>
         )}
-        {p.facts && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {p.facts.map(([k, v]) => (
-              <div key={k} className="rounded-xl border border-slate-200/70 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 px-3 py-2">
-                <Label>{k}</Label>
-                <p className="mt-0.5 text-sm font-bold text-slate-900 dark:text-white">{v}</p>
-              </div>
-            ))}
-          </div>
-        )}
         {p.cases && <ExposureTree cases={p.cases} />}
-        {l && <SummaryTiles l={l} s={s} />}
         {l && <Timeline outcomes={p.outcomes} />}
         {!l && only && <SingleOutcome o={only} />}
       </Card>
@@ -293,11 +264,11 @@ function SectionBody({ s, focus }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-3">
           <GroupHead icon={Landmark} tone="free" title="RBI Redemption" sub="At maturity, or premature redemption through RBI" />
-          {s.products.filter((p) => p.group === 'rbi').map((p) => <ProductCard key={p.id} p={p} focused={focus === p.id} />)}
+          {s.products.filter((p) => p.group === 'rbi').map((p) => <ProductCard key={p.id} p={p} focused={focus === p.id} hideBadge />)}
         </div>
         <div className="space-y-3">
           <GroupHead icon={Building2} tone="ltcg" title="Stock Exchange Sale" sub="Sold on the stock exchange" />
-          {s.products.filter((p) => p.group === 'exchange').map((p) => <ProductCard key={p.id} p={p} focused={focus === p.id} />)}
+          {s.products.filter((p) => p.group === 'exchange').map((p) => <ProductCard key={p.id} p={p} focused={focus === p.id} hideBadge />)}
         </div>
       </div>
     );
