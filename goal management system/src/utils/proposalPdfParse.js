@@ -576,8 +576,11 @@ export function parseInvestmentProposal(pages, { schemes = {} } = {}) {
         rows.push(row);
       });
       checkTotals(main, rows, label, warnings);
-      if (mk.id === 'stp' && rows.length && !main.columns.some((c) => c.key === 'FREQUENCY')) {
-        warnings.push(`${label}: Frequency isn't printed on this older proposal PDF — please pick it for each row.`);
+      if (mk.id === 'stp') {
+        rows.forEach((row) => { row.installments = installmentsOf(row.fromAmount, row.toAmount); });
+        if (rows.length && !main.columns.some((c) => c.key === 'FREQUENCY')) {
+          warnings.push(`${label}: Frequency isn't printed on this older proposal PDF — please pick it for each row.`);
+        }
       }
     } else {
       warnings.push(`${label}: no table found in the PDF.`);
@@ -614,6 +617,17 @@ export function parseInvestmentProposal(pages, { schemes = {} } = {}) {
   });
 
   return result;
+}
+
+// STP Installments aren't printed. The form works To Amount out as From
+// Amount ÷ Installments (rounded to the rupee), so when the printed pair is
+// such an even split the count comes back from it; otherwise it stays blank.
+function installmentsOf(from, to) {
+  const f = Number(String(from || '').replace(/,/g, ''));
+  const t = Number(String(to || '').replace(/,/g, ''));
+  if (!(f > 0 && t > 0)) return '';
+  const n = Math.round(f / t);
+  return n >= 1 && Math.round(f / n) === t ? String(n) : '';
 }
 
 function labelOfKey(key) {
